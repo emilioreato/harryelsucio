@@ -17,6 +17,11 @@ export const api = {
     body: JSON.stringify(request),
   }),
   job: (jobId) => requestJson(`/api/jobs/${jobId}`),
+  fireProgression: (jobId, scenario) => requestJson(`/api/jobs/${jobId}/fire-progression`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(scenario),
+  }),
   layerUrl: (jobId, name) => `/api/jobs/${jobId}/layers/${name}.png`,
   async downloadLayer(jobId, name) {
     const response = await fetch(api.layerUrl(jobId, name));

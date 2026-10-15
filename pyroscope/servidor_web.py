@@ -31,6 +31,7 @@ from .interfaz.procesamiento import preparar_pareja, procesar_pareja
 from .detectores import listar_detectores_superficie, obtener_detector_superficie
 from .detectores.kmeans import PESOS_SCORE_POR_DEFECTO
 from .agua import UMBRALES_AGUA_POR_DEFECTO
+from .escenarios import generar_escenario_progresion
 from .humo import PESOS_CONFIANZA_HUMO_POR_DEFECTO
 from .ontologia import ClaseSemantica
 from .visualizacion import crear_superposicion, crear_vista_clasificacion
@@ -686,6 +687,27 @@ class LumbreHandler(BaseHTTPRequestHandler):
                 return
             self._json(200, {"message": "Cerrando Lumbre."})
             threading.Thread(target=self.server.shutdown, daemon=True).start()
+            return
+        escenario = re.fullmatch(r"/api/jobs/([a-f0-9-]{36})/fire-progression", ruta)
+        if escenario:
+            try:
+                job_id = escenario.group(1)
+                with _JOBS_LOCK:
+                    trabajo = _JOBS.get(job_id)
+                    if trabajo is None:
+                        raise ValueError("No se encontró ese análisis.")
+                    if trabajo.get("state") != "complete" or not trabajo.get("grid"):
+                        raise ValueError("La segmentación debe terminar antes de crear el escenario.")
+                    rejilla = trabajo["grid"]
+                datos = self._leer_json()
+                resultado = generar_escenario_progresion(
+                    int(rejilla["ancho_px"]), int(rejilla["alto_px"]), datos
+                )
+                self._json(200, resultado)
+            except (ValueError, TypeError, json.JSONDecodeError) as exc:
+                self._json(400, {"error": str(exc)})
+            except Exception as exc:
+                self._json(500, {"error": f"No se pudo crear el escenario: {exc}"})
             return
         if ruta != "/api/analyze":
             self._json(404, {"error": "Ruta no encontrada."})

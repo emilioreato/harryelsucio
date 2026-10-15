@@ -166,7 +166,7 @@ button:disabled, input:disabled, select:disabled { cursor: not-allowed !importan
 .results-column > .results-heading { margin-bottom: 11px; }
 .measurement-panel { padding: 9px; border: 1px solid rgba(46, 62, 51, .13); border-radius: 13px; background: rgba(255, 255, 255, .7); }
 .panel-kicker { margin: 0 0 8px; color: #627168; font-size: 9px; font-weight: 750; letter-spacing: .13em; }
-.tool-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; padding: 3px; border: 1px solid rgba(46, 62, 51, .14); border-radius: 9px; background: #e8ebe6; }
+.tool-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; padding: 3px; border: 1px solid rgba(46, 62, 51, .14); border-radius: 9px; background: #e8ebe6; }
 .tool-button.rt-Button { min-width: 0; height: 31px; gap: 4px; padding: 0 4px; border: 0; border-radius: 7px; color: #4d5d53; background: transparent; font-size: 10px; font-weight: 570; cursor: pointer; }
 .tool-button.rt-Button.is-active { color: #304d3b; background: #fff; box-shadow: 0 1px 4px rgba(40, 56, 46, .12); }
 .measurement-hint { min-height: 26px; margin: 8px 0 5px; color: #56645c; font-size: 10px; line-height: 1.4; }
@@ -223,6 +223,21 @@ button:disabled, input:disabled, select:disabled { cursor: not-allowed !importan
 .tuning-content { display: grid; gap: 5px; padding: 2px 0 5px; }
 .tuning-content > .field-help { margin: 0 0 2px; }
 .tuning-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 7px; row-gap: 6px; }
+.scenario-panel { display: grid; gap: 7px; }
+.scenario-panel .panel-kicker { margin-bottom: 0; }
+.scenario-origin-button.rt-Button { width: 100%; min-height: 36px; justify-content: center; gap: 6px; color: #334c3a; font-size: 10px; }
+.scenario-origin-readout { margin: 0; color: #8a334c; font: 650 10px/1.3 ui-monospace, Consolas, monospace; }
+.scenario-fields { margin-top: 0; }
+.scenario-fields .field-label { min-height: 28px; align-items: end; }
+.scenario-advance-label { margin: 2px 0 -3px; }
+.scenario-run-button.rt-Button { min-height: 37px; justify-content: center; gap: 6px; color: #fff; background: linear-gradient(110deg, #a84334, #cf6637); font-size: 10px; }
+.scenario-playback { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.scenario-playback .rt-Button { gap: 5px; font-size: 10px; }
+.scenario-playback span { color: #58665e; font: 650 9px/1 ui-monospace, Consolas, monospace; }
+.scenario-timeline { height: 18px; margin-top: -4px; }
+.scenario-formula { margin-top: 0; }
+.scenario-formula > summary { color: #53625a; font-size: 9px; }
+.scenario-caveat { margin: 2px 0 0; padding: 7px; border-left: 3px solid #c66d37; color: #654d3d; background: #fff4e7; font-size: 9px; line-height: 1.42; }
 .tuning-field { display: grid; min-width: 0; gap: 3px; color: #4f5f55; font-size: 9px; line-height: 1.3; }
 .tuning-field input { width: 100%; min-width: 0; height: 28px; padding: 0 7px; border: 1px solid rgba(54, 75, 63, .14); border-radius: 7px; outline: 0; color: var(--ink); background: rgba(255,255,255,.78); font-size: 10px; }
 .tuning-field input::placeholder { color: #99a39c; font-size: 8px; }

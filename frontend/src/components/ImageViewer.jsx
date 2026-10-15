@@ -27,7 +27,7 @@ export default function ImageViewer({
   jobId, grid, layer, setLayer, showSegmentation, setShowSegmentation,
   showMarks, setShowMarks, tool, marks, setMarks, distancePreview,
   setDistancePreview, inspectedPixel, setInspectedPixel, polygonClosed,
-  setPolygonClosed, errorMessage, onError,
+  setPolygonClosed, seedPoint, progressionFront, onSeedSelect, errorMessage, onError,
 }) {
   const stageRef = useRef(null);
   const imageRef = useRef(null);
@@ -57,11 +57,38 @@ export default function ImageViewer({
       const context = canvas.getContext("2d");
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
       context.clearRect(0, 0, imageRect.width, imageRect.height);
-      if (!showMarks) return;
 
       const scaleX = imageRect.width / image.naturalWidth;
       const scaleY = imageRect.height / image.naturalHeight;
       const toCanvas = (point) => ({ x: point.x * scaleX, y: point.y * scaleY });
+      if (progressionFront?.length > 2) {
+        context.beginPath();
+        progressionFront.forEach(([x, y], index) => {
+          const point = toCanvas({ x, y });
+          if (index === 0) context.moveTo(point.x, point.y);
+          else context.lineTo(point.x, point.y);
+        });
+        context.closePath();
+        context.fillStyle = "rgba(255, 103, 34, .18)";
+        context.fill();
+        context.setLineDash([7, 4]);
+        context.strokeStyle = "#ffe16b";
+        context.lineWidth = 2.5;
+        context.stroke();
+        context.setLineDash([]);
+      }
+      if (seedPoint) {
+        const origin = toCanvas(seedPoint);
+        context.beginPath();
+        context.arc(origin.x, origin.y, 6, 0, Math.PI * 2);
+        context.fillStyle = "#e72e5f";
+        context.fill();
+        context.strokeStyle = "#fff";
+        context.lineWidth = 2;
+        context.stroke();
+      }
+      if (!showMarks) return;
+
       const drawLine = (start, end, dashed = false) => {
         const a = toCanvas(start);
         const b = toCanvas(end);
@@ -128,7 +155,7 @@ export default function ImageViewer({
       window.removeEventListener("resize", draw);
       observer?.disconnect();
     };
-  }, [source, showMarks, marks, distancePreview, tool, polygonClosed, inspectedPixel]);
+  }, [source, showMarks, marks, distancePreview, tool, polygonClosed, inspectedPixel, seedPoint, progressionFront]);
 
   const pointAt = (clientX, clientY, clamp = false) => {
     const image = imageRef.current;
@@ -180,10 +207,11 @@ export default function ImageViewer({
   };
 
   const handleImageClick = (event) => {
-    if (!hasResult || (tool !== "pixel" && tool !== "polygon")) return;
+    if (!hasResult || (tool !== "pixel" && tool !== "polygon" && tool !== "seed")) return;
     const point = pointAt(event.clientX, event.clientY);
     if (!point) return;
-    if (tool === "pixel") setInspectedPixel(point);
+    if (tool === "seed") onSeedSelect(point);
+    else if (tool === "pixel") setInspectedPixel(point);
     else {
       setMarks((current) => [...current, point]);
       setPolygonClosed(false);
@@ -226,7 +254,7 @@ export default function ImageViewer({
       </div>
 
       <div
-        className={`image-stage${tool === "distance" ? " is-ruling" : tool === "polygon" || tool === "pixel" ? " has-tool" : ""}`}
+        className={`image-stage${tool === "distance" ? " is-ruling" : tool === "polygon" || tool === "pixel" || tool === "seed" ? " has-tool" : ""}`}
         ref={stageRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}

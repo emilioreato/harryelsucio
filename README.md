@@ -89,6 +89,8 @@ En **Detector de superficie** se puede comparar el K-Means conjunto (True Color 
 
 La aplicación estima humo probable con ambas composiciones alineadas: usa el núcleo cian de SWIR y lo amplía solo sobre velo muy liso, neutro y cercano al núcleo. El humo se conserva como capa de oclusión; en paralelo, el detector busca evidencia compatible con superficie afectada debajo. Esa hipótesis se muestra en fucsia y no se suma al área ni al perímetro observados. No reconstruye el terreno tapado: puede confundir humo con nubes o veladuras y no detecta fuego activo ni clasifica vegetación/suelo desnudo como clases separadas. Compara ambas vistas y revisa el resultado.
 
+Tras completar un análisis se puede crear una **progresión ilustrativa** desde un único punto elegido manualmente, mediante un escenario polar sesgado por el viento y controles de temperatura/humedad del aire. Los pasos son píxeles, sin duración temporal. No es una predicción validada: faltan combustible, humedad del combustible, pendiente, barreras y calibración. La fórmula, entradas y límites están en [`DOCUMENTACION/Ideas/escenario_progresion_ilustrativo.md`](DOCUMENTACION/Ideas/escenario_progresion_ilustrativo.md).
+
 El filtro espacial prioriza por defecto el componente candidato más grande y puede descartar candidatos alejados. Si la escena puede contener focos independientes, activa **Conservar regiones desconectadas**; así se mantienen los componentes que superan el tamaño mínimo. Las coberturas mostradas son fracciones de píxeles candidatos, no una medida de precisión ni una estimación de fuego activo.
 
 ### Random Forest supervisado

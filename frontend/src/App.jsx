@@ -4,7 +4,7 @@ import AdvancedSettings from "./components/AdvancedSettings.jsx";
 import ImageViewer from "./components/ImageViewer.jsx";
 import { api, fileToBase64 } from "./services/api.js";
 import { Button, Card } from "@radix-ui/themes";
-import { Activity, Crosshair, Copy, MousePointer2, Play, Ruler, ScanLine, SlidersHorizontal } from "lucide-react";
+import { Activity, Crosshair, Copy, MapPin, MousePointer2, Pause, Play, Ruler, ScanLine, SlidersHorizontal } from "lucide-react";
 import { distanceBetween, formatArea, formatLength, formatNumber, polygonArea, polylineLength } from "./domain/measurements.js";
 
 const DEFAULT_KMEANS_WEIGHTS = {
@@ -36,6 +36,7 @@ const TOOL_OPTIONS = [
   { id: "distance", label: "Regla", Icon: Ruler },
   { id: "polygon", label: "Área", Icon: Crosshair },
   { id: "pixel", label: "Píxel", Icon: ScanLine },
+  { id: "seed", label: "Origen", Icon: MapPin },
 ];
 
 function defaultAdvancedSettings() {
@@ -93,6 +94,19 @@ function App() {
   const [layer, setLayer] = useState("swir");
   const [showSegmentation, setShowSegmentation] = useState(true);
   const [showMarks, setShowMarks] = useState(true);
+  const [airTemperature, setAirTemperature] = useState("25");
+  const [airHumidity, setAirHumidity] = useState("35");
+  const [windFrom, setWindFrom] = useState("270");
+  const [windSpeed, setWindSpeed] = useState("20");
+  const [baseAdvance, setBaseAdvance] = useState("2.5");
+  const [weatherTime, setWeatherTime] = useState("");
+  const [weatherSource, setWeatherSource] = useState("");
+  const [scenarioSeed, setScenarioSeed] = useState(null);
+  const [scenario, setScenario] = useState(null);
+  const [scenarioFrame, setScenarioFrame] = useState(0);
+  const [scenarioPlaying, setScenarioPlaying] = useState(false);
+  const [scenarioLoading, setScenarioLoading] = useState(false);
+  const [scenarioError, setScenarioError] = useState("");
   const [tool, setTool] = useState("view");
   const [marks, setMarks] = useState([]);
   const [distancePreview, setDistancePreview] = useState(null);
@@ -187,6 +201,18 @@ function App() {
   const manualPerimeter = grid && tool === "polygon" && marks.length >= 2
     ? polylineLength(marks, grid, polygonClosed)
     : null;
+  const progressionFront = scenario?.frames?.[scenarioFrame]?.front || null;
+
+  useEffect(() => {
+    if (!scenarioPlaying || !scenario?.frames?.length) return undefined;
+    const lastFrame = scenario.frames.length - 1;
+    if (scenarioFrame >= lastFrame) {
+      setScenarioPlaying(false);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setScenarioFrame((frame) => frame + 1), 240);
+    return () => window.clearTimeout(timer);
+  }, [scenarioPlaying, scenario, scenarioFrame]);
 
   const selectTool = (nextTool) => {
     if (nextTool === tool) return;
@@ -195,6 +221,53 @@ function App() {
     setDistancePreview(null);
     setPolygonClosed(false);
     setInspectedPixel(null);
+  };
+
+  const chooseScenarioOrigin = (point) => {
+    setScenarioSeed(point);
+    setScenario(null);
+    setScenarioFrame(0);
+    setScenarioPlaying(false);
+    setScenarioError("");
+    setTool("view");
+  };
+
+  const runProgressionScenario = async () => {
+    setScenarioError("");
+    try {
+      if (!hasResult || !jobId) throw new Error("Primero termina un análisis de imagen.");
+      if (!scenarioSeed) throw new Error("Elige un único origen en la imagen.");
+      const temperature = numberFromInput(airTemperature, "La temperatura");
+      const humidity = numberFromInput(airHumidity, "La humedad relativa");
+      const direction = numberFromInput(windFrom, "La dirección del viento");
+      const speed = numberFromInput(windSpeed, "La velocidad del viento");
+      const advance = numberFromInput(baseAdvance, "El avance visual");
+      if (temperature < -20 || temperature > 60) throw new Error("La temperatura debe estar entre -20 y 60 °C.");
+      if (humidity < 0 || humidity > 100) throw new Error("La humedad relativa debe estar entre 0 y 100 %.");
+      if (direction < 0 || direction >= 360) throw new Error("La dirección debe estar entre 0° y 359,9°.");
+      if (speed < 0 || speed > 160) throw new Error("La velocidad debe estar entre 0 y 160 km/h.");
+      if (advance < 0.5 || advance > 16) throw new Error("El avance visual debe estar entre 0,5 y 16 px por paso.");
+      setScenarioLoading(true);
+      const generated = await api.fireProgression(jobId, {
+        origin: scenarioSeed,
+        temperature_c: temperature,
+        relative_humidity_pct: humidity,
+        wind_from_deg: direction,
+        wind_speed_kmh: speed,
+        base_advance_px: advance,
+        weather_time: weatherTime,
+        weather_source: weatherSource,
+        steps: 16,
+      });
+      setScenario(generated);
+      setScenarioFrame(0);
+      setScenarioPlaying(true);
+      setTool("view");
+    } catch (cause) {
+      setScenarioError(cause?.message || "No se pudo generar el escenario.");
+    } finally {
+      setScenarioLoading(false);
+    }
   };
 
   const collectSettings = () => {
@@ -268,6 +341,11 @@ function App() {
       setDistancePreview(null);
       setPolygonClosed(false);
       setInspectedPixel(null);
+      setScenarioSeed(null);
+      setScenario(null);
+      setScenarioFrame(0);
+      setScenarioPlaying(false);
+      setScenarioError("");
       setRunning(true);
       setConnection({ ready: true, label: "Analizando…" });
       setProgress({ label: "Preparando análisis", value: 0 });
@@ -478,6 +556,9 @@ function App() {
               setShowSegmentation={setShowSegmentation}
               showMarks={showMarks}
               setShowMarks={setShowMarks}
+              seedPoint={scenarioSeed}
+              progressionFront={progressionFront}
+              onSeedSelect={chooseScenarioOrigin}
               tool={tool}
               setTool={setTool}
               marks={marks}
@@ -496,17 +577,67 @@ function App() {
 
         <aside className="results-column interaction-panel" id="mobile-results" aria-label="Herramientas y resultados">
           <div className="results-heading"><h2>Medir y analizar</h2></div>
+          <section className="measurement-panel scenario-panel" aria-label="Escenario ilustrativo de progresión">
+            <p className="panel-kicker">ESCENARIO DE PROGRESIÓN</p>
+            <Button className="scenario-origin-button" variant="outline" size="2" type="button" disabled={!hasResult} aria-pressed={tool === "seed"} onClick={() => selectTool("seed")}>
+              <MapPin size={14} aria-hidden="true" />{scenarioSeed ? "Cambiar origen en imagen" : "Elegir origen en imagen"}
+            </Button>
+            <p className="field-help">Elige un solo punto donde observes fuego activo; el área quemada no se usa como origen.</p>
+            {scenarioSeed && <p className="scenario-origin-readout" aria-live="polite">Origen: ({formatNumber(scenarioSeed.x, 1)}, {formatNumber(scenarioSeed.y, 1)}) px</p>}
+            <div className="compact-fields scenario-fields">
+              <div><label className="field-label" htmlFor="scenario-temp">Temperatura del aire · °C</label><input className="field-control" id="scenario-temp" type="number" min="-20" max="60" step="any" value={airTemperature} onChange={(event) => setAirTemperature(event.target.value)} /></div>
+              <div><label className="field-label" htmlFor="scenario-humidity">Humedad relativa · %</label><input className="field-control" id="scenario-humidity" type="number" min="0" max="100" step="any" value={airHumidity} onChange={(event) => setAirHumidity(event.target.value)} /></div>
+              <div><label className="field-label" htmlFor="scenario-wind-from">Viento desde · °</label><input className="field-control" id="scenario-wind-from" type="number" min="0" max="359.9" step="any" value={windFrom} onChange={(event) => setWindFrom(event.target.value)} /></div>
+              <div><label className="field-label" htmlFor="scenario-wind-speed">Velocidad · km/h</label><input className="field-control" id="scenario-wind-speed" type="number" min="0" max="160" step="any" value={windSpeed} onChange={(event) => setWindSpeed(event.target.value)} /></div>
+            </div>
+            <p className="field-help">Dirección meteorológica: 0° = norte y crece en sentido horario; el modelo la invierte hacia el destino.</p>
+            <div>
+              <label className="field-label" htmlFor="scenario-weather-time">Hora de esos datos y zona horaria</label>
+              <input className="field-control" id="scenario-weather-time" type="text" maxLength="120" placeholder="p. ej., 2026-10-15 14:00 UTC" value={weatherTime} onChange={(event) => setWeatherTime(event.target.value)} />
+            </div>
+            <div>
+              <label className="field-label" htmlFor="scenario-weather-source">Fuente meteorológica</label>
+              <input className="field-control" id="scenario-weather-source" type="text" maxLength="120" placeholder="p. ej., estación local" value={weatherSource} onChange={(event) => setWeatherSource(event.target.value)} />
+            </div>
+            <p className="field-help">Anota datos próximos a la adquisición y su procedencia. La app no consulta meteorología automáticamente.</p>
+            <label className="field-label scenario-advance-label" htmlFor="scenario-advance">Avance base · px por paso visual</label>
+            <input className="field-control" id="scenario-advance" type="number" min="0.5" max="16" step="0.5" value={baseAdvance} onChange={(event) => setBaseAdvance(event.target.value)} />
+            <Button className="scenario-run-button" variant="solid" size="2" type="button" disabled={!hasResult || scenarioLoading || !scenarioSeed} onClick={runProgressionScenario}>
+              {scenarioLoading ? <Activity size={14} aria-hidden="true" /> : <Play size={14} aria-hidden="true" fill="currentColor" />}
+              {scenarioLoading ? "Calculando…" : "Generar progresión"}
+            </Button>
+            {scenario && <>
+              <div className="scenario-playback">
+                <Button variant="outline" size="1" type="button" onClick={() => {
+                  if (scenarioFrame >= scenario.frames.length - 1) setScenarioFrame(0);
+                  setScenarioPlaying((playing) => !playing);
+                }}>
+                  {scenarioPlaying ? <Pause size={13} aria-hidden="true" /> : <Play size={13} aria-hidden="true" fill="currentColor" />}
+                  {scenarioPlaying ? "Pausar" : "Animar"}
+                </Button>
+                <span>Paso {scenarioFrame + 1}/{scenario.frames.length}</span>
+              </div>
+              <input className="range-control scenario-timeline" aria-label="Paso de la progresión ilustrativa" type="range" min="0" max={scenario.frames.length - 1} step="1" value={scenarioFrame} onChange={(event) => { setScenarioFrame(Number(event.target.value)); setScenarioPlaying(false); }} />
+              <p className="field-help">La dirección meteorológica se convierte de «desde» a «hacia». El avance y los pasos se expresan solo en píxeles.</p>
+              <details className="details-panel scenario-formula">
+                <summary>Fórmula del escenario</summary>
+                <p className="field-help">D = ((T + 20) / 80) × (1 − HR / 100); factor de ambiente = 0,75 + 0,5D; sesgo de viento = 0,45 × v / (v + 20); radio(θ, k) = k × avance × factor × [1 + sesgo × cos(θ − θviento)]. Los coeficientes sirven solo para dibujar esta hipótesis.</p>
+              </details>
+            </>}
+            {scenarioError && <p className="form-error" role="alert">{scenarioError}</p>}
+            <p className="scenario-caveat">Escenario matemático exploratorio, no pronóstico validado. La humedad del aire no es humedad del combustible. Sin combustible, pendiente ni calibración no se calcula una tasa real.</p>
+          </section>
           <section className="measurement-panel" aria-label="Herramientas de medición">
             <p className="panel-kicker">HERRAMIENTAS</p>
             <div className="tool-grid" role="group" aria-label="Seleccionar herramienta">
               {TOOL_OPTIONS.map(({ id, label, Icon }) => (
                 <Button key={id} className={`tool-button${tool === id ? " is-active" : ""}`} variant={tool === id ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult} aria-pressed={tool === id} onClick={() => selectTool(id)}>
-                  <Icon size={14} aria-hidden="true" /><span>{label}</span>
+                <Icon size={14} aria-hidden="true" /><span>{label}</span>
                 </Button>
               ))}
             </div>
             <p className="measurement-hint" aria-live="polite">
-              {tool === "distance" ? "Arrastra sobre la imagen para medir una distancia." : tool === "polygon" ? "Marca vértices en la imagen para medir un área." : tool === "pixel" ? "Selecciona un píxel para ver su coordenada." : "Elige una herramienta o compara las capas en el visor."}
+              {tool === "distance" ? "Arrastra sobre la imagen para medir una distancia." : tool === "polygon" ? "Marca vértices en la imagen para medir un área." : tool === "pixel" ? "Selecciona un píxel para ver su coordenada." : tool === "seed" ? "Haz clic en un punto de fuego activo para fijar el origen del escenario." : "Elige una herramienta o compara las capas en el visor."}
             </p>
             {(currentDistance !== null || manualArea !== null || (tool === "pixel" && inspectedPixel)) && <div className="measurement-readout" aria-live="polite">
               {currentDistance !== null && <div><span>{distancePreview ? "Midiendo" : "Distancia"}</span><strong>{formatLength(currentDistance, marksUnit)}</strong></div>}
