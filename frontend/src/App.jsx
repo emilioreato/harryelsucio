@@ -268,7 +268,7 @@ function App() {
     }
     saveBlob(
       new Blob([JSON.stringify({ esquema: "pyroscope-imagen-v1", job_id: jobId, sistema_coordenadas: grid, elementos }, null, 2)], { type: "application/json" }),
-      "pyroscope_mediciones.json",
+      "espejo_ustorio_mediciones.json",
     );
   };
 
@@ -293,9 +293,9 @@ function App() {
   return (
     <>
       <header className="topbar">
-        <a className="brand" href="/" aria-label="PyroScope, inicio">
-          <span className="brand-mark" aria-hidden="true">🔥</span>
-          <span className="brand-copy"><strong>PyroScope</strong><small>Área afectada</small></span>
+        <a className="brand" href="/" aria-label="Espejo Ustorio, inicio">
+          <span className="brand-mark" aria-hidden="true">◉</span>
+          <span className="brand-copy"><strong>espejo ustorio</strong><small>Observatorio de superficie</small></span>
         </a>
         <div className="topbar-context">
           <span className={`status-dot${connection.ready ? " is-ready" : error ? " is-error" : ""}`} />
