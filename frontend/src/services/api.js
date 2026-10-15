@@ -50,7 +50,9 @@ export const api = {
       return await response.blob();
     } catch (cause) {
       if (cause?.name === "AbortError") {
-        throw new Error("La descarga ha tardado demasiado. Comprueba la conexión e inténtalo de nuevo.");
+        const error = new Error("La descarga ha tardado demasiado. Comprueba la conexión e inténtalo de nuevo.");
+        error.name = "TimeoutError";
+        throw error;
       }
       throw cause;
     } finally {
