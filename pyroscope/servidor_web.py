@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.cookies import CookieError, SimpleCookie
 from io import BytesIO
 import ipaddress
 import json
@@ -37,8 +39,14 @@ from .visualizacion import crear_superposicion, crear_vista_clasificacion
 
 
 _WEB = RAIZ_REPOSITORIO / "web"
-_MAX_BODY_BYTES = 120 * 1024 * 1024
-_MAX_JOBS = 12
+_MAX_BODY_BYTES = min(
+    120 * 1024 * 1024,
+    max(1024, int(os.environ.get("LUMBRE_MAX_BODY_BYTES", str(120 * 1024 * 1024)))),
+)
+_MAX_LOGIN_BODY_BYTES = 4 * 1024
+_MAX_JOBS = min(12, max(1, int(os.environ.get("LUMBRE_MAX_JOBS", "12"))))
+_ACCESS_COOKIE_NAME = "lumbre_session"
+_ACCESS_SESSION_SECONDS = 7 * 24 * 60 * 60
 _JOBS: dict[str, dict[str, Any]] = {}
 _JOBS_LOCK = threading.RLock()
 _ANALYSIS_LOCK = threading.Lock()
@@ -128,15 +136,6 @@ def _es_instancia_lumbre(url: str, id_instancia: str | None = None) -> bool:
             )
         except Exception:
             return False
-
-
-def _instancia_habilita_movil(url: str) -> bool:
-    try:
-        with urlopen(f"{url.rstrip('/')}/api/mobile-access", timeout=0.6) as respuesta:
-            datos = json.loads(respuesta.read().decode("utf-8"))
-        return datos.get("enabled") is True
-    except Exception:
-        return False
 
 
 def _buscar_instancia_activa(host: str, puerto: int) -> str | None:
@@ -238,6 +237,57 @@ def _obtener_ip_lan() -> str | None:
         if ip.is_private and not ip.is_loopback and not ip.is_link_local:
             return direccion
     return None
+
+
+def _acceso_requerido() -> bool:
+    return os.environ.get("LUMBRE_ACCESS_REQUIRED", "").strip().lower() in {
+        "1", "true", "yes", "on"
+    }
+
+
+def _clave_acceso() -> str:
+    return os.environ.get("LUMBRE_ACCESS_PASSWORD", "")
+
+
+def _crear_token_acceso() -> str:
+    caduca = int(time.time()) + _ACCESS_SESSION_SECONDS
+    firma = hmac.new(
+        _clave_acceso().encode("utf-8"),
+        f"lumbre-session-v1:{caduca}".encode("ascii"),
+        hashlib.sha256,
+    ).hexdigest()
+    return f"{caduca}.{firma}"
+
+
+def _token_acceso_valido(cabecera_cookie: str) -> bool:
+    if not _clave_acceso():
+        return False
+    try:
+        cookies = SimpleCookie()
+        cookies.load(cabecera_cookie)
+        token = cookies[_ACCESS_COOKIE_NAME].value
+        caduca_texto, firma_recibida = token.split(".", 1)
+        caduca = int(caduca_texto)
+    except (CookieError, KeyError, TypeError, ValueError):
+        return False
+    ahora = int(time.time())
+    if caduca < ahora or caduca > ahora + _ACCESS_SESSION_SECONDS:
+        return False
+    if not firma_recibida.isascii():
+        return False
+    firma_esperada = hmac.new(
+        _clave_acceso().encode("utf-8"),
+        f"lumbre-session-v1:{caduca}".encode("ascii"),
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(firma_recibida, firma_esperada)
+
+
+def _validar_configuracion_acceso() -> None:
+    if _acceso_requerido() and len(_clave_acceso()) < 16:
+        raise RuntimeError(
+            "El acceso web requiere LUMBRE_ACCESS_PASSWORD con al menos 16 caracteres."
+        )
 
 
 def cerrar_servidor_local() -> bool:
@@ -572,28 +622,32 @@ def _iniciar_analisis(job_id: str, true_bytes: bytes, swir_bytes: bytes, ajustes
 
 
 class LumbreHandler(BaseHTTPRequestHandler):
-    """Sirve el frontend y la API local de análisis."""
+    """Sirve el frontend y la API de análisis de Lumbre."""
 
     server_version = "Lumbre/1.0"
 
     def do_GET(self) -> None:  # noqa: N802 - nombre requerido por BaseHTTPRequestHandler
         ruta = urlsplit(self.path).path
+        if ruta == "/api/auth/status":
+            requerido = _acceso_requerido()
+            self._json(
+                200,
+                {
+                    "required": requerido,
+                    "authenticated": not requerido or _token_acceso_valido(
+                        self.headers.get("Cookie", "")
+                    ),
+                    "max_upload_bytes": _MAX_BODY_BYTES,
+                },
+            )
+            return
         if ruta == "/api/health":
             self._json(
                 200,
                 {"app": "Lumbre", "instance_id": _ID_INSTANCIA, "pid": os.getpid()},
             )
             return
-        if ruta == "/api/mobile-access":
-            host, puerto = self.server.server_address[:2]
-            ip_lan = _obtener_ip_lan() if host in ("0.0.0.0", "::") else None
-            self._json(
-                200,
-                {
-                    "enabled": ip_lan is not None,
-                    "url": f"http://{ip_lan}:{puerto}/" if ip_lan else None,
-                },
-            )
+        if ruta.startswith("/api/") and self._rechazar_si_no_autorizado():
             return
         if ruta == "/api/scenes":
             escenas = [
@@ -687,6 +741,11 @@ class LumbreHandler(BaseHTTPRequestHandler):
             self._json(200, {"message": "Cerrando Lumbre."})
             threading.Thread(target=self.server.shutdown, daemon=True).start()
             return
+        if ruta == "/api/auth/login":
+            self._procesar_login()
+            return
+        if ruta.startswith("/api/") and self._rechazar_si_no_autorizado():
+            return
         if ruta != "/api/analyze":
             self._json(404, {"error": "Ruta no encontrada."})
             return
@@ -766,13 +825,56 @@ class LumbreHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             self._json(500, {"error": f"No se pudo iniciar el análisis: {exc}"})
 
-    def _leer_json(self) -> dict[str, Any]:
+    def _procesar_login(self) -> None:
+        if not _acceso_requerido():
+            self._json(200, {"required": False, "authenticated": True})
+            return
+        try:
+            datos = self._leer_json(_MAX_LOGIN_BODY_BYTES)
+        except (ValueError, json.JSONDecodeError) as exc:
+            self._json(400, {"error": str(exc)})
+            return
+        clave_recibida = datos.get("password")
+        if not isinstance(clave_recibida, str) or not hmac.compare_digest(
+            clave_recibida.encode("utf-8"), _clave_acceso().encode("utf-8")
+        ):
+            self._json(401, {"error": "La clave de acceso no es correcta."})
+            return
+
+        token = _crear_token_acceso()
+        seguro = os.environ.get("LUMBRE_COOKIE_SECURE", "true").strip().lower() in {
+            "1", "true", "yes", "on"
+        }
+        cookie = (
+            f"{_ACCESS_COOKIE_NAME}={token}; Path=/; Max-Age={_ACCESS_SESSION_SECONDS}; "
+            "HttpOnly; SameSite=Strict"
+        )
+        if seguro:
+            cookie += "; Secure"
+        self._json(
+            200,
+            {"required": True, "authenticated": True},
+            headers={"Set-Cookie": cookie},
+        )
+
+    def _rechazar_si_no_autorizado(self) -> bool:
+        if not _acceso_requerido() or _token_acceso_valido(
+            self.headers.get("Cookie", "")
+        ):
+            return False
+        self._json(401, {"error": "Introduce la clave para acceder a Lumbre."})
+        return True
+
+    def _leer_json(self, max_bytes: int = _MAX_BODY_BYTES) -> dict[str, Any]:
         try:
             longitud = int(self.headers.get("Content-Length", "0"))
         except ValueError as exc:
             raise ValueError("La solicitud tiene un tamaño no válido.") from exc
-        if longitud < 1 or longitud > _MAX_BODY_BYTES:
-            raise ValueError("El tamaño de la solicitud no es válido o supera el límite local.")
+        if longitud < 1:
+            raise ValueError("La solicitud no contiene un cuerpo JSON válido.")
+        if longitud > max_bytes:
+            limite_mib = max(1, max_bytes // (1024 * 1024))
+            raise ValueError(f"La solicitud supera el límite de {limite_mib} MiB.")
         try:
             datos = json.loads(self.rfile.read(longitud))
         except json.JSONDecodeError as exc:
@@ -791,16 +893,29 @@ class LumbreHandler(BaseHTTPRequestHandler):
         tipo = mimetypes.guess_type(ruta_resuelta.name)[0] or "application/octet-stream"
         self._bytes(200, ruta_resuelta.read_bytes(), tipo)
 
-    def _json(self, codigo: int, datos: dict[str, Any]) -> None:
+    def _json(
+        self,
+        codigo: int,
+        datos: dict[str, Any],
+        headers: dict[str, str] | None = None,
+    ) -> None:
         cuerpo = json.dumps(datos, ensure_ascii=False, allow_nan=False).encode("utf-8")
-        self._bytes(codigo, cuerpo, "application/json; charset=utf-8")
+        self._bytes(codigo, cuerpo, "application/json; charset=utf-8", headers=headers)
 
-    def _bytes(self, codigo: int, datos: bytes, tipo: str) -> None:
+    def _bytes(
+        self,
+        codigo: int,
+        datos: bytes,
+        tipo: str,
+        headers: dict[str, str] | None = None,
+    ) -> None:
         self.send_response(codigo)
         self.send_header("Content-Type", tipo)
         self.send_header("Content-Length", str(len(datos)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
+        for nombre, valor in (headers or {}).items():
+            self.send_header(nombre, valor)
         self.end_headers()
         self.wfile.write(datos)
 
@@ -810,15 +925,9 @@ def ejecutar_servidor(host: str = "127.0.0.1", puerto: int = 8501, abrir_navegad
 
     Reutiliza la instancia activa y devuelve ``False`` si ya hay una instancia.
     """
+    _validar_configuracion_acceso()
     url_existente = _buscar_instancia_activa(host, puerto)
     if url_existente:
-        if host == "0.0.0.0" and not _instancia_habilita_movil(url_existente):
-            print(
-                "Lumbre ya está abierta en modo local. Ciérrala con Ctrl+C en su ventana "
-                "y vuelve a iniciar encender_movil.bat para mostrar el QR."
-            )
-            _abrir_navegador(f"{url_existente}/")
-            return False
         if abrir_navegador:
             print(f"Lumbre ya está abierta en {url_existente}/. Abriendo esa instancia.")
             _abrir_navegador(f"{url_existente}/")
@@ -841,13 +950,6 @@ def ejecutar_servidor(host: str = "127.0.0.1", puerto: int = 8501, abrir_navegad
                 break
             time.sleep(0.15)
         if url_existente:
-            if host == "0.0.0.0" and not _instancia_habilita_movil(url_existente):
-                print(
-                    "Lumbre ya está abierta en modo local. Ciérrala con Ctrl+C en su ventana "
-                    "y vuelve a iniciar encender_movil.bat para mostrar el QR."
-                )
-                _abrir_navegador(f"{url_existente}/")
-                return False
             if abrir_navegador:
                 print(f"Lumbre ya está abierta en {url_existente}/. Abriendo esa instancia.")
                 _abrir_navegador(f"{url_existente}/")
@@ -883,7 +985,7 @@ def ejecutar_servidor(host: str = "127.0.0.1", puerto: int = 8501, abrir_navegad
             if ip_lan:
                 print(f"Acceso móvil: http://{ip_lan}:{puerto_real}/ (misma Wi-Fi).")
             else:
-                print("Acceso móvil: consulta el QR que se mostrará en Lumbre.")
+                print("No se pudo detectar la IP local. Comprueba los ajustes de red del equipo.")
         print("Mantén esta ventana abierta mientras usas la aplicación. Ctrl+C detiene el servidor.")
         if abrir_navegador:
             temporizador = threading.Timer(0.8, _abrir_navegador, args=(url,))

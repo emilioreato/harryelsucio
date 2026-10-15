@@ -2,13 +2,20 @@ async function requestJson(url, options) {
   const response = await fetch(url, options);
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.error || `Error HTTP ${response.status}`);
+    const error = new Error(payload.error || `Error HTTP ${response.status}`);
+    error.status = response.status;
+    throw error;
   }
   return payload;
 }
 
 export const api = {
-  mobileAccess: () => requestJson("/api/mobile-access"),
+  authStatus: () => requestJson("/api/auth/status"),
+  login: (password) => requestJson("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  }),
   scenes: () => requestJson("/api/scenes"),
   detectors: () => requestJson("/api/detectors"),
   analyze: (request) => requestJson("/api/analyze", {

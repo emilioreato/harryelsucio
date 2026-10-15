@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: lumbre-web
+    runtime: docker
+    plan: free
+    region: frankfurt
+    branch: codex/mobile-pixelart
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: LUMBRE_ACCESS_REQUIRED
+        value: "true"
+      - key: LUMBRE_ACCESS_PASSWORD
+        sync: false
+      - key: LUMBRE_COOKIE_SECURE
+        value: "true"
+      - key: LUMBRE_MAX_BODY_BYTES
+        value: "33554432"
+      - key: LUMBRE_MAX_JOBS
+        value: "2"

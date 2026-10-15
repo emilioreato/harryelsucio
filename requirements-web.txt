@@ -1,0 +1,7 @@
+# Dependencias usadas por el backend web. OpenCV sin GUI reduce requisitos del contenedor.
+numpy>=1.26,<3
+scipy>=1.11,<2
+opencv-python-headless>=4.9,<5
+scikit-learn>=1.4,<2
+Pillow>=10,<13
+pyproj>=3.6,<4

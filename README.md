@@ -62,22 +62,20 @@ python app.py
 
 En Windows puedes iniciarla con doble clic en [`encender_aplicacion.bat`](encender_aplicacion.bat), situado en la raíz del repositorio. El script usa el Python 3.11 o posterior seleccionado por el lanzador de Windows o disponible en `PATH`; no pide instalar una versión concreta. Si no encuentra Python, muestra un enlace de descarga y los comandos para instalarlo y sus dependencias. El lanzador abre la página local en el navegador. Si Lumbre ya está abierta, vuelve a abrir esa instancia en lugar de iniciar otro servidor. Para cerrarla desde otra ventana, ejecuta [`cerrar_aplicacion.bat`](cerrar_aplicacion.bat); también puedes pulsar `Ctrl+C` en la ventana del servidor. Si el servidor no responde, el cierre busca procesos Python asociados al `app.py` de esta copia y termina solo esos procesos.
 
-## Versión móvil (Android y iOS)
+## Publicar la web gratis y mantenerla actualizada
 
-La interfaz móvil es una web app instalable (PWA) que comparte toda la interfaz y las funciones de Lumbre: escenas, carga de imágenes, detectores, parámetros, visor de capas, mediciones, resultados y exportaciones. El análisis científico sigue ejecutándose en el servidor Python del ordenador; el teléfono es el cliente táctil y debe estar conectado al mismo Wi‑Fi.
+La configuración de [Render](https://render.com/) está en [`render.yaml`](render.yaml). Usa su plan gratuito, crea el sitio desde esta rama de GitHub y vuelve a desplegarlo cuando se actualice la rama `codex/mobile-pixelart`.
 
-1. En Windows, inicia [`encender_movil.bat`](encender_movil.bat) con doble clic. Se abrirá Lumbre en el ordenador y aparecerá un código QR. En macOS/Linux o desde una terminal, ejecuta:
+1. Sube esta rama a GitHub y crea una cuenta gratuita en Render.
+2. En Render, elige **New → Blueprint**, conecta el repositorio y selecciona la rama `codex/mobile-pixelart`.
+3. Render leerá `render.yaml`. Cuando lo solicite, define `LUMBRE_ACCESS_PASSWORD` con una clave propia de al menos 16 caracteres. Guárdala fuera del repositorio y compártela solo con quienes deban acceder.
+4. Confirma que el servicio conserva el plan **Free** y crea el despliegue. Render mostrará una dirección HTTPS `onrender.com` al terminar.
 
-   ```powershell
-   python app.py --host 0.0.0.0
-   ```
+No añadas un método de pago. Si se agotan las cuotas gratuitas, Render suspende el servicio o las nuevas compilaciones en lugar de facturar el exceso cuando la cuenta no tiene un método de pago. El servicio gratuito se duerme tras 15 minutos sin visitas y puede tardar alrededor de un minuto en despertar; dispone de 512 MB de RAM y almacenamiento temporal. Para cuidar ese límite, el despliegue admite peticiones de carga de hasta 32 MiB (aproximadamente 24 MiB entre las dos imágenes) y conserva como máximo dos análisis en memoria. Las imágenes cargadas y los resultados desaparecen cuando el servicio se reinicia, duerme o se vuelve a desplegar; las imágenes de ejemplo incluidas en el repositorio vuelven a estar disponibles al arrancar. Los pares grandes pueden tardar o superar la memoria gratuita. [Detalles del plan gratuito](https://render.com/docs/free).
 
-2. Conecta el móvil a la misma Wi‑Fi y escanea el QR con la cámara. Se abrirá Lumbre en Safari o Chrome; permite el acceso en el firewall del ordenador si Windows lo solicita.
-3. Para dejar un acceso en el teléfono, usa **Compartir → Añadir a pantalla de inicio** en Safari o **Instalar aplicación/Añadir a pantalla de inicio** en Chrome. En una dirección local HTTP, algunos navegadores crean un acceso directo; la instalación PWA completa y su caché sin conexión requieren publicar Lumbre bajo HTTPS.
+Tras crear el servicio, cada actualización que llegue a `codex/mobile-pixelart` se compilará y publicará automáticamente. En Android abre su URL en Chrome y elige **Instalar aplicación** o **Añadir a pantalla de inicio**. En iPhone/iPad, abre la URL en Safari y usa **Compartir → Añadir a pantalla de inicio**. No hace falta que el móvil y el ordenador compartan Wi‑Fi. La web usa el backend Python real y protege los endpoints de análisis con la clave configurada. No crea paquetes firmados para App Store o Google Play.
 
-Si Lumbre ya estaba abierta en modo normal, ciérrala con `Ctrl+C` y vuelve a iniciar `encender_movil.bat` para activar el acceso móvil.
-
-El modo `--host 0.0.0.0` permite conexiones de otros dispositivos de esa red. Úsalo en una Wi‑Fi privada de confianza; no expongas este servidor HTTP a Internet. Para acceso fuera de la red local hace falta alojar la API detrás de HTTPS. Esta rama entrega la app móvil web instalable y reutiliza el backend real; aún no genera paquetes firmados para App Store o Google Play.
+La interfaz móvil también se puede probar en la red local con [`encender_movil.bat`](encender_movil.bat); ese modo no publica Lumbre en Internet. No expongas el servidor local HTTP directamente a una red pública.
 
 Para desarrollar la interfaz React con recarga automática, abre dos terminales: en una inicia `python app.py --no-browser`; en la otra entra en `frontend/` y ejecuta `npm run dev`. Vite sirve la interfaz en `http://127.0.0.1:5173/` y reenvía `/api` al servidor Python local. Si el puerto 8501 está ocupado y Python anuncia otro puerto, configura `LUMBRE_API_TARGET` con esa dirección antes de arrancar Vite.
 

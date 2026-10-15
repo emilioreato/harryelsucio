@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
-import QRCode from "qrcode";
 import AdvancedSettings from "./components/AdvancedSettings.jsx";
 import ImageViewer from "./components/ImageViewer.jsx";
 import { api, fileToBase64 } from "./services/api.js";
 import { Button, Card } from "@radix-ui/themes";
-import { Activity, Crosshair, Copy, MousePointer2, Play, Ruler, ScanLine, SlidersHorizontal } from "lucide-react";
+import { Activity, Crosshair, LockKeyhole, MousePointer2, Play, Ruler, ScanLine, SlidersHorizontal } from "lucide-react";
 import { distanceBetween, formatArea, formatLength, formatNumber, polygonArea, polylineLength } from "./domain/measurements.js";
 
 const DEFAULT_KMEANS_WEIGHTS = {
@@ -70,6 +69,10 @@ function saveBlob(blob, filename) {
 }
 
 function App() {
+  const [access, setAccess] = useState({ loading: true, required: false, authenticated: false });
+  const [accessPassword, setAccessPassword] = useState("");
+  const [accessError, setAccessError] = useState("");
+  const [accessSubmitting, setAccessSubmitting] = useState(false);
   const [scenes, setScenes] = useState([]);
   const [detectors, setDetectors] = useState([]);
   const [connection, setConnection] = useState({ ready: false, label: "Conectando…" });
@@ -100,34 +103,6 @@ function App() {
   const [inspectedPixel, setInspectedPixel] = useState(null);
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
-  const [mobileAccess, setMobileAccess] = useState(null);
-  const [mobileQr, setMobileQr] = useState("");
-  const [mobileLinkCopied, setMobileLinkCopied] = useState(false);
-
-  const desktopMobileSetup = Boolean(
-    mobileAccess?.enabled && ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname),
-  );
-
-  useEffect(() => {
-    let active = true;
-    api.mobileAccess().then((access) => {
-      if (active) setMobileAccess(access);
-    }).catch(() => {});
-    return () => { active = false; };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    if (!desktopMobileSetup || !mobileAccess?.url) {
-      setMobileQr("");
-      return () => { active = false; };
-    }
-    QRCode.toDataURL(mobileAccess.url, { width: 176, margin: 1, errorCorrectionLevel: "M" })
-      .then((dataUrl) => { if (active) setMobileQr(dataUrl); })
-      .catch(() => { if (active) setMobileQr(""); });
-    return () => { active = false; };
-  }, [desktopMobileSetup, mobileAccess?.url]);
-
   useEffect(() => {
     const rememberInstallPrompt = (event) => {
       event.preventDefault();
@@ -135,6 +110,21 @@ function App() {
     };
     window.addEventListener("beforeinstallprompt", rememberInstallPrompt);
     return () => window.removeEventListener("beforeinstallprompt", rememberInstallPrompt);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    api.authStatus()
+      .then((status) => {
+        if (active) setAccess({ loading: false, ...status });
+      })
+      .catch((cause) => {
+        if (!active) return;
+        setAccess({ loading: false, required: false, authenticated: false });
+        setConnection({ ready: false, label: "Sin conexión" });
+        setError(cause.message);
+      });
+    return () => { active = false; };
   }, []);
 
   const installMobileApp = async () => {
@@ -147,7 +137,23 @@ function App() {
     setInstallPrompt(null);
   };
 
+  const submitAccess = async (event) => {
+    event.preventDefault();
+    setAccessError("");
+    setAccessSubmitting(true);
+    try {
+      const status = await api.login(accessPassword);
+      setAccess({ loading: false, ...status });
+      setAccessPassword("");
+    } catch (cause) {
+      setAccessError(cause.message);
+    } finally {
+      setAccessSubmitting(false);
+    }
+  };
+
   useEffect(() => {
+    if (access.loading || (access.required && !access.authenticated)) return undefined;
     let active = true;
     Promise.all([api.scenes(), api.detectors()])
       .then(([sceneResponse, detectorResponse]) => {
@@ -168,7 +174,7 @@ function App() {
         setError(cause.message);
       });
     return () => { active = false; };
-  }, []);
+  }, [access.loading, access.required, access.authenticated]);
 
   const selectedScene = scenes.find((item) => item.id === sceneId);
   const selectedDetector = detectors.find((item) => item.id === method);
@@ -345,6 +351,41 @@ function App() {
   const summary = metrics && settingsUsed
     ? `${metrics.detector}. Rejilla ${metrics.grid_width} × ${metrics.grid_height} px. Píxeles excluidos como agua: ${formatNumber(metrics.water_excluded)}. Regiones remotas descartadas: ${metrics.remote_regions_discarded}. ${metrics.gsd_x_m ? `GSD efectivo ${formatNumber(metrics.gsd_x_m, 3)} × ${formatNumber(metrics.gsd_y_m, 3)} m/píxel.` : "Sin GSD; las medidas se expresan en píxeles."}`
     : "Al terminar, aquí se muestran el detector y la rejilla usada.";
+
+  if (access.loading) {
+    return <main className="access-screen" aria-live="polite"><section className="access-card">
+      <span className="brand-pixel-flame" aria-hidden="true" />
+      <p className="access-kicker">LUMBRE · ANÁLISIS SATELITAL</p>
+      <h1>Conectando…</h1>
+    </section></main>;
+  }
+
+  if (access.required && !access.authenticated) {
+    return <main className="access-screen"><section className="access-card">
+      <span className="brand-pixel-flame" aria-hidden="true" />
+      <p className="access-kicker">LUMBRE · ANÁLISIS SATELITAL</p>
+      <h1><LockKeyhole size={20} aria-hidden="true" /> Acceso privado</h1>
+      <p className="access-description">Introduce la clave de acceso de esta instalación para abrir el espacio de análisis.</p>
+      <form className="access-form" onSubmit={submitAccess}>
+        <label htmlFor="access-password">Clave de acceso</label>
+        <input
+          autoComplete="current-password"
+          autoFocus
+          id="access-password"
+          type="password"
+          value={accessPassword}
+          onChange={(event) => setAccessPassword(event.target.value)}
+          required
+        />
+        {accessError && <p className="access-error" role="alert">{accessError}</p>}
+        <button type="submit" disabled={accessSubmitting || !accessPassword}>
+          {accessSubmitting ? "Comprobando…" : "Entrar"}
+        </button>
+      </form>
+      <p className="access-footnote">La sesión se guarda en una cookie protegida del navegador.</p>
+    </section></main>;
+  }
+
   return (
     <>
       <header className="mobile-appbar">
@@ -367,22 +408,6 @@ function App() {
             </span>
           </div>
 
-          {desktopMobileSetup && <section className="phone-access" aria-label="Abrir Lumbre en el móvil">
-            <h2>Abre Lumbre en tu móvil</h2>
-            <p>Conecta el móvil a la misma Wi‑Fi y escanea este código con la cámara.</p>
-            {mobileQr ? <img className="phone-access-qr" src={mobileQr} alt="Código QR para abrir Lumbre en el móvil" /> : <p>Preparando el código…</p>}
-            <code className="phone-access-url">{mobileAccess.url}</code>
-            <button className="phone-access-copy" type="button" onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(mobileAccess.url);
-                setMobileLinkCopied(true);
-                window.setTimeout(() => setMobileLinkCopied(false), 1800);
-              } catch {
-                setMobileLinkCopied(false);
-              }
-            }}><Copy size={14} aria-hidden="true" />{mobileLinkCopied ? "Enlace copiado" : "Copiar enlace"}</button>
-          </section>}
-
           <form onSubmit={runAnalysis}>
             <div className="source-switch" role="tablist" aria-label="Origen de las imágenes">
               {[ ["preloaded", "Escenas"], ["upload", "Subir imágenes"] ].map(([id, label]) => (
@@ -403,7 +428,10 @@ function App() {
                 <input className="file-control" name="true-color-file" id="true-color-file" type="file" accept=".jpg,.jpeg,.png,.tif,.tiff,image/*" />
                 <label className="field-label second-file-label" htmlFor="swir-file">Imagen SWIR</label>
                 <input className="file-control" name="swir-file" id="swir-file" type="file" accept=".jpg,.jpeg,.png,.tif,.tiff,image/*" />
-                <p className="field-help">True Color y SWIR de la misma fecha.</p>
+                <p className="field-help">
+                  True Color y SWIR de la misma fecha.
+                  {access.max_upload_bytes && ` Límite aproximado por pareja: ${Math.max(1, Math.floor(access.max_upload_bytes * 0.72 / (1024 * 1024)))} MiB.`}
+                </p>
               </section>
             )}
 

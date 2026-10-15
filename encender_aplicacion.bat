@@ -10,6 +10,7 @@ set "LUMBRE_HOST=127.0.0.1"
 set "LUMBRE_BROWSER_OPTION="
 if /I "%~1"=="--lan" (
     set "LUMBRE_HOST=0.0.0.0"
+    set "LUMBRE_BROWSER_OPTION=--no-browser"
 )
 
 where py >nul 2>nul

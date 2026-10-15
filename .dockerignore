@@ -1,0 +1,25 @@
+.git
+.github
+.codex
+.agents
+.aws
+.env
+.env.*
+**/.env
+**/.env.*
+.venv
+venv
+env
+frontend/node_modules
+frontend/.vite
+**/__pycache__
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.lumbre-instance.json
+.lumbre-instance.lock
+.lumbre-instance.*.tmp
+tmp_pyroscope
+tmp_algorithm_review
+training Random Forest/dataset
+training Random Forest/random_forest.joblib
