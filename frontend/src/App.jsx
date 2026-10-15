@@ -86,7 +86,6 @@ function App() {
   const [tool, setTool] = useState("view");
   const [marks, setMarks] = useState([]);
   const [polygonClosed, setPolygonClosed] = useState(false);
-  const [inspectedPixel, setInspectedPixel] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -190,7 +189,6 @@ function App() {
       setResult(null);
       setMarks([]);
       setPolygonClosed(false);
-      setInspectedPixel(null);
       setRunning(true);
       setConnection({ ready: true, label: "El motor Python está procesando" });
       setProgress({ label: "Preparando análisis", value: 0 });
