@@ -10,7 +10,7 @@ from ..coordenadas import SistemaCoordenadasImagen
 from ..imagenes import abrir_rgb, reducir_par_alineado
 from ..segmentacion import ResultadoAreaAfectada, segmentar_superficie_afectada
 from ..progreso import ProgresoSegmentacion
-from .configuracion import MAX_LADO_ANALISIS
+from .configuracion import MAX_LADO_ANALISIS, MAX_LADO_CONTEXTUAL
 
 
 @dataclass(frozen=True)
@@ -25,10 +25,11 @@ def preparar_pareja(
     true_bytes: bytes,
     swir_bytes: bytes,
     gsd_m_por_px: float | None,
+    max_lado: int = MAX_LADO_ANALISIS,
 ) -> ParejaPreparada:
     """Lee ambas composiciones y exige dimensiones originales coincidentes."""
-    true_color, tamano_true = abrir_rgb(true_bytes, MAX_LADO_ANALISIS)
-    swir, tamano_swir = abrir_rgb(swir_bytes, MAX_LADO_ANALISIS)
+    true_color, tamano_true = abrir_rgb(true_bytes, max_lado)
+    swir, tamano_swir = abrir_rgb(swir_bytes, max_lado)
     if tamano_true != tamano_swir or true_color.shape != swir.shape:
         raise ValueError(
             "Las imágenes no tienen las mismas dimensiones después de leerlas. "
@@ -63,7 +64,7 @@ def procesar_pareja(
 ) -> tuple[np.ndarray, np.ndarray, ResultadoAreaAfectada]:
     """Reduce en pareja y llama al servicio de segmentación compartido."""
     true_reducido, swir_reducida = reducir_par_alineado(
-        true_color, swir, MAX_LADO_ANALISIS
+        true_color, swir, MAX_LADO_CONTEXTUAL if metodo == "contextual_hibrida" else MAX_LADO_ANALISIS
     )
     factor_x = true_color.shape[1] / true_reducido.shape[1]
     factor_y = true_color.shape[0] / true_reducido.shape[0]

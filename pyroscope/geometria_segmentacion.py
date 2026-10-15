@@ -16,6 +16,7 @@ def segmentar_regiones_espaciales(
     distancia_maxima_pct: float = 10.0,
     on_progress: ProgresoSegmentacion | None = None,
     conservar_regiones_separadas: bool = False,
+    preservar_geometria: bool = False,
 ) -> ResultadoRegionesEspaciales:
     """Convierte candidatos semánticos en regiones espaciales depuradas.
 
@@ -40,12 +41,13 @@ def segmentar_regiones_espaciales(
     alto, ancho = mascara.shape
     _informar_progreso(on_progress, "Limpiando ruido y agrupando regiones", 82)
     mascara_u8 = mascara.astype(np.uint8) * 255
-    mascara_u8 = cv2.morphologyEx(
-        mascara_u8, cv2.MORPH_CLOSE, np.ones((5, 5), dtype=np.uint8)
-    )
-    mascara_u8 = cv2.morphologyEx(
-        mascara_u8, cv2.MORPH_OPEN, np.ones((3, 3), dtype=np.uint8)
-    )
+    if not preservar_geometria:
+        mascara_u8 = cv2.morphologyEx(
+            mascara_u8, cv2.MORPH_CLOSE, np.ones((5, 5), dtype=np.uint8)
+        )
+        mascara_u8 = cv2.morphologyEx(
+            mascara_u8, cv2.MORPH_OPEN, np.ones((3, 3), dtype=np.uint8)
+        )
     pixeles_agua_excluidos = int(np.count_nonzero(mascara_u8[mascara_agua]))
     pixeles_humo_excluidos = int(np.count_nonzero(mascara_u8[mascara_humo]))
     mascara_u8[mascara_agua] = 0
@@ -79,13 +81,14 @@ def segmentar_regiones_espaciales(
             if separacion > distancia_maxima_px:
                 componentes_remotos_descartados += 1
                 continue
-            dentro_del_radio = componente & (distancia_al_ancla <= distancia_maxima_px)
-            limpia[dentro_del_radio] = 255
+            # La proximidad decide sobre el componente entero; no es un recorte.
+            limpia[componente] = 255
     else:
         limpia = np.zeros((alto, ancho), dtype=np.uint8)
 
     contornos, _ = cv2.findContours(
-        limpia, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        limpia, cv2.RETR_LIST if preservar_geometria else cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE
     )
     contornos_ordenados = tuple(sorted(contornos, key=cv2.contourArea, reverse=True))
     _informar_progreso(on_progress, "Preparando el resultado visual", 98)

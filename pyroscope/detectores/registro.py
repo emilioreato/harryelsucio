@@ -7,6 +7,7 @@ from typing import Callable
 
 from ..modelos_segmentacion import ResultadoClasificacionSemantica
 from .fusion import clasificar_fusion_ponderada
+from .contextual import clasificar_base_contextual
 from .kmeans import clasificar_pixeles_area_afectada
 from .swir_histeresis import clasificar_pixeles_area_afectada_swir
 
@@ -26,6 +27,13 @@ class DetectorSuperficie:
 
 
 DETECTORES_SUPERFICIE: tuple[DetectorSuperficie, ...] = (
+    DetectorSuperficie(
+        id="contextual_hibrida",
+        nombre="Segmentación contextual híbrida (experimental)",
+        descripcion="Evidencia V2 + SLIC conjunto, RAG y Watershed local opcional. Hipótesis bajo humo separada del área visible.",
+        usa_numero_clases=False,
+        clasificar=clasificar_base_contextual,
+    ),
     DetectorSuperficie(
         id="kmeans",
         nombre="K-Means conjunto",

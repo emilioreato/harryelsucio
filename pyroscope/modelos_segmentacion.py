@@ -24,6 +24,7 @@ class ResultadoClasificacionSemantica:
     centros: np.ndarray
     clases_seleccionadas: tuple[int, ...]
     puntuaciones_clase: np.ndarray
+    caracteristicas_comunes: np.ndarray | None = None
 
 
 @dataclass(frozen=True)
@@ -59,3 +60,12 @@ class ResultadoAreaAfectada:
     pixeles_agua_excluidos: int
     distancia_maxima_px: int
     componentes_remotos_descartados: int
+    # Ampliaciones opcionales: los detectores existentes no cambian su contrato.
+    mascara_indeterminada: np.ndarray | None = None
+    mascara_bajo_humo_espectral: np.ndarray | None = None
+    mascara_bajo_humo_continuidad: np.ndarray | None = None
+    diagnosticos_contextuales: dict[str, np.ndarray] | None = None
+
+    @property
+    def mascara_superficie_visible(self) -> np.ndarray:
+        return self.mascara

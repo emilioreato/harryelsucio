@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import numpy as np
 
 from .coordenadas import SistemaCoordenadasImagen
@@ -61,9 +62,9 @@ def segmentar_superficie_afectada(
         opciones_detector["pesos_kmeans"] = avanzado.get("kmeans_weights")
         if detector.id == "kmeans":
             opciones_detector["pesos_score"] = opciones_detector.pop("pesos_kmeans")
-    if detector.id in ("swir_histeresis", "fusion_ponderada"):
+    if detector.id in ("swir_histeresis", "fusion_ponderada", "contextual_hibrida"):
         opciones_detector["umbrales_swir"] = avanzado.get("swir_thresholds")
-        if detector.id == "swir_histeresis":
+        if detector.id in ("swir_histeresis", "contextual_hibrida"):
             opciones_detector["umbrales_percentil"] = opciones_detector.pop("umbrales_swir")
     if detector.id == "fusion_ponderada":
         opciones_detector.update(
@@ -73,20 +74,53 @@ def segmentar_superficie_afectada(
         )
 
     clasificacion = detector.clasificar(true_color, swir, **opciones_detector)
+    diagnosticos = None
+    estimacion = None
+    es_contextual = detector.id == "contextual_hibrida"
+    if es_contextual:
+        from .caracteristicas import extraer_caracteristicas_pareja
+        from .evidencia_contextual import evidencia_desde_v2
+        from .regiones_contextuales import segmentar_contextual
+        caracteristicas = clasificacion.caracteristicas_comunes
+        if caracteristicas is None:
+            caracteristicas = extraer_caracteristicas_pareja(true_color, swir)
+        score = evidencia_desde_v2(clasificacion, caracteristicas)
+        informar_progreso(on_progress, "Organizando evidencia con SLIC y RAG", 75)
+        contexto = segmentar_contextual(
+            true_color, swir, clasificacion.mascara_candidata,
+            clasificacion.mascara_agua, clasificacion.mascara_humo,
+            evidencia=score, caracteristicas=caracteristicas,
+        )
+        diagnosticos = contexto.diagnosticos
+        clasificacion = replace(clasificacion, mascara_candidata=contexto.mascara)
     regiones = segmentar_regiones_espaciales(
         clasificacion,
         area_minima_pct=area_minima_pct,
         distancia_maxima_pct=distancia_maxima_pct,
         on_progress=on_progress,
-        conservar_regiones_separadas=conservar_regiones_separadas,
+        conservar_regiones_separadas=conservar_regiones_separadas or es_contextual,
+        preservar_geometria=es_contextual,
     )
+    if es_contextual:
+        from .estimacion_bajo_humo import estimar_bajo_humo
+        # Una firma roja superviviente permite hipótesis espectral; ausencia de
+        # contraste deja solo continuidad corta o suelo desconocido.
+        contradiccion = ((caracteristicas[..., 2] > .25)
+                         & (caracteristicas[..., 0] < -.05)
+                         & (clasificacion.confianza_humo < .7))
+        estimacion = estimar_bajo_humo(
+            regiones.mascara, clasificacion.mascara_humo, clasificacion.mascara_agua,
+            score, contradiccion=contradiccion,
+            distancia_maxima_px=max(3, min(24, round(min(alto, ancho) * .015))),
+        )
     informar_progreso(on_progress, "Análisis completado", 100)
 
     return ResultadoAreaAfectada(
         sistema_coordenadas=sistema_coordenadas,
         mascara=regiones.mascara,
         mascara_clasificada=clasificacion.mascara_candidata,
-        mascara_candidata_bajo_humo=clasificacion.mascara_candidata_bajo_humo,
+        mascara_candidata_bajo_humo=(estimacion.mascara_candidata if estimacion is not None
+                                    else clasificacion.mascara_candidata_bajo_humo),
         mascara_humo=clasificacion.mascara_humo,
         confianza_humo=clasificacion.confianza_humo,
         clase_por_pixel=clasificacion.clase_por_pixel,
@@ -99,6 +133,10 @@ def segmentar_superficie_afectada(
         pixeles_agua_excluidos=regiones.pixeles_agua_excluidos,
         distancia_maxima_px=regiones.distancia_maxima_px,
         componentes_remotos_descartados=regiones.componentes_remotos_descartados,
+        mascara_indeterminada=(estimacion.mascara_indeterminada if estimacion is not None else None),
+        mascara_bajo_humo_espectral=(estimacion.mascara_espectral if estimacion is not None else None),
+        mascara_bajo_humo_continuidad=(estimacion.mascara_continuidad if estimacion is not None else None),
+        diagnosticos_contextuales=diagnosticos,
     )
 
 

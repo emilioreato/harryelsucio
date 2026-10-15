@@ -23,11 +23,79 @@ function pixelLabel(point, grid) {
   return `Píxel (${x}, ${y}) · ${formatNumber(point.x * grid.gsd_x_m, 1)}, ${formatNumber(point.y * grid.gsd_y_m, 1)} m`;
 }
 
+function labelMaskRegions(pixels, width, height, grid) {
+  const size = width * height;
+  const labels = new Uint32Array(size);
+  let foregroundCount = 0;
+  for (let index = 0; index < size; index += 1) {
+    if (pixels[index * 4] >= 128) foregroundCount += 1;
+  }
+  if (!foregroundCount) return { labels, regions: [], width, height };
+
+  const queue = new Int32Array(foregroundCount);
+  const scaleX = grid.gsd_x_m || 1;
+  const scaleY = grid.gsd_y_m || 1;
+  const metricScale = Number.isFinite(grid.gsd_x_m) && grid.gsd_x_m > 0
+    && Number.isFinite(grid.gsd_y_m) && grid.gsd_y_m > 0;
+  const regions = [];
+
+  for (let seed = 0; seed < size; seed += 1) {
+    if (labels[seed] || pixels[seed * 4] < 128) continue;
+    const id = regions.length + 1;
+    let head = 0;
+    let tail = 0;
+    let pixelCount = 0;
+    let horizontalEdges = 0;
+    let verticalEdges = 0;
+    queue[tail++] = seed;
+    labels[seed] = id;
+
+    while (head < tail) {
+      const index = queue[head++];
+      const x = index % width;
+      const y = Math.floor(index / width);
+      pixelCount += 1;
+      if (y === 0 || pixels[(index - width) * 4] < 128) horizontalEdges += 1;
+      if (y === height - 1 || pixels[(index + width) * 4] < 128) horizontalEdges += 1;
+      if (x === 0 || pixels[(index - 1) * 4] < 128) verticalEdges += 1;
+      if (x === width - 1 || pixels[(index + 1) * 4] < 128) verticalEdges += 1;
+
+      for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
+        const neighborY = y + offsetY;
+        if (neighborY < 0 || neighborY >= height) continue;
+        for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
+          if (offsetX === 0 && offsetY === 0) continue;
+          const neighborX = x + offsetX;
+          if (neighborX < 0 || neighborX >= width) continue;
+          const neighbor = neighborY * width + neighborX;
+          if (!labels[neighbor] && pixels[neighbor * 4] >= 128) {
+            labels[neighbor] = id;
+            queue[tail++] = neighbor;
+          }
+        }
+      }
+    }
+
+    regions.push({
+      id,
+      pixel_count: pixelCount,
+      area: pixelCount * (metricScale ? scaleX * scaleY : 1),
+      area_unit: metricScale ? "m²" : "px²",
+      perimeter: metricScale
+        ? horizontalEdges * scaleX + verticalEdges * scaleY
+        : horizontalEdges + verticalEdges,
+      perimeter_unit: metricScale ? "m" : "px",
+    });
+  }
+
+  return { labels, regions, width, height };
+}
+
 export default function ImageViewer({
   jobId, grid, layer, setLayer, showSegmentation, setShowSegmentation,
   showMarks, setShowMarks, tool, marks, setMarks, distancePreview,
   setDistancePreview, inspectedPixel, setInspectedPixel, selectedRegion,
-  onRegionSelect, errorMessage, onError,
+  onRegionSelect, onRegionsReady, errorMessage, onError,
 }) {
   const stageRef = useRef(null);
   const imageRef = useRef(null);
@@ -41,28 +109,28 @@ export default function ImageViewer({
 
   useEffect(() => {
     regionLabelsRef.current = null;
+    onRegionsReady([]);
     if (!hasResult) return undefined;
     let cancelled = false;
-    const regionImage = new Image();
-    regionImage.onload = () => {
+    const maskImage = new Image();
+    maskImage.onload = () => {
       if (cancelled) return;
-      const labelsCanvas = document.createElement("canvas");
-      labelsCanvas.width = grid.ancho_px;
-      labelsCanvas.height = grid.alto_px;
-      const labelsContext = labelsCanvas.getContext("2d", { willReadFrequently: true });
-      labelsContext.drawImage(regionImage, 0, 0, labelsCanvas.width, labelsCanvas.height);
-      regionLabelsRef.current = {
-        width: labelsCanvas.width,
-        height: labelsCanvas.height,
-        data: labelsContext.getImageData(0, 0, labelsCanvas.width, labelsCanvas.height).data,
-      };
+      const maskCanvas = document.createElement("canvas");
+      maskCanvas.width = grid.ancho_px;
+      maskCanvas.height = grid.alto_px;
+      const maskContext = maskCanvas.getContext("2d", { willReadFrequently: true });
+      maskContext.drawImage(maskImage, 0, 0, maskCanvas.width, maskCanvas.height);
+      const pixels = maskContext.getImageData(0, 0, maskCanvas.width, maskCanvas.height).data;
+      const labeledMask = labelMaskRegions(pixels, maskCanvas.width, maskCanvas.height, grid);
+      regionLabelsRef.current = labeledMask;
+      onRegionsReady(labeledMask.regions);
     };
-    regionImage.src = api.layerUrl(jobId, "region-ids");
+    maskImage.src = api.layerUrl(jobId, "mask");
     return () => {
       cancelled = true;
       regionLabelsRef.current = null;
     };
-  }, [hasResult, jobId, grid?.ancho_px, grid?.alto_px]);
+  }, [hasResult, jobId, grid?.ancho_px, grid?.alto_px, grid?.gsd_x_m, grid?.gsd_y_m, onRegionsReady]);
 
   useEffect(() => {
     const image = imageRef.current;
@@ -123,25 +191,40 @@ export default function ImageViewer({
       if (tool === "distance") {
         for (let index = 0; index + 1 < marks.length; index += 2) drawLine(marks[index], marks[index + 1]);
         if (distancePreview) drawLine(distancePreview.start, distancePreview.end, true);
-      } else if (tool === "area" && selectedRegion?.contours?.length) {
-        context.lineCap = "round";
-        context.lineJoin = "round";
-        for (const contour of selectedRegion.contours) {
-          if (contour.length < 2) continue;
-          context.beginPath();
-          contour.forEach(([x, y], index) => {
-            const point = toCanvas({ x, y });
-            if (index === 0) context.moveTo(point.x, point.y);
-            else context.lineTo(point.x, point.y);
-          });
-          context.closePath();
-          context.strokeStyle = "rgba(24, 15, 30, .92)";
-          context.lineWidth = 5;
-          context.stroke();
-          context.strokeStyle = "#ff4fa3";
-          context.lineWidth = 2.6;
-          context.stroke();
+      } else if (tool === "area" && selectedRegion && regionLabelsRef.current) {
+        const { labels, width, height } = regionLabelsRef.current;
+        const highlight = document.createElement("canvas");
+        highlight.width = width;
+        highlight.height = height;
+        const highlightContext = highlight.getContext("2d");
+        const overlay = highlightContext.createImageData(width, height);
+        const selectedId = selectedRegion.id;
+        const setPink = (offset, alpha) => {
+          overlay.data[offset] = 255;
+          overlay.data[offset + 1] = 79;
+          overlay.data[offset + 2] = 163;
+          overlay.data[offset + 3] = Math.max(overlay.data[offset + 3], alpha);
+        };
+
+        for (let index = 0; index < labels.length; index += 1) {
+          if (labels[index] !== selectedId) continue;
+          const x = index % width;
+          const y = Math.floor(index / width);
+          const boundary = x === 0 || labels[index - 1] !== selectedId
+            || x === width - 1 || labels[index + 1] !== selectedId
+            || y === 0 || labels[index - width] !== selectedId
+            || y === height - 1 || labels[index + width] !== selectedId;
+          const offset = index * 4;
+          setPink(offset, boundary ? 255 : 48);
+          if (boundary) {
+            if (x > 0) setPink((index - 1) * 4, 255);
+            if (x + 1 < width) setPink((index + 1) * 4, 255);
+            if (y > 0) setPink((index - width) * 4, 255);
+            if (y + 1 < height) setPink((index + width) * 4, 255);
+          }
         }
+        highlightContext.putImageData(overlay, 0, 0);
+        context.drawImage(highlight, 0, 0, imageRect.width, imageRect.height);
       }
 
       const points = tool === "pixel" && inspectedPixel ? [inspectedPixel] : marks;
@@ -230,11 +313,8 @@ export default function ImageViewer({
       if (!labelMap) return;
       const x = Math.max(0, Math.min(labelMap.width - 1, Math.floor(point.x)));
       const y = Math.max(0, Math.min(labelMap.height - 1, Math.floor(point.y)));
-      const offset = (y * labelMap.width + x) * 4;
-      const regionId = labelMap.data[offset]
-        | (labelMap.data[offset + 1] << 8)
-        | (labelMap.data[offset + 2] << 16);
-      onRegionSelect(regionId || null);
+      const regionId = labelMap.labels[y * labelMap.width + x];
+      onRegionSelect(regionId ? labelMap.regions[regionId - 1] : null);
     } else if (tool === "pixel") setInspectedPixel(point);
   };
 

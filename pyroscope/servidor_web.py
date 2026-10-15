@@ -22,7 +22,6 @@ from urllib.request import Request, urlopen
 import uuid
 import webbrowser
 
-import cv2
 import numpy as np
 from PIL import Image
 
@@ -32,7 +31,7 @@ from .detectores import listar_detectores_superficie, obtener_detector_superfici
 from .detectores.kmeans import PESOS_SCORE_POR_DEFECTO
 from .agua import UMBRALES_AGUA_POR_DEFECTO
 from .humo import PESOS_CONFIANZA_HUMO_POR_DEFECTO
-from .visualizacion import crear_superposicion, crear_vista_clasificacion
+from .visualizacion import crear_superposicion, crear_vista_clasificacion, colorear_diagnostico
 
 
 _WEB = RAIZ_REPOSITORIO / "web"
@@ -255,6 +254,27 @@ def _png_bytes(imagen: np.ndarray) -> bytes:
     return salida.getvalue()
 
 
+def _capas_adicionales(resultado: Any) -> dict[str, bytes]:
+    """Exporta observación y oclusión separadas sin exigir campos nuevos al detector."""
+    capas = {}
+    for nombre, campo in (
+        ("smoke", "mascara_humo"),
+        ("smoke-candidates", "mascara_candidata_bajo_humo"),
+        ("visible-surface", "mascara_superficie_visible"),
+        ("smoke-unknown", "mascara_indeterminada"),
+        ("smoke-spectral", "mascara_bajo_humo_espectral"),
+        ("smoke-continuity", "mascara_bajo_humo_continuidad"),
+    ):
+        datos = getattr(resultado, campo, None)
+        if datos is not None:
+            capas[nombre] = _png_bytes(np.asarray(datos, dtype=bool))
+    for nombre, datos in (getattr(resultado, "diagnosticos_contextuales", None) or {}).items():
+        nombre_seguro = re.sub(r"[^a-z]+", "-", str(nombre).lower()).strip("-")
+        if nombre_seguro and datos is not None:
+            capas[f"diagnostic-{nombre_seguro}"] = _png_bytes(colorear_diagnostico(datos))
+    return capas
+
+
 def _actualizar_trabajo(job_id: str, **cambios: Any) -> None:
     with _JOBS_LOCK:
         trabajo = _JOBS.get(job_id)
@@ -446,7 +466,11 @@ def _iniciar_analisis(job_id: str, true_bytes: bytes, swir_bytes: bytes, ajustes
                 stage="Leyendo y comprobando la pareja de imágenes",
                 progress=3,
             )
-            pareja = preparar_pareja(true_bytes, swir_bytes, ajustes["gsd_m_per_px"])
+            from .interfaz.configuracion import MAX_LADO_ANALISIS, MAX_LADO_CONTEXTUAL
+            pareja = preparar_pareja(
+                true_bytes, swir_bytes, ajustes["gsd_m_per_px"],
+                max_lado=MAX_LADO_CONTEXTUAL if ajustes["detector"].id == "contextual_hibrida" else MAX_LADO_ANALISIS,
+            )
 
             def progreso(etapa: str, porcentaje: int) -> None:
                 _actualizar_trabajo(
@@ -473,49 +497,6 @@ def _iniciar_analisis(job_id: str, true_bytes: bytes, swir_bytes: bytes, ajustes
             sistema = resultado.sistema_coordenadas
             pixeles = int(np.count_nonzero(resultado.mascara))
             area, unidad_area = sistema.area_de_pixeles(pixeles)
-            numero_regiones, etiquetas_regiones, estadisticas_regiones, _ = cv2.connectedComponentsWithStats(
-                resultado.mascara.astype(np.uint8), connectivity=8
-            )
-            regiones_rgb = np.stack(
-                (
-                    etiquetas_regiones & 0xFF,
-                    (etiquetas_regiones >> 8) & 0xFF,
-                    (etiquetas_regiones >> 16) & 0xFF,
-                ),
-                axis=-1,
-            ).astype(np.uint8)
-            regiones: list[dict[str, Any]] = []
-            unidad_perimetro_region = "m" if sistema.gsd_x_m is not None else "px"
-            for region_id in range(1, numero_regiones):
-                componente = (etiquetas_regiones == region_id).astype(np.uint8)
-                contornos_region, _ = cv2.findContours(
-                    componente, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-                )
-                contornos_simplificados = []
-                perimetro_region = 0.0
-                for contorno in contornos_region:
-                    vertices = [tuple(map(float, punto[0])) for punto in contorno]
-                    longitud, unidad_perimetro_region = sistema.longitud_de_linea(
-                        vertices, cerrar=True
-                    )
-                    perimetro_region += longitud
-                    aproximado = cv2.approxPolyDP(contorno, 1.0, True)
-                    contornos_simplificados.append(
-                        [[int(punto[0][0]), int(punto[0][1])] for punto in aproximado]
-                    )
-                pixeles_region = int(estadisticas_regiones[region_id, cv2.CC_STAT_AREA])
-                area_region, unidad_area_region = sistema.area_de_pixeles(pixeles_region)
-                regiones.append(
-                    {
-                        "id": region_id,
-                        "pixel_count": pixeles_region,
-                        "area": float(area_region),
-                        "area_unit": unidad_area_region,
-                        "perimeter": float(perimetro_region),
-                        "perimeter_unit": unidad_perimetro_region if contornos_region else unidad_perimetro,
-                        "contours": contornos_simplificados,
-                    }
-                )
             perimetro = 0.0
             unidad_perimetro = "m" if sistema.gsd_x_m is not None else "px"
             for contorno in resultado.contornos:
@@ -530,9 +511,10 @@ def _iniciar_analisis(job_id: str, true_bytes: bytes, swir_bytes: bytes, ajustes
                 "overlay-swir": _png_bytes(crear_superposicion(swir, resultado)),
                 "candidates": _png_bytes(crear_vista_clasificacion(tc, resultado)),
                 "mask": _png_bytes(resultado.mascara),
-                "region-ids": _png_bytes(regiones_rgb),
             }
+            outputs.update(_capas_adicionales(resultado))
             metrics = {
+                "available_layers": list(outputs),
                 "detector": ajustes["detector"].nombre,
                 "coverage_pct": float(resultado.proporcion * 100),
                 "area": float(area),
@@ -543,8 +525,10 @@ def _iniciar_analisis(job_id: str, true_bytes: bytes, swir_bytes: bytes, ajustes
                 "smoke_covered_candidates_px": int(
                     np.count_nonzero(resultado.mascara_candidata_bajo_humo)
                 ),
+                "smoke_unknown_px": int(np.count_nonzero(
+                    getattr(resultado, "mascara_indeterminada", None)
+                )),
                 "pixel_count": pixeles,
-                "regions": regiones,
                 "water_excluded": int(resultado.pixeles_agua_excluidos),
                 "remote_regions_discarded": int(resultado.componentes_remotos_descartados),
                 "grid_width": int(sistema.ancho_px),

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import AdvancedSettings from "./components/AdvancedSettings.jsx";
 import ImageViewer from "./components/ImageViewer.jsx";
 import { api, fileToBase64 } from "./services/api.js";
@@ -36,6 +36,15 @@ const TOOL_OPTIONS = [
   { id: "area", label: "Área", Icon: Crosshair },
   { id: "pixel", label: "Píxel", Icon: ScanLine },
 ];
+
+const OCCLUSION_LAYERS = {
+  "visible-surface": "Superficie observable",
+  smoke: "Humo probable",
+  "smoke-candidates": "Hipótesis bajo humo",
+  "smoke-unknown": "Terreno indeterminado",
+  "smoke-spectral": "Bajo humo: evidencia SWIR",
+  "smoke-continuity": "Bajo humo: continuidad espacial",
+};
 
 function defaultAdvancedSettings() {
   return {
@@ -95,7 +104,8 @@ function App() {
   const [tool, setTool] = useState("view");
   const [marks, setMarks] = useState([]);
   const [distancePreview, setDistancePreview] = useState(null);
-  const [selectedRegionId, setSelectedRegionId] = useState(null);
+  const [selectedRegion, setSelectedRegion] = useState(null);
+  const [regionCount, setRegionCount] = useState(0);
   const [inspectedPixel, setInspectedPixel] = useState(null);
 
   useEffect(() => {
@@ -128,7 +138,8 @@ function App() {
   const hasResult = Boolean(result && result.state === "complete");
   const grid = result?.grid || null;
   const metrics = result?.metrics || null;
-  const selectedRegion = metrics?.regions?.find((region) => region.id === selectedRegionId) || null;
+  const diagnosticLayers = (metrics?.available_layers || []).filter((name) => name.startsWith("diagnostic-"));
+  const handleRegionsReady = useCallback((regions) => setRegionCount(regions.length), []);
   const hasMetricScale = Number.isFinite(grid?.gsd_x_m) && grid.gsd_x_m > 0
     && Number.isFinite(grid?.gsd_y_m) && grid.gsd_y_m > 0;
   const marksUnit = hasMetricScale ? "m" : "px";
@@ -142,7 +153,7 @@ function App() {
     setTool(nextTool);
     setMarks([]);
     setDistancePreview(null);
-    setSelectedRegionId(null);
+    setSelectedRegion(null);
     setInspectedPixel(null);
   };
 
@@ -215,7 +226,8 @@ function App() {
       setResult(null);
       setMarks([]);
       setDistancePreview(null);
-      setSelectedRegionId(null);
+      setSelectedRegion(null);
+      setRegionCount(0);
       setInspectedPixel(null);
       setRunning(true);
       setConnection({ ready: true, label: "Analizando…" });
@@ -407,7 +419,8 @@ function App() {
               inspectedPixel={inspectedPixel}
               setInspectedPixel={setInspectedPixel}
               selectedRegion={selectedRegion}
-              onRegionSelect={setSelectedRegionId}
+              onRegionSelect={setSelectedRegion}
+              onRegionsReady={handleRegionsReady}
               errorMessage={running ? "La vista aparecerá al terminar la segmentación." : ""}
               onError={setError}
             />
@@ -420,13 +433,13 @@ function App() {
             <p className="panel-kicker">HERRAMIENTAS</p>
             <div className="tool-grid" role="group" aria-label="Seleccionar herramienta">
               {TOOL_OPTIONS.map(({ id, label, Icon }) => (
-                <Button key={id} className={`tool-button${tool === id ? " is-active" : ""}`} variant={tool === id ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult || (id === "distance" && !hasMetricScale) || (id === "area" && !metrics?.regions?.length)} title={id === "distance" && hasResult && !hasMetricScale ? "Introduce un GSD y vuelve a analizar para medir en metros." : undefined} aria-pressed={tool === id} onClick={() => selectTool(id)}>
+                <Button key={id} className={`tool-button${tool === id ? " is-active" : ""}`} variant={tool === id ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult || (id === "distance" && !hasMetricScale) || (id === "area" && !regionCount)} title={id === "distance" && hasResult && !hasMetricScale ? "Introduce un GSD y vuelve a analizar para medir en metros." : undefined} aria-pressed={tool === id} onClick={() => selectTool(id)}>
                   <Icon size={14} aria-hidden="true" /><span>{label}</span>
                 </Button>
               ))}
             </div>
             <p className="measurement-hint" aria-live="polite">
-              {tool === "distance" && hasResult && !hasMetricScale ? "Introduce el GSD y vuelve a analizar para habilitar la regla en metros." : tool === "distance" ? "Arrastra sobre la imagen para medir una distancia en metros." : tool === "area" ? "Haz clic dentro del contorno segmentado para medir esa región." : tool === "pixel" ? "Selecciona un píxel para ver su coordenada." : "Elige una herramienta o compara las capas en el visor."}
+              {tool === "distance" && hasResult && !hasMetricScale ? "Introduce el GSD y vuelve a analizar para habilitar la regla en metros." : tool === "distance" ? "Arrastra sobre la imagen para medir una distancia en metros." : tool === "area" && hasResult && !regionCount ? "La máscara no contiene regiones segmentadas para medir." : tool === "area" ? "Haz clic dentro del contorno segmentado para medir esa región." : tool === "pixel" ? "Selecciona un píxel para ver su coordenada." : "Elige una herramienta o compara las capas en el visor."}
             </p>
             {(currentDistance !== null || selectedRegion || (tool === "pixel" && inspectedPixel)) && <div className="measurement-readout" aria-live="polite">
               {currentDistance !== null && <div><span>{distancePreview ? "Midiendo" : "Distancia"}</span><strong>{formatLength(currentDistance, marksUnit)}</strong></div>}
@@ -440,12 +453,12 @@ function App() {
             <div className="measurement-actions">
               <button className="text-button" type="button" disabled={!hasResult || (!marks.length && !inspectedPixel && !selectedRegion)} onClick={() => {
                 if (tool === "pixel") setInspectedPixel(null);
-                else if (tool === "area") setSelectedRegionId(null);
+                else if (tool === "area") setSelectedRegion(null);
                 else setMarks((current) => current.slice(0, tool === "distance" ? -2 : -1));
                 setDistancePreview(null);
               }}>Deshacer</button>
               <button className="text-button" type="button" disabled={!hasResult || (!marks.length && !inspectedPixel && !selectedRegion)} onClick={() => {
-                setMarks([]); setInspectedPixel(null); setDistancePreview(null); setSelectedRegionId(null);
+                setMarks([]); setInspectedPixel(null); setDistancePreview(null); setSelectedRegion(null);
               }}>Borrar marcas</button>
             </div>
             <hr className="measurement-separator" />
@@ -487,12 +500,29 @@ function App() {
               <Card className="metric-card" size="1"><span>Perímetro</span><strong>{formatLength(metrics.perimeter, metrics.perimeter_unit)}</strong></Card>
               <Card className="metric-card" size="1"><span>Humo probable</span><strong>{formatNumber(metrics.smoke_pct, 1)} %</strong></Card>
             </div>
-            <p className="result-caveat">Resultado orientativo; revisa la máscara. En fucsia: {formatNumber(metrics.smoke_covered_candidates_px)} px con evidencia de superficie afectada bajo humo; es una hipótesis, no se suma al área ni detecta fuego activo.</p>
+            <p className="result-caveat">Resultado orientativo; revisa la máscara. Rojo: superficie observable. Azul: humo probable. Fucsia: {formatNumber(metrics.smoke_covered_candidates_px)} px de posible superficie afectada bajo humo; es una hipótesis y no se suma al área observada. Trama gris: terreno indeterminado{metrics.smoke_unknown_px != null ? ` (${formatNumber(metrics.smoke_unknown_px)} px)` : ""}. No detecta fuego activo.</p>
           </>}
 
           <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("overlay-true-color", "lumbre_mapa_segmentado.png")}><span>Mapa con contorno</span><span>PNG ↓</span></button>
           <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("mask", "lumbre_mascara_candidata.png")}><span>Máscara segmentada</span><span>PNG ↓</span></button>
           <button className="export-button" type="button" disabled={!hasResult} onClick={downloadMeasurements}><span>Puntos y medidas</span><span>JSON ↓</span></button>
+
+          {hasResult && <details className="details-panel">
+            <summary>Capas de humo y diagnóstico</summary>
+            <div className="details-content">
+              <p>Máscaras PNG independientes. La hipótesis y el humo pueden coincidir; negro significa ausencia en esa capa.</p>
+              {(metrics?.available_layers || []).filter((name) => OCCLUSION_LAYERS[name]).map((name) => (
+                <button key={name} className="export-button" type="button" onClick={() => downloadLayer(name, `lumbre_${name}.png`)}><span>{OCCLUSION_LAYERS[name]}</span><span>PNG ↓</span></button>
+              ))}
+              {diagnosticLayers.map((name) => (
+                <details key={name}>
+                  <summary>{name.replace("diagnostic-", "").replaceAll("-", " ")}</summary>
+                  <img loading="lazy" src={api.layerUrl(jobId, name)} alt={`Diagnóstico ${name}`} style={{ width: "100%", height: "auto" }} />
+                  <button className="text-button" type="button" onClick={() => downloadLayer(name, `lumbre_${name}.png`)}>Descargar PNG</button>
+                </details>
+              ))}
+            </div>
+          </details>}
 
           {metrics && <details className="details-panel">
             <summary>Detalles</summary>

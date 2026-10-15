@@ -9,6 +9,7 @@ RAIZ_REPOSITORIO = Path(__file__).resolve().parents[2]
 CARPETA_IMAGENES = RAIZ_REPOSITORIO / "imagenes"
 EXTENSIONES_IMAGEN = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
 MAX_LADO_ANALISIS = 1800
+MAX_LADO_CONTEXTUAL = 2500
 
 
 @dataclass(frozen=True)

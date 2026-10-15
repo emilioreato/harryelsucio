@@ -91,6 +91,7 @@ def clasificar_pixeles_area_afectada_swir(
             centros=np.empty((0, caracteristicas.shape[2]), dtype=np.float32),
             clases_seleccionadas=(),
             puntuaciones_clase=np.empty((0,), dtype=np.float32),
+            caracteristicas_comunes=caracteristicas,
         )
 
     # Los percentiles por escena toleran estiramientos distintos de la
@@ -200,4 +201,5 @@ def clasificar_pixeles_area_afectada_swir(
         puntuaciones_clase=np.asarray(
             [umbral_semilla, umbral_crecimiento], dtype=np.float32
         ),
+        caracteristicas_comunes=caracteristicas,
     )

@@ -86,3 +86,27 @@ La aplicación y sus resultados usan una rejilla común de píxeles con origen a
 - **Google Earth Engine**, previsto para una fase posterior: requiere una cuenta de Google, un proyecto de Google Cloud registrado para Earth Engine, permisos y autenticación. El acceso no comercial requiere registrar y acreditar el uso no comercial; el uso comercial necesita la configuración y plan comercial correspondientes. No se instala en este entorno inicial.
 
 Para cada fuente se deben guardar fecha, resolución, licencia y procedencia de los datos. Las reconstrucciones meteorológicas y las capas de vegetación son estimaciones/contexto, no mediciones exactas del incendio.
+
+
+### Segmentación contextual híbrida (experimental)
+
+El nuevo modo conserva V2 como fuente semántica y añade SLIC conjunto, estadísticas regionales, un grafo de adyacencia (RAG), crecimiento limitado y Watershed local con marcadores y fallback. Sigue disponible K-Means, V2 y fusión; K-Means continúa como predeterminado. No modifica entrenamiento, etiquetas ni modelos Random Forest.
+
+El híbrido analiza hasta 2500 píxeles de lado (La Mierla y Niebla conservan su resolución original), frente a 1800 en los modos anteriores. El esfuerzo espacial se concentra en recortes alrededor de **todos** los candidatos con margen de 24 píxeles, conservando cicatrices independientes. No se descarta una cicatriz por estar lejos de la principal. El motor semántico sigue examinando la escena completa: el recorte no recupera regiones que el clasificador omita.
+
+La máscara visible conserva huecos y veta agua/humo. El humo es independiente de la hipótesis fucsia; la trama gris indica suelo desconocido bajo humo. Las hipótesis espectrales y de continuidad corta se exportan separadas en **Capas de humo y diagnóstico** y nunca se suman al área observada. Una columna extensa puede quedar sin inferencia; la menor superficie fucsia es una política de abstención, no prueba de mejor detección. Las distancias son píxeles de trabajo y el área solo es métrica con GSD fiable.
+
+Ver [evaluación, parámetros y límites](DOCUMENTACION/Ideas/segmentacion_contextual_evaluacion.md). No se ha demostrado una mejora de exactitud con máscaras de referencia reales; el modo permanece experimental.
+
+Comprobaciones y artefactos reproducibles (sin dependencias nuevas):
+
+```powershell
+python -m pytest tests -q
+python scripts/comparar_contextual.py --fase baseline
+python scripts/comparar_contextual.py --fase contextual_roi
+python scripts/evaluar_humo_sintetico.py
+# Con python app.py --no-browser ya iniciado:
+python scripts/verificar_http_contextual.py --url http://127.0.0.1:8501
+```
+
+Las comparaciones controladas usan 1800 de lado en todos los métodos; la verificación HTTP usa la resolución real del modo (2500). Los resultados se guardan en `resultados_contextual/` (excluida de Git). El baseline histórico de esta intervención se guardó antes de corregir la geometría; volver a ejecutar `--fase baseline` lo sustituye por el comportamiento actual. No compares recuentos de píxeles de rejillas distintas como si fueran cambios de superficie.
