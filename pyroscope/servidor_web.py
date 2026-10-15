@@ -39,6 +39,16 @@ _ANALYSIS_LOCK = threading.Lock()
 _INSTANCIA_LOCK: Any | None = None
 
 
+class _ServidorWebExclusivo(ThreadingHTTPServer):
+    """Impide que Windows permita dos procesos en el mismo puerto local."""
+
+    # HTTPServer permite reutilizar direcciones por defecto. En Windows eso
+    # puede dejar dos app.py escuchando a la vez y repartir conexiones de forma
+    # impredecible. Si el puerto está ocupado, se elige otro en ejecutar_servidor.
+    allow_reuse_address = False
+    allow_reuse_port = False
+
+
 def _adquirir_bloque_instancia() -> bool:
     """Evita que varios clics al lanzador creen servidores y pestañas duplicados."""
     global _INSTANCIA_LOCK
@@ -562,7 +572,7 @@ def ejecutar_servidor(host: str = "127.0.0.1", puerto: int = 8501, abrir_navegad
     try:
         for candidato in range(puerto, min(puerto + 20, 65536)):
             try:
-                servidor = ThreadingHTTPServer((host, candidato), PyroScopeHandler)
+                servidor = _ServidorWebExclusivo((host, candidato), PyroScopeHandler)
                 break
             except OSError:
                 continue
