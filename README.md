@@ -1,6 +1,6 @@
-# malackathon
+# Hackatón
 
-Proyecto PyroScope para el reto de Indra. La orientación técnica y los supuestos iniciales están en [`CONCEPTOS_PYROSCOPE_INDRA.md`](CONCEPTOS_PYROSCOPE_INDRA.md).
+Proyecto PyroScope para el análisis y la segmentación de imágenes satelitales de incendios. La orientación técnica y los supuestos iniciales están en [`DOCUMENTACION/Ideas/inicial.md`](DOCUMENTACION/Ideas/inicial.md).
 
 ## Preparación del entorno de desarrollo
 

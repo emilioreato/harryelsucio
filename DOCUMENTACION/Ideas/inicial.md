@@ -1,12 +1,12 @@
-# PyroScope — Fundamentos conceptuales del reto Indra
+# PyroScope — Fundamentos conceptuales
 
-**Malackathon 2026 · Documento de orientación técnica y de producto · 15/10/2026**
+**Hackatón 2026 · Documento de orientación técnica y de producto · 15/10/2026**
 
 > **Propósito:** conservar las concepciones que guían el diseño antes de implementar. No es una especificación cerrada, un modelo físico validado ni una predicción operativa de incendios. Complementa el manual de PyroScope, pero algunas decisiones de ese manual deberán revisarse.
 
 ## 1. Qué problema resolvemos
 
-Indra proporcionará **dos composiciones de una misma escena Sentinel-2, adquiridas en el mismo instante** durante un incendio en la Comunidad de Madrid:
+El material de partida incluye **dos composiciones de una misma escena Sentinel-2, adquiridas en el mismo instante** durante un incendio en la Comunidad de Madrid:
 
 - **True Color:** representación visible semejante a una fotografía (bandas RGB).
 - **SWIR / falso color:** composición con información del infrarrojo de onda corta, útil para diferenciar materiales, humedad, áreas quemadas y ciertos focos de alta temperatura, según las bandas y la composición empleadas.
@@ -80,7 +80,7 @@ Como organización conceptual, no como ley exacta:
 
 `R(x, y, θ, t) ≈ R_base(combustible, humedad, ...) × F(θ, viento, pendiente, ...)`
 
-El **modelo de Rothermel** es una referencia física conocida para propagación de fuego forestal de superficie. Su uso riguroso exige modelos y parámetros del combustible, calibración y validación: no sustituirlos por ponderaciones arbitrarias. Una alternativa de hackathon es un **autómata celular de escenarios exploratorios**, claramente rotulado como simplificación no validada.
+El **modelo de Rothermel** es una referencia física conocida para propagación de fuego forestal de superficie. Su uso riguroso exige modelos y parámetros del combustible, calibración y validación: no sustituirlos por ponderaciones arbitrarias. Una alternativa de implementación rápida es un **autómata celular de escenarios exploratorios**, claramente rotulado como simplificación no validada.
 
 Para derivar la pendiente de un DEM se necesitan diferencias de elevación **divididas por distancias horizontales reales** (`dz/dx`, `dz/dy`). A partir de ellas se obtiene magnitud y dirección de máxima pendiente. La dirección meteorológica del viento suele indicar *de dónde viene*; para simular desplazamiento hay que convertirla a *hacia dónde va*.
 
@@ -114,7 +114,7 @@ No descartar el manual: conservar su estructura útil (Python, Streamlit, módul
 
 ## 7. Orden de trabajo propuesto
 
-1. **Contrato de datos:** formatos reales, RGB frente a bandas crudas, metadatos, fecha/hora, CRS, referencia de verdad terreno y qué evaluará Indra.
+1. **Contrato de datos:** formatos reales, RGB frente a bandas crudas, metadatos, fecha/hora, CRS, referencia de verdad terreno y qué se evaluará en la demostración.
 2. **MVP de detección:** carga, alineación geográfica, segmentación, corrección, medidas y exportación.
 3. **Contexto histórico:** viento/humedad de la fecha, DEM y capa de vegetación anterior al incendio; preservar procedencia e incertidumbre.
 4. **Dos mapas conceptuales:** condiciones de combustión y tasa/dirección de propagación.
@@ -136,4 +136,4 @@ No descartar el manual: conservar su estructura útil (Python, Streamlit, módul
 
 ---
 
-**Estado:** documento conceptual, sujeto a revisión al conocer los archivos y criterios reales de Indra. No sustituye evaluación científica, modelos oficiales ni sistemas de protección civil.
+**Estado:** documento conceptual, sujeto a revisión al conocer los archivos y criterios definitivos del proyecto. No sustituye evaluación científica, modelos oficiales ni sistemas de protección civil.
