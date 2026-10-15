@@ -61,7 +61,7 @@ function saveBlob(blob, filename) {
 
 function loadNotes() {
   try {
-    const notes = JSON.parse(localStorage.getItem("espejo-ustorio-notes") || "[]");
+    const notes = JSON.parse(localStorage.getItem("pyroscope-notes") || "[]");
     return Array.isArray(notes) ? notes.slice(0, 12) : [];
   } catch {
     return [];
