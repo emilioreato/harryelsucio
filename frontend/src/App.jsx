@@ -330,7 +330,7 @@ function App() {
               <section className="source-content">
                 <label className="field-label" htmlFor="scene-select">Escena</label>
                 <select className="field-control" id="scene-select" value={sceneId} onChange={(event) => setSceneId(event.target.value)}>
-                  {scenes.length ? scenes.map((scene) => <option value={scene.id} key={scene.id}>{scene.label}</option>) : <option value="">Buscando imágenes…</option>}
+                  {scenes.length ? scenes.map((scene) => <option value={scene.id} key={scene.id}>{scene.label}</option>) : <option value="">{connection.ready ? "No hay escenas precargadas" : "Buscando imágenes…"}</option>}
                 </select>
               </section>
             ) : (
