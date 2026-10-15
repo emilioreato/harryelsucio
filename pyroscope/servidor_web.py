@@ -454,7 +454,13 @@ def _validar_ajustes(datos: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _iniciar_analisis(job_id: str, true_bytes: bytes, swir_bytes: bytes, ajustes: dict[str, Any]) -> None:
+def _iniciar_analisis(
+    job_id: str,
+    true_bytes: bytes,
+    swir_bytes: bytes,
+    ajustes: dict[str, Any],
+    referencia_wildfires_bytes: bytes | None = None,
+) -> None:
     try:
         _actualizar_trabajo(job_id, stage="En cola para iniciar el análisis", progress=1)
         with _ANALYSIS_LOCK:
@@ -510,6 +516,24 @@ def _iniciar_analisis(job_id: str, true_bytes: bytes, swir_bytes: bytes, ajustes
                 "candidates": _png_bytes(crear_vista_clasificacion(tc, resultado)),
                 "mask": _png_bytes(resultado.mascara),
             }
+            advertencia_referencia = None
+            if referencia_wildfires_bytes:
+                try:
+                    with Image.open(BytesIO(referencia_wildfires_bytes)) as referencia:
+                        proporcion_referencia = referencia.width / referencia.height
+                        proporcion_rejilla = sistema.ancho_px / sistema.alto_px
+                        if abs(proporcion_referencia - proporcion_rejilla) > 0.002:
+                            advertencia_referencia = (
+                                "La referencia Wildfires tiene una proporción distinta y no se mostró."
+                            )
+                        else:
+                            referencia = referencia.convert("RGB").resize(
+                                (sistema.ancho_px, sistema.alto_px),
+                                Image.Resampling.LANCZOS,
+                            )
+                            outputs["reference-wildfires"] = _png_bytes(np.asarray(referencia))
+                except Exception:
+                    advertencia_referencia = "No se pudo leer la referencia Wildfires; el análisis sí terminó."
             outputs.update(_capas_adicionales(resultado))
             metrics = {
                 "available_layers": list(outputs),
@@ -534,6 +558,8 @@ def _iniciar_analisis(job_id: str, true_bytes: bytes, swir_bytes: bytes, ajustes
                 "gsd_x_m": sistema.gsd_x_m,
                 "gsd_y_m": sistema.gsd_y_m,
             }
+            if advertencia_referencia:
+                metrics["reference_warning"] = advertencia_referencia
             with _JOBS_LOCK:
                 trabajo = _JOBS.get(job_id)
                 if trabajo is not None:
@@ -575,7 +601,14 @@ class LumbreHandler(BaseHTTPRequestHandler):
             return
         if ruta == "/api/scenes":
             escenas = [
-                {"id": escena.nombre, "label": escena.etiqueta, "name": escena.nombre, "date": escena.fecha}
+                {
+                    "id": escena.nombre,
+                    "label": escena.etiqueta,
+                    "name": escena.nombre,
+                    "date": escena.fecha,
+                    "has_wildfires_reference": escena.referencia_wildfires is not None,
+                    "gsd_m_per_px": escena.gsd_m_por_pixel,
+                }
                 for escena in listar_escenas_disponibles()
             ]
             self._json(200, {"scenes": escenas})
@@ -684,6 +717,11 @@ class LumbreHandler(BaseHTTPRequestHandler):
                     raise ValueError("Selecciona una escena precargada válida.")
                 true_bytes = escena.true_color.read_bytes()
                 swir_bytes = escena.swir.read_bytes()
+                referencia_wildfires_bytes = (
+                    escena.referencia_wildfires.read_bytes()
+                    if escena.referencia_wildfires is not None
+                    else None
+                )
             elif source == "upload":
                 true_encoded = datos.get("true_color", "")
                 swir_encoded = datos.get("swir", "")
@@ -691,6 +729,7 @@ class LumbreHandler(BaseHTTPRequestHandler):
                     raise ValueError("Las imágenes cargadas no tienen un formato válido.")
                 true_bytes = base64.b64decode(true_encoded, validate=True)
                 swir_bytes = base64.b64decode(swir_encoded, validate=True)
+                referencia_wildfires_bytes = None
                 if not true_bytes or not swir_bytes:
                     raise ValueError("Carga las dos imágenes: True Color y SWIR.")
             else:
@@ -732,7 +771,7 @@ class LumbreHandler(BaseHTTPRequestHandler):
                 }
             worker = threading.Thread(
                 target=_iniciar_analisis,
-                args=(job_id, true_bytes, swir_bytes, ajustes),
+                args=(job_id, true_bytes, swir_bytes, ajustes, referencia_wildfires_bytes),
                 name=f"lumbre-{job_id[:8]}",
                 daemon=True,
             )

@@ -1,6 +1,8 @@
 """Rutas y límites de entrada compartidos por la interfaz web."""
 
 from dataclasses import dataclass
+import json
+import math
 from pathlib import Path
 import re
 
@@ -20,6 +22,8 @@ class EscenaDisponible:
     true_color: Path
     swir: Path
     fecha: str | None
+    referencia_wildfires: Path | None = None
+    gsd_m_por_pixel: float | None = None
 
     @property
     def etiqueta(self) -> str:
@@ -58,12 +62,28 @@ def listar_escenas_disponibles() -> tuple[EscenaDisponible, ...]:
         fecha = (fechas_true or fechas_swir or (None,))[0]
         if fecha:
             fecha = f"{fecha[8:10]}/{fecha[5:7]}/{fecha[:4]}"
+        carpeta_referencias = carpeta / "referencias"
+        referencias_wildfires = (
+            tuple(
+                ruta
+                for ruta in carpeta_referencias.iterdir()
+                if ruta.is_file()
+                and "wildfires" in _nombre_normalizado(ruta)
+                and ruta.suffix.casefold() in EXTENSIONES_IMAGEN
+            )
+            if carpeta_referencias.is_dir()
+            else ()
+        )
+        referencia_wildfires = referencias_wildfires[0] if len(referencias_wildfires) == 1 else None
+        gsd = _gsd_de_metadatos(carpeta / "metadatos.json")
         escenas.append(
             EscenaDisponible(
                 nombre=carpeta.name,
                 true_color=true_color[0],
                 swir=swir[0],
                 fecha=fecha,
+                referencia_wildfires=referencia_wildfires,
+                gsd_m_por_pixel=gsd,
             )
         )
     return tuple(escenas)
@@ -75,3 +95,13 @@ def _nombre_normalizado(ruta: Path) -> str:
 
 def _fechas_archivo(ruta: Path) -> tuple[str, ...]:
     return tuple(re.findall(r"\d{4}-\d{2}-\d{2}", ruta.name))
+
+
+def _gsd_de_metadatos(ruta: Path) -> float | None:
+    """Devuelve el GSD declarado si hay metadatos legibles y plausibles."""
+    try:
+        valor = json.loads(ruta.read_text(encoding="utf-8")).get("gsd_m")
+        gsd = float(valor)
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+    return gsd if math.isfinite(gsd) and gsd > 0 else None

@@ -1,0 +1,323 @@
+{
+  "generados": 5,
+  "objetivo": 5,
+  "modo_diagnostico": false,
+  "dimensiones_px": [
+    2500,
+    1546
+  ],
+  "gsd_m": 10,
+  "escenas": [
+    {
+      "nombre": "01_Cinco_Villas_Zaragoza",
+      "fecha": "2026-07-16",
+      "lat": 42.315,
+      "lon": -1.045,
+      "fuente": "https://eu-space.europa.eu/components/earth-observation-copernicus/image-of-the-day/wildfire-prompts-evacuations-cinco-villas-spain",
+      "descripcion": "Fuego activo al norte de Asín, humo y cicatriz. Punto de búsqueda aproximado entre Asín y Luesia.",
+      "crs": "EPSG:32630",
+      "transform": [
+        10.0,
+        0.0,
+        648610.4653342816,
+        0.0,
+        -10.0,
+        4694332.057161437
+      ],
+      "coverage": 1.0,
+      "gsd_m": 10,
+      "calibracion": {
+        "B02": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B03": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B04": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B8A": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B11": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B12": {
+          "scale": 0.0001,
+          "offset": 0.0
+        }
+      },
+      "fecha_real_utc": "2026-07-16T10:56:19.024000+00:00",
+      "stac_item_id": "S2B_MSIL2A_20260716T105619_R094_T30TXM_20260716T134607",
+      "stac_collection": "sentinel-2-l2a",
+      "cloud_cover_tile_pct": 30.469066,
+      "assets": {
+        "B02": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/30/T/XM/2026/07/16/S2B_MSIL2A_20260716T105619_N0512_R094_T30TXM_20260716T134607.SAFE/GRANULE/L2A_T30TXM_A048883_20260716T110817/IMG_DATA/R10m/T30TXM_20260716T105619_B02_10m.tif",
+        "B03": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/30/T/XM/2026/07/16/S2B_MSIL2A_20260716T105619_N0512_R094_T30TXM_20260716T134607.SAFE/GRANULE/L2A_T30TXM_A048883_20260716T110817/IMG_DATA/R10m/T30TXM_20260716T105619_B03_10m.tif",
+        "B04": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/30/T/XM/2026/07/16/S2B_MSIL2A_20260716T105619_N0512_R094_T30TXM_20260716T134607.SAFE/GRANULE/L2A_T30TXM_A048883_20260716T110817/IMG_DATA/R10m/T30TXM_20260716T105619_B04_10m.tif",
+        "B8A": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/30/T/XM/2026/07/16/S2B_MSIL2A_20260716T105619_N0512_R094_T30TXM_20260716T134607.SAFE/GRANULE/L2A_T30TXM_A048883_20260716T110817/IMG_DATA/R20m/T30TXM_20260716T105619_B8A_20m.tif",
+        "B11": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/30/T/XM/2026/07/16/S2B_MSIL2A_20260716T105619_N0512_R094_T30TXM_20260716T134607.SAFE/GRANULE/L2A_T30TXM_A048883_20260716T110817/IMG_DATA/R20m/T30TXM_20260716T105619_B11_20m.tif",
+        "B12": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/30/T/XM/2026/07/16/S2B_MSIL2A_20260716T105619_N0512_R094_T30TXM_20260716T134607.SAFE/GRANULE/L2A_T30TXM_A048883_20260716T110817/IMG_DATA/R20m/T30TXM_20260716T105619_B12_20m.tif"
+      },
+      "dimensiones_px": [
+        2500,
+        1546
+      ],
+      "nota": "Composiciones aproximadas, pueden no coincidir con la LUT del reto. Wildfires no es ground truth. Revisar visualmente antes de usar."
+    },
+    {
+      "nombre": "02_La_Vall_d_Uixo_Castellon",
+      "fecha": "2026-07-28",
+      "lat": 39.856,
+      "lon": -0.24,
+      "fuente": "https://eu-space.europa.eu/components/earth-observation-copernicus/image-of-the-day/wildfire-la-vall-duixo-spain",
+      "descripcion": "Incendio con humo espeso y focos activos. Punto de búsqueda al norte del núcleo urbano.",
+      "crs": "EPSG:32630",
+      "transform": [
+        10.0,
+        0.0,
+        723603.3979923773,
+        0.0,
+        -10.0,
+        4423150.740539173
+      ],
+      "coverage": 1.0,
+      "gsd_m": 10,
+      "calibracion": {
+        "B02": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B03": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B04": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B8A": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B11": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B12": {
+          "scale": 0.0001,
+          "offset": 0.0
+        }
+      },
+      "fecha_real_utc": "2026-07-28T10:46:21.025000+00:00",
+      "stac_item_id": "S2C_MSIL2A_20260728T104621_R051_T30TYK_20260728T144218",
+      "stac_collection": "sentinel-2-l2a",
+      "cloud_cover_tile_pct": 1.651182,
+      "assets": {
+        "B02": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/30/T/YK/2026/07/28/S2C_MSIL2A_20260728T104621_N0512_R051_T30TYK_20260728T144218.SAFE/GRANULE/L2A_T30TYK_A009888_20260728T105117/IMG_DATA/R10m/T30TYK_20260728T104621_B02_10m.tif",
+        "B03": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/30/T/YK/2026/07/28/S2C_MSIL2A_20260728T104621_N0512_R051_T30TYK_20260728T144218.SAFE/GRANULE/L2A_T30TYK_A009888_20260728T105117/IMG_DATA/R10m/T30TYK_20260728T104621_B03_10m.tif",
+        "B04": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/30/T/YK/2026/07/28/S2C_MSIL2A_20260728T104621_N0512_R051_T30TYK_20260728T144218.SAFE/GRANULE/L2A_T30TYK_A009888_20260728T105117/IMG_DATA/R10m/T30TYK_20260728T104621_B04_10m.tif",
+        "B8A": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/30/T/YK/2026/07/28/S2C_MSIL2A_20260728T104621_N0512_R051_T30TYK_20260728T144218.SAFE/GRANULE/L2A_T30TYK_A009888_20260728T105117/IMG_DATA/R20m/T30TYK_20260728T104621_B8A_20m.tif",
+        "B11": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/30/T/YK/2026/07/28/S2C_MSIL2A_20260728T104621_N0512_R051_T30TYK_20260728T144218.SAFE/GRANULE/L2A_T30TYK_A009888_20260728T105117/IMG_DATA/R20m/T30TYK_20260728T104621_B11_20m.tif",
+        "B12": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/30/T/YK/2026/07/28/S2C_MSIL2A_20260728T104621_N0512_R051_T30TYK_20260728T144218.SAFE/GRANULE/L2A_T30TYK_A009888_20260728T105117/IMG_DATA/R20m/T30TYK_20260728T104621_B12_20m.tif"
+      },
+      "dimensiones_px": [
+        2500,
+        1546
+      ],
+      "nota": "Composiciones aproximadas, pueden no coincidir con la LUT del reto. Wildfires no es ground truth. Revisar visualmente antes de usar."
+    },
+    {
+      "nombre": "03_Fermoselle_Zamora",
+      "fecha": "2026-07-29",
+      "lat": 41.335,
+      "lon": -6.405,
+      "fuente": "https://eu-space.europa.eu/components/earth-observation-copernicus/image-of-the-day/wildfires-along-portugal-spain-border",
+      "descripcion": "Incendio en Arribes del Duero durante la emergencia, humo y frente activo.",
+      "crs": "EPSG:32629",
+      "transform": [
+        10.0,
+        0.0,
+        704644.3398986077,
+        0.0,
+        -10.0,
+        4586925.24578294
+      ],
+      "coverage": 1.0,
+      "gsd_m": 10,
+      "calibracion": {
+        "B02": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B03": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B04": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B8A": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B11": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B12": {
+          "scale": 0.0001,
+          "offset": 0.0
+        }
+      },
+      "fecha_real_utc": "2026-07-29T11:06:19.024000+00:00",
+      "stac_item_id": "S2B_MSIL2A_20260729T110619_R137_T29TQF_20260729T133901",
+      "stac_collection": "sentinel-2-l2a",
+      "cloud_cover_tile_pct": 0.00283,
+      "assets": {
+        "B02": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/QF/2026/07/29/S2B_MSIL2A_20260729T110619_N0512_R137_T29TQF_20260729T133901.SAFE/GRANULE/L2A_T29TQF_A049069_20260729T111143/IMG_DATA/R10m/T29TQF_20260729T110619_B02_10m.tif",
+        "B03": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/QF/2026/07/29/S2B_MSIL2A_20260729T110619_N0512_R137_T29TQF_20260729T133901.SAFE/GRANULE/L2A_T29TQF_A049069_20260729T111143/IMG_DATA/R10m/T29TQF_20260729T110619_B03_10m.tif",
+        "B04": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/QF/2026/07/29/S2B_MSIL2A_20260729T110619_N0512_R137_T29TQF_20260729T133901.SAFE/GRANULE/L2A_T29TQF_A049069_20260729T111143/IMG_DATA/R10m/T29TQF_20260729T110619_B04_10m.tif",
+        "B8A": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/QF/2026/07/29/S2B_MSIL2A_20260729T110619_N0512_R137_T29TQF_20260729T133901.SAFE/GRANULE/L2A_T29TQF_A049069_20260729T111143/IMG_DATA/R20m/T29TQF_20260729T110619_B8A_20m.tif",
+        "B11": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/QF/2026/07/29/S2B_MSIL2A_20260729T110619_N0512_R137_T29TQF_20260729T133901.SAFE/GRANULE/L2A_T29TQF_A049069_20260729T111143/IMG_DATA/R20m/T29TQF_20260729T110619_B11_20m.tif",
+        "B12": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/QF/2026/07/29/S2B_MSIL2A_20260729T110619_N0512_R137_T29TQF_20260729T133901.SAFE/GRANULE/L2A_T29TQF_A049069_20260729T111143/IMG_DATA/R20m/T29TQF_20260729T110619_B12_20m.tif"
+      },
+      "dimensiones_px": [
+        2500,
+        1546
+      ],
+      "nota": "Composiciones aproximadas, pueden no coincidir con la LUT del reto. Wildfires no es ground truth. Revisar visualmente antes de usar."
+    },
+    {
+      "nombre": "04_Pinzio_Portugal",
+      "fecha": "2026-07-29",
+      "lat": 40.6025,
+      "lon": -7.0653,
+      "fuente": "https://eu-space.europa.eu/components/earth-observation-copernicus/image-of-the-day/wildfires-along-portugal-spain-border",
+      "descripcion": "Incendio al lado de la autovía A25, humo y frente activo.",
+      "crs": "EPSG:32629",
+      "transform": [
+        10.0,
+        0.0,
+        651189.6433368874,
+        0.0,
+        -10.0,
+        4504161.287456639
+      ],
+      "coverage": 0.9016817593790427,
+      "gsd_m": 10,
+      "calibracion": {
+        "B02": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B03": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B04": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B8A": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B11": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B12": {
+          "scale": 0.0001,
+          "offset": 0.0
+        }
+      },
+      "fecha_real_utc": "2026-07-29T11:21:31.024000+00:00",
+      "stac_item_id": "S2A_MSIL2A_20260729T112131_R037_T29TPF_20260729T195715",
+      "stac_collection": "sentinel-2-l2a",
+      "cloud_cover_tile_pct": 0.00146,
+      "assets": {
+        "B02": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/PF/2026/07/29/S2A_MSIL2A_20260729T112131_N0512_R037_T29TPF_20260729T195715.SAFE/GRANULE/L2A_T29TPF_A057978_20260729T112319/IMG_DATA/R10m/T29TPF_20260729T112131_B02_10m.tif",
+        "B03": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/PF/2026/07/29/S2A_MSIL2A_20260729T112131_N0512_R037_T29TPF_20260729T195715.SAFE/GRANULE/L2A_T29TPF_A057978_20260729T112319/IMG_DATA/R10m/T29TPF_20260729T112131_B03_10m.tif",
+        "B04": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/PF/2026/07/29/S2A_MSIL2A_20260729T112131_N0512_R037_T29TPF_20260729T195715.SAFE/GRANULE/L2A_T29TPF_A057978_20260729T112319/IMG_DATA/R10m/T29TPF_20260729T112131_B04_10m.tif",
+        "B8A": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/PF/2026/07/29/S2A_MSIL2A_20260729T112131_N0512_R037_T29TPF_20260729T195715.SAFE/GRANULE/L2A_T29TPF_A057978_20260729T112319/IMG_DATA/R20m/T29TPF_20260729T112131_B8A_20m.tif",
+        "B11": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/PF/2026/07/29/S2A_MSIL2A_20260729T112131_N0512_R037_T29TPF_20260729T195715.SAFE/GRANULE/L2A_T29TPF_A057978_20260729T112319/IMG_DATA/R20m/T29TPF_20260729T112131_B11_20m.tif",
+        "B12": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/PF/2026/07/29/S2A_MSIL2A_20260729T112131_N0512_R037_T29TPF_20260729T195715.SAFE/GRANULE/L2A_T29TPF_A057978_20260729T112319/IMG_DATA/R20m/T29TPF_20260729T112131_B12_20m.tif"
+      },
+      "dimensiones_px": [
+        2500,
+        1546
+      ],
+      "nota": "Composiciones aproximadas, pueden no coincidir con la LUT del reto. Wildfires no es ground truth. Revisar visualmente antes de usar."
+    },
+    {
+      "nombre": "05_Valpacos_Portugal",
+      "fecha": "2026-07-29",
+      "lat": 41.61,
+      "lon": -7.315,
+      "fuente": "https://eu-space.europa.eu/components/earth-observation-copernicus/image-of-the-day/wildfires-along-portugal-spain-border",
+      "descripcion": "Incendio de Valpaços/Ervões, pluma de humo y cicatriz.",
+      "crs": "EPSG:32629",
+      "transform": [
+        10.0,
+        0.0,
+        627898.9612640638,
+        0.0,
+        -10.0,
+        4615577.591163309
+      ],
+      "coverage": 1.0,
+      "gsd_m": 10,
+      "calibracion": {
+        "B02": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B03": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B04": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B8A": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B11": {
+          "scale": 0.0001,
+          "offset": 0.0
+        },
+        "B12": {
+          "scale": 0.0001,
+          "offset": 0.0
+        }
+      },
+      "fecha_real_utc": "2026-07-29T11:21:31.024000+00:00",
+      "stac_item_id": "S2A_MSIL2A_20260729T112131_R037_T29TPG_20260729T195715",
+      "stac_collection": "sentinel-2-l2a",
+      "cloud_cover_tile_pct": 0.063172,
+      "assets": {
+        "B02": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/PG/2026/07/29/S2A_MSIL2A_20260729T112131_N0512_R037_T29TPG_20260729T195715.SAFE/GRANULE/L2A_T29TPG_A057978_20260729T112319/IMG_DATA/R10m/T29TPG_20260729T112131_B02_10m.tif",
+        "B03": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/PG/2026/07/29/S2A_MSIL2A_20260729T112131_N0512_R037_T29TPG_20260729T195715.SAFE/GRANULE/L2A_T29TPG_A057978_20260729T112319/IMG_DATA/R10m/T29TPG_20260729T112131_B03_10m.tif",
+        "B04": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/PG/2026/07/29/S2A_MSIL2A_20260729T112131_N0512_R037_T29TPG_20260729T195715.SAFE/GRANULE/L2A_T29TPG_A057978_20260729T112319/IMG_DATA/R10m/T29TPG_20260729T112131_B04_10m.tif",
+        "B8A": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/PG/2026/07/29/S2A_MSIL2A_20260729T112131_N0512_R037_T29TPG_20260729T195715.SAFE/GRANULE/L2A_T29TPG_A057978_20260729T112319/IMG_DATA/R20m/T29TPG_20260729T112131_B8A_20m.tif",
+        "B11": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/PG/2026/07/29/S2A_MSIL2A_20260729T112131_N0512_R037_T29TPG_20260729T195715.SAFE/GRANULE/L2A_T29TPG_A057978_20260729T112319/IMG_DATA/R20m/T29TPG_20260729T112131_B11_20m.tif",
+        "B12": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/PG/2026/07/29/S2A_MSIL2A_20260729T112131_N0512_R037_T29TPG_20260729T195715.SAFE/GRANULE/L2A_T29TPG_A057978_20260729T112319/IMG_DATA/R20m/T29TPG_20260729T112131_B12_20m.tif"
+      },
+      "dimensiones_px": [
+        2500,
+        1546
+      ],
+      "nota": "Composiciones aproximadas, pueden no coincidir con la LUT del reto. Wildfires no es ground truth. Revisar visualmente antes de usar."
+    }
+  ],
+  "errores": []
+}

@@ -138,6 +138,13 @@ function App() {
   }, []);
 
   const selectedScene = scenes.find((item) => item.id === sceneId);
+  useEffect(() => {
+    if (source !== "preloaded") {
+      setGsd("");
+      return;
+    }
+    setGsd(selectedScene?.gsd_m_per_px ? String(selectedScene.gsd_m_per_px) : "");
+  }, [source, selectedScene?.id, selectedScene?.gsd_m_per_px]);
   const selectedDetector = detectors.find((item) => item.id === method);
   const activeLabel = source === "upload" ? "Pareja cargada" : selectedScene?.label || "Selecciona una escena";
   const canRun = connection.ready && !running && (source === "upload" || scenes.length > 0);
@@ -429,6 +436,7 @@ function App() {
               selectedRegion={selectedRegion}
               onRegionSelect={setSelectedRegion}
               onRegionsReady={handleRegionsReady}
+              hasWildfiresReference={metrics?.available_layers?.includes("reference-wildfires") || false}
               errorMessage={running ? "La vista aparecerá al terminar la segmentación." : ""}
               onError={setError}
             />

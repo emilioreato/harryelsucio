@@ -1,0 +1,62 @@
+{
+  "nombre": "03_Fermoselle_Zamora",
+  "fecha": "2026-07-29",
+  "lat": 41.335,
+  "lon": -6.405,
+  "fuente": "https://eu-space.europa.eu/components/earth-observation-copernicus/image-of-the-day/wildfires-along-portugal-spain-border",
+  "descripcion": "Incendio en Arribes del Duero durante la emergencia, humo y frente activo.",
+  "crs": "EPSG:32629",
+  "transform": [
+    10.0,
+    0.0,
+    704644.3398986077,
+    0.0,
+    -10.0,
+    4586925.24578294
+  ],
+  "coverage": 1.0,
+  "gsd_m": 10,
+  "calibracion": {
+    "B02": {
+      "scale": 0.0001,
+      "offset": 0.0
+    },
+    "B03": {
+      "scale": 0.0001,
+      "offset": 0.0
+    },
+    "B04": {
+      "scale": 0.0001,
+      "offset": 0.0
+    },
+    "B8A": {
+      "scale": 0.0001,
+      "offset": 0.0
+    },
+    "B11": {
+      "scale": 0.0001,
+      "offset": 0.0
+    },
+    "B12": {
+      "scale": 0.0001,
+      "offset": 0.0
+    }
+  },
+  "fecha_real_utc": "2026-07-29T11:06:19.024000+00:00",
+  "stac_item_id": "S2B_MSIL2A_20260729T110619_R137_T29TQF_20260729T133901",
+  "stac_collection": "sentinel-2-l2a",
+  "cloud_cover_tile_pct": 0.00283,
+  "assets": {
+    "B02": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/QF/2026/07/29/S2B_MSIL2A_20260729T110619_N0512_R137_T29TQF_20260729T133901.SAFE/GRANULE/L2A_T29TQF_A049069_20260729T111143/IMG_DATA/R10m/T29TQF_20260729T110619_B02_10m.tif",
+    "B03": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/QF/2026/07/29/S2B_MSIL2A_20260729T110619_N0512_R137_T29TQF_20260729T133901.SAFE/GRANULE/L2A_T29TQF_A049069_20260729T111143/IMG_DATA/R10m/T29TQF_20260729T110619_B03_10m.tif",
+    "B04": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/QF/2026/07/29/S2B_MSIL2A_20260729T110619_N0512_R137_T29TQF_20260729T133901.SAFE/GRANULE/L2A_T29TQF_A049069_20260729T111143/IMG_DATA/R10m/T29TQF_20260729T110619_B04_10m.tif",
+    "B8A": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/QF/2026/07/29/S2B_MSIL2A_20260729T110619_N0512_R137_T29TQF_20260729T133901.SAFE/GRANULE/L2A_T29TQF_A049069_20260729T111143/IMG_DATA/R20m/T29TQF_20260729T110619_B8A_20m.tif",
+    "B11": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/QF/2026/07/29/S2B_MSIL2A_20260729T110619_N0512_R137_T29TQF_20260729T133901.SAFE/GRANULE/L2A_T29TQF_A049069_20260729T111143/IMG_DATA/R20m/T29TQF_20260729T110619_B11_20m.tif",
+    "B12": "https://sentinel2l2a01.blob.core.windows.net/sentinel2-l2/29/T/QF/2026/07/29/S2B_MSIL2A_20260729T110619_N0512_R137_T29TQF_20260729T133901.SAFE/GRANULE/L2A_T29TQF_A049069_20260729T111143/IMG_DATA/R20m/T29TQF_20260729T110619_B12_20m.tif"
+  },
+  "dimensiones_px": [
+    2500,
+    1546
+  ],
+  "nota": "Composiciones aproximadas, pueden no coincidir con la LUT del reto. Wildfires no es ground truth. Revisar visualmente antes de usar."
+}

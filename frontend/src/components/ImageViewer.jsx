@@ -12,6 +12,7 @@ const LAYERS = [
 
 function visibleLayer(layer, showSegmentation) {
   if (layer === "candidates") return "candidates";
+  if (layer === "reference-wildfires") return "reference-wildfires";
   if (!showSegmentation) return layer;
   return layer === "swir" ? "overlay-swir" : "overlay-true-color";
 }
@@ -95,7 +96,7 @@ export default function ImageViewer({
   jobId, grid, layer, setLayer, showSegmentation, setShowSegmentation,
   showMarks, setShowMarks, tool, marks, setMarks, distancePreview,
   setDistancePreview, inspectedPixel, setInspectedPixel, selectedRegion,
-  onRegionSelect, onRegionsReady, errorMessage, onError,
+  onRegionSelect, onRegionsReady, hasWildfiresReference, errorMessage, onError,
 }) {
   const stageRef = useRef(null);
   const imageRef = useRef(null);
@@ -106,6 +107,9 @@ export default function ImageViewer({
   const currentLayer = jobId ? visibleLayer(layer, showSegmentation) : null;
   const source = currentLayer && jobId ? `${api.layerUrl(jobId, currentLayer)}?v=${jobId}` : "";
   const hasResult = Boolean(jobId && grid);
+  const availableLayers = hasWildfiresReference
+    ? [...LAYERS, ["reference-wildfires", "Wildfires · ref.", Layers3]]
+    : LAYERS;
 
   useEffect(() => {
     regionLabelsRef.current = null;
@@ -324,7 +328,7 @@ export default function ImageViewer({
     <>
       <div className="viewer-toolbar">
         <div className="layer-control" role="group" aria-label="Composición visible">
-          {LAYERS.map(([id, label, Icon]) => (
+          {availableLayers.map(([id, label, Icon]) => (
             <Button
               className={`layer-choice${layer === id ? " is-active" : ""}`}
               key={id}
@@ -333,19 +337,21 @@ export default function ImageViewer({
               type="button"
               aria-pressed={layer === id}
               disabled={!hasResult}
+              title={id === "reference-wildfires" ? "Referencia visual; no es verdad terreno ni se usa para segmentar." : undefined}
               onClick={() => {
                 setLayer(id);
                 if (id === "candidates") setShowSegmentation(true);
+                if (id === "reference-wildfires") setShowSegmentation(false);
               }}
             ><Icon size={14} aria-hidden="true" /><span>{label}</span></Button>
           ))}
         </div>
         <div className="overlay-control" role="group" aria-label="Original o segmentación">
           <Button className={`overlay-choice${!showSegmentation ? " is-active" : ""}`} variant={!showSegmentation ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult} aria-pressed={!showSegmentation} onClick={() => {
-            if (layer === "candidates") setLayer("true-color");
+            if (layer === "candidates" || layer === "reference-wildfires") setLayer("true-color");
             setShowSegmentation(false);
           }}><Eye size={13} aria-hidden="true" />Original</Button>
-          <Button className={`overlay-choice${showSegmentation ? " is-active" : ""}`} variant={showSegmentation ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult || layer === "candidates"} aria-pressed={showSegmentation} onClick={() => setShowSegmentation(true)}><Flame size={13} aria-hidden="true" />Contorno</Button>
+          <Button className={`overlay-choice${showSegmentation ? " is-active" : ""}`} variant={showSegmentation ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult || layer === "candidates" || layer === "reference-wildfires"} aria-pressed={showSegmentation} onClick={() => setShowSegmentation(true)}><Flame size={13} aria-hidden="true" />Contorno</Button>
         </div>
         <Button className={`mark-toggle${showMarks ? " is-active" : ""}`} variant="outline" size="1" type="button" disabled={!hasResult} aria-pressed={showMarks} onClick={() => setShowMarks((visible) => !visible)}>
           {showMarks ? <EyeOff size={13} aria-hidden="true" /> : <Eye size={13} aria-hidden="true" />}
@@ -373,7 +379,7 @@ export default function ImageViewer({
             <img
               ref={imageRef}
               src={source}
-              alt={layer === "candidates" ? "Clases de superficie y humo probable" : `${layer === "swir" ? "SWIR" : "True Color"}${showSegmentation ? " con segmentación" : " original"}`}
+              alt={layer === "candidates" ? "Clases de superficie y humo probable" : layer === "reference-wildfires" ? "Composición Wildfires de referencia; no es verdad terreno" : `${layer === "swir" ? "SWIR" : "True Color"}${showSegmentation ? " con segmentación" : " original"}`}
               draggable="false"
               onError={() => onError("No se pudo cargar la imagen resultante.")}
             />
