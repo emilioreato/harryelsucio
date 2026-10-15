@@ -253,7 +253,7 @@ export default function ImageViewer({
         <div className="mark-actions">
           <button className="text-button" type="button" disabled={!hasResult || !marks.length} onClick={undo}>Deshacer</button>
           {tool === "polygon" && <button className="text-button" type="button" disabled={!canClosePolygon} onClick={closePolygon}>Cerrar área</button>}
-          <button className="text-button" type="button" disabled={!hasResult || (!marks.length && !inspectedPixel)} onClick={clear}>Limpiar</button>
+          <button className="text-button" type="button" disabled={!hasResult || !marks.length} onClick={clear}>Limpiar</button>
         </div>
       </div>
       <div className="measurement-result" aria-live="polite">{measurement}</div>
