@@ -235,7 +235,7 @@ def _validar_ajustes(datos: dict[str, Any]) -> dict[str, Any]:
         crecimiento_rojo = 0.94 - (entero("sensitivity", 1, 10, 5) - 1) * 0.010
     if semilla_roja is None:
         semilla_roja = 0.994 - (entero("sensitivity", 1, 10, 5) - 1) * 0.006
-    if crecimiento_rojo > semilla_roja:
+    if metodo in ("swir_histeresis", "fusion_ponderada") and crecimiento_rojo > semilla_roja:
         raise ValueError("El percentil SWIR de crecimiento debe ser menor o igual al de semilla.")
 
     semilla_rg = umbrales_swir["seed_red_green"]
@@ -245,7 +245,7 @@ def _validar_ajustes(datos: dict[str, Any]) -> dict[str, Any]:
         crecimiento_rg = 0.68 - (sensibilidad - 1) * 0.012
     if semilla_rg is None:
         semilla_rg = 0.82 - (sensibilidad - 1) * 0.005
-    if crecimiento_rg > semilla_rg:
+    if metodo in ("swir_histeresis", "fusion_ponderada") and crecimiento_rg > semilla_rg:
         raise ValueError("El percentil rojo/verde de crecimiento debe ser menor o igual al de semilla.")
 
     def decimal_avanzado(clave: str, minimo: float, maximo: float, defecto: float) -> float:
