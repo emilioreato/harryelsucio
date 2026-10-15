@@ -263,7 +263,7 @@ function App() {
         setProgress({ label: "No se pudo completar", value: 0 });
       }
       setRunning(false);
-      if (cause instanceof TypeError) {
+      if (cause instanceof TypeError || cause?.name === "TimeoutError") {
         setConnection({ ready: false, label: "Conexión interrumpida" });
       } else {
         setConnection((current) => current.ready
@@ -279,7 +279,7 @@ function App() {
       saveBlob(await api.downloadLayer(jobId, name), filename);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
-      if (cause instanceof TypeError) setConnection({ ready: false, label: "Conexión interrumpida" });
+      if (cause instanceof TypeError || cause?.name === "TimeoutError") setConnection({ ready: false, label: "Conexión interrumpida" });
     }
   };
 
