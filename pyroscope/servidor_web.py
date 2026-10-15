@@ -322,13 +322,6 @@ def _iniciar_analisis(job_id: str, true_bytes: bytes, swir_bytes: bytes, ajustes
             sistema = resultado.sistema_coordenadas
             pixeles = int(np.count_nonzero(resultado.mascara))
             area, unidad_area = sistema.area_de_pixeles(pixeles)
-            perimetro = 0.0
-            unidad_perimetro = "m" if sistema.gsd_x_m is not None else "px"
-            for contorno in resultado.contornos:
-                vertices = [tuple(map(float, punto[0])) for punto in contorno]
-                longitud, unidad_perimetro = sistema.longitud_de_linea(vertices, cerrar=True)
-                perimetro += longitud
-
             outputs = {
                 "true-color": _png_bytes(tc),
                 "swir": _png_bytes(swir),
@@ -342,8 +335,6 @@ def _iniciar_analisis(job_id: str, true_bytes: bytes, swir_bytes: bytes, ajustes
                 "coverage_pct": float(resultado.proporcion * 100),
                 "area": float(area),
                 "area_unit": unidad_area,
-                "perimeter": float(perimetro),
-                "perimeter_unit": unidad_perimetro,
                 "smoke_pct": float(np.mean(resultado.mascara_humo) * 100),
                 "pixel_count": pixeles,
                 "water_excluded": int(resultado.pixeles_agua_excluidos),
