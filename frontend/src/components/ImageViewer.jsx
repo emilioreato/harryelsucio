@@ -73,6 +73,17 @@ export default function ImageViewer({
         context.lineWidth = 2;
         context.stroke();
         context.setLineDash([]);
+        const lineLength = Math.hypot(b.x - a.x, b.y - a.y);
+        if (lineLength < 2) return;
+        const angle = Math.atan2(b.y - a.y, b.x - a.x);
+        const headLength = 14;
+        context.beginPath();
+        context.moveTo(b.x, b.y);
+        context.lineTo(b.x - headLength * Math.cos(angle - Math.PI / 7), b.y - headLength * Math.sin(angle - Math.PI / 7));
+        context.lineTo(b.x - headLength * Math.cos(angle + Math.PI / 7), b.y - headLength * Math.sin(angle + Math.PI / 7));
+        context.closePath();
+        context.fillStyle = "#f6dc49";
+        context.fill();
       };
 
       if (tool === "distance") {
