@@ -169,9 +169,9 @@ export default function ImageViewer({
         context.lineWidth = 6;
         context.stroke();
         context.save();
-        context.shadowColor = "rgba(80, 238, 236, .78)";
+        context.shadowColor = "rgba(240, 184, 102, .8)";
         context.shadowBlur = 12;
-        context.strokeStyle = "#76f1eb";
+        context.strokeStyle = "#f0bd70";
         context.lineWidth = 2.4;
         context.stroke();
         context.restore();
@@ -189,9 +189,9 @@ export default function ImageViewer({
         context.lineWidth = 2.5;
         context.stroke();
         context.save();
-        context.shadowColor = "rgba(80, 238, 236, .8)";
+        context.shadowColor = "rgba(240, 184, 102, .82)";
         context.shadowBlur = 10;
-        context.fillStyle = "#76f1eb";
+        context.fillStyle = "#f0bd70";
         context.fill();
         context.restore();
       };
@@ -207,10 +207,10 @@ export default function ImageViewer({
         const highlightContext = highlight.getContext("2d");
         const overlay = highlightContext.createImageData(width, height);
         const selectedId = selectedRegion.id;
-        const setPink = (offset, alpha) => {
-          overlay.data[offset] = 255;
-          overlay.data[offset + 1] = 79;
-          overlay.data[offset + 2] = 163;
+        const setSelection = (offset, alpha) => {
+          overlay.data[offset] = 242;
+          overlay.data[offset + 1] = 188;
+          overlay.data[offset + 2] = 103;
           overlay.data[offset + 3] = Math.max(overlay.data[offset + 3], alpha);
         };
 
@@ -223,12 +223,12 @@ export default function ImageViewer({
             || y === 0 || labels[index - width] !== selectedId
             || y === height - 1 || labels[index + width] !== selectedId;
           const offset = index * 4;
-          setPink(offset, boundary ? 255 : 48);
+          setSelection(offset, boundary ? 255 : 48);
           if (boundary) {
-            if (x > 0) setPink((index - 1) * 4, 255);
-            if (x + 1 < width) setPink((index + 1) * 4, 255);
-            if (y > 0) setPink((index - width) * 4, 255);
-            if (y + 1 < height) setPink((index + width) * 4, 255);
+            if (x > 0) setSelection((index - 1) * 4, 255);
+            if (x + 1 < width) setSelection((index + 1) * 4, 255);
+            if (y > 0) setSelection((index - width) * 4, 255);
+            if (y + 1 < height) setSelection((index + width) * 4, 255);
           }
         }
         highlightContext.putImageData(overlay, 0, 0);
@@ -239,13 +239,17 @@ export default function ImageViewer({
       points.forEach((point, index) => {
         const { x, y } = toCanvas(point);
         context.beginPath();
-        context.arc(x, y, 5, 0, Math.PI * 2);
-        context.fillStyle = "#d94a8b";
+        context.arc(x, y, 5.5, 0, Math.PI * 2);
+        context.save();
+        context.shadowColor = "rgba(240, 184, 102, .85)";
+        context.shadowBlur = 9;
+        context.fillStyle = "#f0bd70";
         context.fill();
-        context.strokeStyle = "rgba(255,255,255,.95)";
+        context.restore();
+        context.strokeStyle = "rgba(6, 16, 18, .95)";
         context.lineWidth = 1.5;
         context.stroke();
-        context.fillStyle = "#fff";
+        context.fillStyle = "#f2e8d0";
         context.font = "600 10px ui-monospace, monospace";
         context.fillText(String(index + 1), x + 8, y - 8);
       });
@@ -389,6 +393,14 @@ export default function ImageViewer({
             {pixelReadout && <div className="pixel-readout">{pixelReadout}</div>}
           </>
         )}
+        <div className="stage-hud stage-hud-top" aria-hidden="true">
+          <span><i className="stage-hud-dot" />PRODUCTO ANALIZADO</span>
+          <span>{layer === "true-color" ? "TRUE COLOR" : layer === "swir" ? "SWIR" : "CLASES + HUMO"}</span>
+        </div>
+        <div className="stage-hud stage-hud-bottom" aria-hidden="true">
+          <span>{tool === "distance" ? "REGLA ACTIVA" : tool === "area" ? "SELECCIÓN DE REGIÓN" : tool === "pixel" ? "LECTURA DE PÍXEL" : "VISOR SATELITAL"}</span>
+          <span>ESCALA {grid?.gsd_x_m && grid?.gsd_y_m ? `${grid.gsd_x_m.toFixed(2)} × ${grid.gsd_y_m.toFixed(2)} M/PIX` : "NO CALIBRADA"}</span>
+        </div>
       </div>
     </>
   );

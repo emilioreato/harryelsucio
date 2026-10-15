@@ -314,14 +314,31 @@ function App() {
     ? `${metrics.detector}. Rejilla ${metrics.grid_width} × ${metrics.grid_height} px. Píxeles excluidos como agua: ${formatNumber(metrics.water_excluded)}. Regiones remotas descartadas: ${metrics.remote_regions_discarded}. ${metrics.gsd_x_m ? `GSD efectivo ${formatNumber(metrics.gsd_x_m, 3)} × ${formatNumber(metrics.gsd_y_m, 3)} m/píxel.` : "Sin GSD; las medidas se expresan en píxeles."}`
     : "Al terminar, aquí se muestran el detector y la rejilla usada.";
   return (
-    <>
+    <div className="mission-shell">
+      <header className="mission-header">
+        <div className="brand-lockup">
+          <span className="brand-mark" aria-hidden="true">L</span>
+          <div className="brand-copy"><strong>LUMBRE</strong><span>CARTOGRAFÍA DE CAMPO</span></div>
+        </div>
+        <div className="mission-context">
+          <span className="header-overline">PLANIFICACIÓN DE RUTA / ANÁLISIS</span>
+          <strong>{activeLabel}</strong>
+        </div>
+        <div className="header-status">
+          <span className={`connection-pill${connection.ready ? " is-ready" : error ? " is-error" : ""}`}>
+            <span className="status-dot" />{connection.label}
+          </span>
+          <span className="header-capability">IMAGEN · TERRENO · SEGMENTACIÓN</span>
+        </div>
+      </header>
       <main className="workspace">
         <aside className="control-panel" aria-label="Configuración del análisis">
           <div className="panel-heading">
-            <h1><SlidersHorizontal size={15} aria-hidden="true" />Análisis</h1>
-            <span className={`connection-pill${connection.ready ? " is-ready" : error ? " is-error" : ""}`}>
-              <span className="status-dot" />{connection.label}
-            </span>
+            <span className="panel-index">01</span>
+            <div className="panel-heading-copy">
+              <h1><SlidersHorizontal size={15} aria-hidden="true" />Preparar carga</h1>
+              <span>FUENTE / MÉTODO / DETECCIÓN</span>
+            </div>
           </div>
 
           <section className="sidebar-progress" aria-label="Progreso del análisis">
@@ -409,6 +426,10 @@ function App() {
 
         <section className="analysis-column" aria-label="Visor del análisis">
           <div className="viewer-card">
+            <div className="viewer-ident">
+              <div><span className="viewer-overline">ÁREA DE OPERACIONES</span><strong>{activeLabel}</strong></div>
+              <div className="viewer-mode"><span className="signal-mark" />{hasResult ? (showSegmentation ? "LECTURA SEGMENTADA" : "CAPA ORIGINAL") : "ESPERANDO IMAGEN"}</div>
+            </div>
             <ImageViewer
               jobId={hasResult ? jobId : null}
               grid={hasResult ? grid : null}
@@ -436,7 +457,10 @@ function App() {
         </section>
 
         <aside className="results-column interaction-panel" aria-label="Herramientas y resultados">
-          <div className="results-heading"><h2>Medir y analizar</h2></div>
+          <div className="panel-heading results-title">
+            <span className="panel-index">02</span>
+            <div className="panel-heading-copy"><h1>Lectura de campo</h1><span>MEDICIÓN / INFORME</span></div>
+          </div>
           <section className="measurement-panel" aria-label="Herramientas de medición">
             <p className="panel-kicker">HERRAMIENTAS</p>
             <div className="tool-grid" role="group" aria-label="Seleccionar herramienta">
@@ -538,7 +562,7 @@ function App() {
           </details>}
         </aside>
       </main>
-    </>
+    </div>
   );
 }
 
