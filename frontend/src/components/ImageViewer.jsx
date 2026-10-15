@@ -146,7 +146,7 @@ export default function ImageViewer({
       window.removeEventListener("resize", draw);
       observer?.disconnect();
     };
-  }, [source, showMarks, marksForDraw, tool, polygonClosed]);
+  }, [source, showMarks, marksForDraw, tool, polygonClosed, imageFailed]);
 
   const handleImageClick = (event) => {
     if (!hasResult || tool === "view" || !imageRef.current) return;
@@ -244,7 +244,6 @@ export default function ImageViewer({
             if (nextTool !== tool) {
               setMarks([]);
               setPolygonClosed(false);
-              setInspectedPixel(null);
             }
             setTool(nextTool);
           }}>
@@ -252,7 +251,7 @@ export default function ImageViewer({
           </select>
         </label>
         <div className="mark-actions">
-          <button className="text-button" type="button" disabled={!hasResult || (!marks.length && !inspectedPixel)} onClick={undo}>Deshacer</button>
+          <button className="text-button" type="button" disabled={!hasResult || !marks.length} onClick={undo}>Deshacer</button>
           {tool === "polygon" && <button className="text-button" type="button" disabled={!canClosePolygon} onClick={closePolygon}>Cerrar área</button>}
           <button className="text-button" type="button" disabled={!hasResult || (!marks.length && !inspectedPixel)} onClick={clear}>Limpiar</button>
         </div>
