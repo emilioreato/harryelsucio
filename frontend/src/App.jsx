@@ -61,7 +61,7 @@ function saveBlob(blob, filename) {
 
 function loadNotes() {
   try {
-    const notes = JSON.parse(localStorage.getItem("pyroscope-notes") || "[]");
+    const notes = JSON.parse(localStorage.getItem("espejo-ustorio-notes") || "[]");
     return Array.isArray(notes) ? notes.slice(0, 12) : [];
   } catch {
     return [];
@@ -356,27 +356,30 @@ function App() {
               <input className="range-control" id="num-classes" type="range" min="4" max="10" value={numClasses} onChange={(event) => setNumClasses(Number(event.target.value))} />
             </>}
 
-            <div className="compact-fields">
-              <div>
-                <label className="field-label" htmlFor="minimum-area">Área mínima (%)</label>
-                <input className="field-control" id="minimum-area" type="number" min="0.01" max="1" step="0.01" value={minimumArea} onChange={(event) => setMinimumArea(event.target.value)} />
+            <details className="details-panel parameter-settings">
+              <summary>Parámetros y escala</summary>
+              <div className="parameter-content">
+                <div className="compact-fields">
+                  <div>
+                    <label className="field-label" htmlFor="minimum-area">Área mínima (%)</label>
+                    <input className="field-control" id="minimum-area" type="number" min="0.01" max="1" step="0.01" value={minimumArea} onChange={(event) => setMinimumArea(event.target.value)} />
+                  </div>
+                  <div>
+                    <label className="field-label" htmlFor="max-distance">Radio máximo (%)</label>
+                    <input className="field-control" id="max-distance" type="number" min="3" max="20" step="1" value={maxDistance} disabled={keepSeparate} onChange={(event) => setMaxDistance(event.target.value)} />
+                  </div>
+                </div>
+                <label className="check-row" htmlFor="keep-separate">
+                  <input id="keep-separate" type="checkbox" checked={keepSeparate} onChange={(event) => setKeepSeparate(event.target.checked)} />
+                  <span>Conservar focos separados</span>
+                </label>
+                <div className="section-rule measurement-rule"><span>CALIBRACIÓN</span></div>
+                <label className="field-label" htmlFor="gsd">GSD · metros por píxel <span className="optional">opcional</span></label>
+                <input className="field-control" id="gsd" type="number" min="0.000001" step="any" inputMode="decimal" placeholder="Sin escala: medidas en píxeles" value={gsd} onChange={(event) => setGsd(event.target.value)} />
               </div>
-              <div>
-                <label className="field-label" htmlFor="max-distance">Radio máximo (%)</label>
-                <input className="field-control" id="max-distance" type="number" min="3" max="20" step="1" value={maxDistance} disabled={keepSeparate} onChange={(event) => setMaxDistance(event.target.value)} />
-              </div>
-            </div>
-
-            <label className="check-row" htmlFor="keep-separate">
-              <input id="keep-separate" type="checkbox" checked={keepSeparate} onChange={(event) => setKeepSeparate(event.target.checked)} />
-              <span>Conservar focos separados</span>
-            </label>
+            </details>
 
             <AdvancedSettings value={advanced} onChange={setAdvanced} onReset={() => setAdvanced(defaultAdvancedSettings())} method={method} />
-
-            <div className="section-rule measurement-rule"><span>MEDICIÓN</span></div>
-            <label className="field-label" htmlFor="gsd">GSD · metros por píxel <span className="optional">opcional</span></label>
-            <input className="field-control" id="gsd" type="number" min="0.000001" step="any" inputMode="decimal" placeholder="Sin escala: medidas en píxeles" value={gsd} onChange={(event) => setGsd(event.target.value)} />
 
             <button className="run-button" id="run-analysis" type="submit" disabled={!canRun}>
               <span className="run-icon" aria-hidden="true">▶</span><span>{running ? "Analizando…" : "Iniciar segmentación"}</span>
@@ -434,8 +437,8 @@ function App() {
           </>}
 
           <div className="section-rule result-rule"><span>EXPORTAR</span></div>
-          <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("overlay-true-color", "pyroscope_mapa_segmentado.png")}><span>Mapa con contorno</span><span>PNG ↓</span></button>
-          <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("mask", "pyroscope_mascara_candidata.png")}><span>Máscara segmentada</span><span>PNG ↓</span></button>
+          <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("overlay-true-color", "espejo_ustorio_mapa_segmentado.png")}><span>Mapa con contorno</span><span>PNG ↓</span></button>
+          <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("mask", "espejo_ustorio_mascara_candidata.png")}><span>Máscara segmentada</span><span>PNG ↓</span></button>
           <button className="export-button" type="button" disabled={!hasResult} onClick={downloadMeasurements}><span>Puntos y medidas</span><span>JSON ↓</span></button>
 
           <details className="details-panel">
@@ -443,7 +446,7 @@ function App() {
             <div className="details-content">{summary}</div>
           </details>
 
-          <details className="details-panel" open>
+          <details className="details-panel">
             <summary>Notas de campo</summary>
             <form className="note-form" onSubmit={addNote}>
               <label className="sr-only" htmlFor="note-text">Añadir una nota</label>
