@@ -82,9 +82,13 @@ export default function ImageViewer({
       if (!showMarks) return;
       const scaleX = imageRect.width / image.naturalWidth;
       const scaleY = imageRect.height / image.naturalHeight;
-      context.strokeStyle = "#f0bd72";
-      context.fillStyle = "#f0bd72";
-      context.lineWidth = 2;
+      const routeColor = "#70e2ef";
+      const areaColor = "#f0bd72";
+      context.strokeStyle = tool === "distance" ? routeColor : areaColor;
+      context.fillStyle = tool === "distance" ? routeColor : areaColor;
+      context.lineWidth = 2.2;
+      context.shadowColor = tool === "distance" ? "rgba(68, 214, 232, .75)" : "rgba(240, 189, 114, .4)";
+      context.shadowBlur = tool === "distance" ? 9 : 4;
       context.lineCap = "round";
       context.lineJoin = "round";
 
@@ -126,10 +130,11 @@ export default function ImageViewer({
         const y = point.y * scaleY;
         context.beginPath();
         context.arc(x, y, 5, 0, Math.PI * 2);
-        context.fillStyle = "#d94a8b";
+        context.fillStyle = tool === "distance" ? "#baf8fa" : "#f0bd72";
         context.fill();
-        context.strokeStyle = "rgba(255,255,255,.95)";
+        context.strokeStyle = tool === "distance" ? "#3dabbc" : "rgba(255,255,255,.92)";
         context.lineWidth = 1.5;
+        context.shadowBlur = 0;
         context.stroke();
         context.fillStyle = "#fff";
         context.font = "600 10px ui-monospace, monospace";
