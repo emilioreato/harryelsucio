@@ -32,9 +32,9 @@ function renderMeasurement(tool, marks, inspectedPixel, polygonClosed, grid) {
   if (tool === "distance") {
     const segments = [];
     for (let index = 0; index + 1 < marks.length; index += 2) {
-      segments.push(`Tramo ${index / 2 + 1}: ${formatLength(distanceBetween(marks[index], marks[index + 1], grid), unit)}`);
+      segments.push(`Flecha ${index / 2 + 1}: ${formatLength(distanceBetween(marks[index], marks[index + 1], grid), unit)}`);
     }
-    if (marks.length % 2) segments.push("Añade otro punto para completar el tramo.");
+    if (marks.length % 2) segments.push("Añade otro punto para completar la flecha.");
     return segments.join(" · ");
   }
   if (tool === "polygon") {
@@ -81,7 +81,35 @@ export default function ImageViewer({
       if (!showMarks) return;
       const scaleX = imageRect.width / image.naturalWidth;
       const scaleY = imageRect.height / image.naturalHeight;
-      if (marksForDraw.length > 1) {
+      context.strokeStyle = "#f0bd72";
+      context.fillStyle = "#f0bd72";
+      context.lineWidth = 2;
+      context.lineCap = "round";
+      context.lineJoin = "round";
+
+      if (tool === "distance") {
+        // Cada pareja de clics es una flecha independiente, no un trazo continuo.
+        for (let index = 0; index + 1 < marksForDraw.length; index += 2) {
+          const start = marksForDraw[index];
+          const end = marksForDraw[index + 1];
+          const x1 = start.x * scaleX;
+          const y1 = start.y * scaleY;
+          const x2 = end.x * scaleX;
+          const y2 = end.y * scaleY;
+          const angle = Math.atan2(y2 - y1, x2 - x1);
+          const headLength = 11;
+          context.beginPath();
+          context.moveTo(x1, y1);
+          context.lineTo(x2, y2);
+          context.stroke();
+          context.beginPath();
+          context.moveTo(x2, y2);
+          context.lineTo(x2 - headLength * Math.cos(angle - Math.PI / 6), y2 - headLength * Math.sin(angle - Math.PI / 6));
+          context.lineTo(x2 - headLength * Math.cos(angle + Math.PI / 6), y2 - headLength * Math.sin(angle + Math.PI / 6));
+          context.closePath();
+          context.fill();
+        }
+      } else if (tool === "polygon" && marksForDraw.length > 1) {
         context.beginPath();
         marksForDraw.forEach((point, index) => {
           const x = point.x * scaleX;
@@ -89,9 +117,7 @@ export default function ImageViewer({
           if (index === 0) context.moveTo(x, y);
           else context.lineTo(x, y);
         });
-        if (tool === "polygon" && polygonClosed && marksForDraw.length > 2) context.closePath();
-        context.strokeStyle = "#f6dc49";
-        context.lineWidth = 2;
+        if (polygonClosed && marksForDraw.length > 2) context.closePath();
         context.stroke();
       }
       marksForDraw.forEach((point, index) => {
