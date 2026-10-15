@@ -137,3 +137,49 @@ No descartar el manual: conservar su estructura útil (Python, Streamlit, módul
 ---
 
 **Estado:** documento conceptual, sujeto a revisión al conocer los archivos y criterios definitivos del proyecto. No sustituye evaluación científica, modelos oficiales ni sistemas de protección civil.
+
+## 8. Estimación de superficie a partir de las imágenes del repositorio
+
+### Inventario de imágenes localizadas
+
+En `DOCUMENTACION/Presentacion reto/` se localizaron ocho imágenes JPG distribuidas en tres ubicaciones. Los tamaños siguientes son los tamaños de archivo, **no** las dimensiones en píxeles ni la superficie terrestre cubierta.
+
+| Ubicación | Producto | Tamaño del archivo |
+|---|---|---:|
+| La Mierla (Guadalajara) | SWIR | 1.447.226 bytes |
+| La Mierla (Guadalajara) | True Color | 1.306.634 bytes |
+| La Mierla (Guadalajara) | Wildfires | 1.241.849 bytes |
+| Madrid-Avila | SWIR | 19.302.978 bytes |
+| Madrid-Avila | True Color | 21.325.480 bytes |
+| Niebla (Huelva) | SWIR | 980.203 bytes |
+| Niebla (Huelva) | True Color | 893.953 bytes |
+| Niebla (Huelva) | Wildfires | 933.409 bytes |
+
+Carpetas:
+- [La Mierla (Guadalajara)](https://github.com/emilioreato/harryelsucio/tree/main/DOCUMENTACION/Presentacion%20reto/La%20Mierla%20(Guadalajara))
+- [Madrid-Avila](https://github.com/emilioreato/harryelsucio/tree/main/DOCUMENTACION/Presentacion%20reto/Madrid-Avila)
+- [Niebla (Huelva)](https://github.com/emilioreato/harryelsucio/tree/main/DOCUMENTACION/Presentacion%20reto/Niebla%20(Huelva))
+
+### Conversión de píxeles a superficie
+
+Para una imagen con resolución espacial conocida y píxeles cuadrados, la estimación nominal es:
+
+`superficie por píxel = tamaño de píxel en el terreno × tamaño de píxel en el terreno`
+
+| Resolución espacial nominal | Superficie nominal por píxel |
+|---|---:|
+| 10 m/píxel | 10 × 10 = 100 m² |
+| 20 m/píxel | 20 × 20 = 400 m² |
+| 60 m/píxel | 60 × 60 = 3.600 m² |
+
+Como referencia inicial, una composición **True Color** basada en bandas visibles de Sentinel-2 suele asociarse a bandas de 10 m, mientras que las bandas SWIR B11/B12 son de 20 m. Esto solo permite usar 100 m²/píxel para True Color y 400 m²/píxel para SWIR **si la exportación conserva esa escala espacial**. Un JPG puede haberse reescalado o renderizado; el nombre del archivo no prueba por sí solo su resolución efectiva. No se ha confirmado aún la composición espectral exacta de los productos `Wildfires`.
+
+Ejemplo ilustrativo: si una máscara clasifica 5.000 píxeles como quemados, el área nominal sería 500.000 m² (50 ha) a 10 m/píxel, o 2.000.000 m² (200 ha) a 20 m/píxel. El ejemplo no es una medición de las imágenes del repositorio.
+
+### Referencia técnica y límites
+
+El artículo adjunto, **“Ground Resolved Distance Estimation of Sentinel-2 Imagery Using Edge-based Scene-Driven Approach”** (PFG Journal, 2025), distingue GSD (distancia de muestreo terrestre entre centros de píxeles) de GRD (capacidad efectiva de resolución). Para las bandas visibles y NIR usa GSD nominal de 10 m; en las escenas estudiadas estima GRD media de aproximadamente 12,4–12,7 m. Por tanto, la superficie nominal de un píxel no debe confundirse con el tamaño mínimo de detalle que el sensor puede resolver.
+
+Antes de dar una superficie real, hay que verificar dimensiones de cada JPG, bandas usadas, remuestreo, CRS/geotransformación y tamaño de celda. Si solo se dispone de una imagen renderizada sin referencia geográfica, puede contarse una máscara de píxeles, pero no debe afirmarse que cubre una superficie terrestre exacta. Para un resultado defendible, trabajar con bandas/raster georreferenciado y sumar las celdas clasificadas como quemadas; distinguir siempre área quemada de fuego activo.
+
+**Siguiente paso:** inspeccionar metadatos y dimensiones de los ocho JPG, confirmar la composición de cada producto y documentar cualquier remuestreo antes de calcular hectáreas.
