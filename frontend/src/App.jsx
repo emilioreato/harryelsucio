@@ -115,6 +115,7 @@ function App() {
   const activeLabel = source === "upload" ? "Pareja cargada" : selectedScene?.label || "Selecciona una escena";
   const canRun = connection.ready && !running && (source === "upload" || scenes.length > 0);
   const hasResult = Boolean(result && result.state === "complete");
+  const canExportMeasurements = hasResult && ((tool === "distance" && marks.length >= 2) || (tool === "polygon" && polygonClosed && marks.length >= 3));
   const grid = result?.grid || null;
   const metrics = result?.metrics || null;
   const marksUnit = grid?.gsd_x_m ? "m" : "px";
@@ -165,9 +166,9 @@ function App() {
     event.preventDefault();
     setError("");
     let request;
+    let analysisStarted = false;
     try {
       const settings = collectSettings();
-      setSettingsUsed(settings);
       if (source === "preloaded") {
         if (!sceneId) throw new Error("Selecciona una escena precargada.");
         request = { source: "preloaded", scene: sceneId, settings };
@@ -184,12 +185,14 @@ function App() {
         };
       }
 
+      setSettingsUsed(settings);
       setJobLabel(activeLabel);
       setJobId(null);
       setResult(null);
       setMarks([]);
       setPolygonClosed(false);
       setRunning(true);
+      analysisStarted = true;
       setConnection({ ready: true, label: "El motor Python está procesando" });
       setProgress({ label: "Preparando análisis", value: 0 });
 
@@ -222,8 +225,10 @@ function App() {
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
       setError(message);
-      setResult({ state: "error", error: message });
-      setProgress({ label: "No se pudo completar", value: 0 });
+      if (analysisStarted) {
+        setResult({ state: "error", error: message });
+        setProgress({ label: "No se pudo completar", value: 0 });
+      }
       setRunning(false);
       if (cause instanceof TypeError) {
         setConnection({ ready: false, label: "Conexión interrumpida" });
@@ -246,11 +251,7 @@ function App() {
 
   const downloadMeasurements = () => {
     if (!jobId || !grid) return;
-    const elements = marks.map((point, index) => ({
-      id: `punto-${index + 1}`,
-      tipo: "punto",
-      coordenadas_px: [point.x, point.y],
-    }));
+    const elements = [];
     if (tool === "distance") {
       for (let index = 0; index + 1 < marks.length; index += 2) {
         elements.push({
@@ -269,8 +270,12 @@ function App() {
         area: { valor: polygonArea(marks, grid), unidad: grid.gsd_x_m ? "m²" : "px²" },
       });
     }
+    if (!elements.length) {
+      setError("Completa una flecha o cierra un área manual antes de exportar las mediciones.");
+      return;
+    }
     saveBlob(
-      new Blob([JSON.stringify({ esquema: "pyroscope-imagen-v1", job_id: jobId, sistema_coordenadas: grid, elementos }, null, 2)], { type: "application/json" }),
+      new Blob([JSON.stringify({ esquema: "espejo-ustorio-mediciones-v1", job_id: jobId, sistema_coordenadas: grid, elementos }, null, 2)], { type: "application/json" }),
       "espejo_ustorio_mediciones.json",
     );
   };
@@ -301,9 +306,9 @@ function App() {
           </div>
 
           <form onSubmit={runAnalysis}>
-            <div className="source-switch" role="tablist" aria-label="Origen de las imágenes">
+            <div className="source-switch" role="group" aria-label="Origen de las imágenes">
               {[ ["preloaded", "Escenas"], ["upload", "Subir pareja"] ].map(([id, label]) => (
-                <button key={id} className={`source-tab${source === id ? " is-active" : ""}`} type="button" role="tab" aria-selected={source === id} onClick={() => setSource(id)}>{label}</button>
+                <button key={id} className={`source-tab${source === id ? " is-active" : ""}`} type="button" aria-pressed={source === id} onClick={() => { setSource(id); setError(""); }}>{label}</button>
               ))}
             </div>
 
@@ -427,7 +432,7 @@ function App() {
           <div className="section-rule result-rule"><span>EXPORTAR</span></div>
           <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("overlay-true-color", "espejo_ustorio_mapa_segmentado.png")}><span>Mapa con contorno</span><span>PNG ↓</span></button>
           <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("mask", "espejo_ustorio_mascara_candidata.png")}><span>Máscara segmentada</span><span>PNG ↓</span></button>
-          <button className="export-button" type="button" disabled={!hasResult} onClick={downloadMeasurements}><span>Puntos y medidas</span><span>JSON ↓</span></button>
+          <button className="export-button" type="button" disabled={!canExportMeasurements} onClick={downloadMeasurements}><span>Flechas y áreas manuales</span><span>JSON ↓</span></button>
 
           <details className="details-panel">
             <summary>Detalles del análisis</summary>
