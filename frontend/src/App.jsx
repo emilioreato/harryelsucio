@@ -383,28 +383,6 @@ function App() {
 
             <AdvancedSettings value={advanced} onChange={setAdvanced} onReset={() => setAdvanced(defaultAdvancedSettings())} method={method} />
 
-            <section className="resolution-reference" aria-labelledby="resolution-title">
-              <h3 id="resolution-title">Resolución y superficie</h3>
-              <p className="resolution-formula">Píxeles cuadrados: superficie/píxel = tamaño de píxel²</p>
-              <table className="resolution-table">
-                <tbody>
-                  <tr><th scope="row">Resolución</th><td>10 m</td><td>20 m</td><td>60 m</td></tr>
-                  <tr><th scope="row">Superficie</th><td>100 m²</td><td>400 m²</td><td>3.600 m²</td></tr>
-                </tbody>
-              </table>
-              <p className="resolution-warning">Valores nominales. Un JPG puede estar remuestreado; el área queda en píxeles hasta verificar escala y georreferenciación.</p>
-              <details className="resolution-details">
-                <summary>Referencia técnica y límites</summary>
-                <div className="resolution-longform">
-                  <p>Como referencia inicial, True Color basado en bandas visibles de Sentinel‑2 suele asociarse a bandas de 10 m y SWIR B11/B12 a 20 m. Solo se pueden aplicar 100 m²/píxel a True Color o 400 m²/píxel a SWIR si la exportación conserva esa escala. El nombre del JPG no demuestra su resolución efectiva; no se ha confirmado la composición espectral exacta de los productos <code>Wildfires</code>.</p>
-                  <p>Ejemplo: 5.000 píxeles clasificados como quemados equivaldrían nominalmente a 500.000 m² (50 ha) a 10 m/píxel, o 2.000.000 m² (200 ha) a 20 m/píxel. Es solo ilustrativo; no mide las imágenes del repositorio.</p>
-                  <p>El artículo “Ground Resolved Distance Estimation of Sentinel‑2 Imagery Using Edge‑based Scene‑Driven Approach” (PFG Journal, 2025) distingue GSD —distancia entre centros de píxeles— de GRD —capacidad efectiva de resolución—. En las escenas estudiadas estima una GRD media de aproximadamente 12,4–12,7 m para las bandas visibles y NIR con GSD nominal de 10 m. El tamaño nominal del píxel no indica el detalle mínimo que se puede resolver.</p>
-                  <p>Para afirmar una superficie real hay que verificar dimensiones de los ocho JPG, bandas, remuestreo, CRS, geotransformación y tamaño de celda. Sin referencia geográfica, la máscara se puede contar en píxeles, pero no atribuirle una superficie terrestre exacta. Un cálculo defendible requiere un raster georreferenciado y sumar las celdas quemadas; área quemada y fuego activo son fenómenos distintos.</p>
-                  <p><strong>Siguiente paso:</strong> confirmar la composición de cada producto y documentar cualquier remuestreo antes de calcular hectáreas.</p>
-                </div>
-              </details>
-            </section>
-
             <button className="run-button" id="run-analysis" type="button" onClick={runAnalysis} disabled={!canRun}>
               <span className="run-icon" aria-hidden="true">▶</span><span>{running ? "Analizando…" : "Iniciar segmentación"}</span>
             </button>
@@ -477,18 +455,27 @@ function App() {
                 setMarks([]); setInspectedPixel(null); setDistancePreview(null); setPolygonClosed(false);
               }}>Borrar marcas</button>
             </div>
-            <label className="scale-input" htmlFor="gsd"><span>GSD verificado <small>metros por píxel</small></span>
-              <input className="field-control" id="gsd" type="number" min="0.000001" step="any" inputMode="decimal" placeholder="Opcional · si conoces la escala" value={gsd} onChange={(event) => setGsd(event.target.value)} disabled={running} />
-            </label>
-            <p className="field-help">Se usa en el siguiente análisis. Sin GSD, las medidas se expresan en píxeles.</p>
-            <details className="resolution-details">
-              <summary>Cómo se calcula la superficie</summary>
+            <section className="resolution-reference" aria-labelledby="resolution-title">
+              <h3 id="resolution-title">Resolución y superficie</h3>
+              <p className="resolution-formula">Para píxeles cuadrados: superficie/píxel = tamaño de píxel²</p>
+              <table className="resolution-table">
+                <tbody>
+                  <tr><th scope="row">Resolución</th><td>10 m</td><td>20 m</td><td>60 m</td></tr>
+                  <tr><th scope="row">Superficie</th><td>100 m²</td><td>400 m²</td><td>3.600 m²</td></tr>
+                </tbody>
+              </table>
+              <p className="resolution-warning">Valores nominales. JPG puede estar reescalado; el área queda en píxeles hasta verificar escala y georreferenciación.</p>
+              <details className="resolution-details">
+                <summary>Referencia técnica y límites</summary>
               <div className="resolution-longform">
-                <p>Superficie por píxel = tamaño de píxel en el terreno². Como referencia nominal, 10 m/píxel equivalen a 100 m², 20 m a 400 m² y 60 m a 3.600 m².</p>
-                <p>True Color suele usar bandas visibles de Sentinel‑2 (10 m); SWIR B11/B12, 20 m. Solo se pueden aplicar esas escalas si la exportación conserva su resolución. El nombre del JPG no confirma GSD, bandas, remuestreo ni georreferenciación.</p>
-                <p>Sin referencia geográfica se cuentan píxeles, pero no se debe afirmar una superficie real. Para un área defendible hay que verificar dimensiones, composición, CRS, geotransformación y tamaño de celda. El área quemada tampoco equivale a fuego activo.</p>
+                <p>Como referencia inicial, True Color basado en bandas visibles de Sentinel‑2 suele asociarse a bandas de 10 m y SWIR B11/B12 a 20 m. Solo se pueden aplicar 100 m²/píxel a True Color o 400 m²/píxel a SWIR si la exportación conserva esa escala. El nombre del JPG no demuestra su resolución efectiva; no se ha confirmado la composición espectral exacta de los productos <code>Wildfires</code>.</p>
+                <p>Ejemplo: 5.000 píxeles clasificados como quemados equivaldrían nominalmente a 500.000 m² (50 ha) a 10 m/píxel, o 2.000.000 m² (200 ha) a 20 m/píxel. Es solo ilustrativo; no mide las imágenes del repositorio.</p>
+                <p>El artículo “Ground Resolved Distance Estimation of Sentinel‑2 Imagery Using Edge‑based Scene‑Driven Approach” (PFG Journal, 2025) distingue GSD —distancia entre centros de píxeles— de GRD —capacidad efectiva de resolución—. En las escenas estudiadas estima una GRD media de aproximadamente 12,4–12,7 m para las bandas visibles y NIR con GSD nominal de 10 m. El tamaño nominal del píxel no indica el detalle mínimo que se puede resolver.</p>
+                <p>Para afirmar una superficie real hay que verificar dimensiones de los ocho JPG, bandas, remuestreo, CRS, geotransformación y tamaño de celda. Sin referencia geográfica, la máscara se puede contar en píxeles, pero no atribuirle una superficie terrestre exacta. Un cálculo defendible requiere un raster georreferenciado y sumar las celdas quemadas; área quemada y fuego activo son fenómenos distintos.</p>
+                <p><strong>Siguiente paso:</strong> confirmar la composición de cada producto y documentar cualquier remuestreo antes de calcular hectáreas.</p>
               </div>
-            </details>
+              </details>
+            </section>
           </section>
 
           <div className="results-heading results-subheading"><h2>Resultado</h2></div>
