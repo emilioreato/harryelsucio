@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../services/api.js";
 import { formatArea, formatLength, distanceBetween, polygonArea } from "../domain/measurements.js";
 
@@ -48,10 +48,15 @@ export default function ImageViewer({
   const stageRef = useRef(null);
   const imageRef = useRef(null);
   const canvasRef = useRef(null);
+  const [imageFailed, setImageFailed] = useState(false);
   const currentLayer = jobId ? visibleLayer(layer, showSegmentation) : null;
   const source = currentLayer && jobId ? `${api.layerUrl(jobId, currentLayer)}?v=${jobId}` : "";
   const hasResult = Boolean(jobId && grid);
   const marksForDraw = marks;
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [source]);
 
   useEffect(() => {
     const image = imageRef.current;
@@ -207,13 +212,26 @@ export default function ImageViewer({
           </div>
         ) : (
           <>
-            <img
-              ref={imageRef}
-              src={source}
-              alt={layer === "candidates" ? "Candidatos de superficie y humo probable" : `${layer === "swir" ? "SWIR" : "True Color"}${showSegmentation ? " con segmentación" : " original"}`}
-              onError={() => onError("No se pudo cargar la imagen resultante.")}
-            />
-            <canvas ref={canvasRef} aria-hidden="true" />
+            {imageFailed ? (
+              <div className="empty-state is-error">
+                <span className="empty-mark" aria-hidden="true">!</span>
+                <strong>No se pudo cargar esta vista</strong>
+                <span>Prueba a cambiar la composición o vuelve a ejecutar el análisis.</span>
+              </div>
+            ) : (
+              <>
+                <img
+                  ref={imageRef}
+                  src={source}
+                  alt={layer === "candidates" ? "Candidatos de superficie y humo probable" : `${layer === "swir" ? "SWIR" : "True Color"}${showSegmentation ? " con segmentación" : " original"}`}
+                  onError={() => {
+                    setImageFailed(true);
+                    onError("No se pudo cargar la imagen resultante.");
+                  }}
+                />
+                <canvas ref={canvasRef} aria-hidden="true" />
+              </>
+            )}
           </>
         )}
       </div>
