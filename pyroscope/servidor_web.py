@@ -103,29 +103,25 @@ def _liberar_bloque_instancia() -> None:
 
 
 def _es_instancia_lumbre(url: str, id_instancia: str | None = None) -> bool:
-    """Comprueba que la URL pertenece a Lumbre y, si se indica, a esa ejecución."""
+    """Comprueba que una URL pertenece a esta copia concreta de Lumbre."""
     try:
         with urlopen(f"{url.rstrip('/')}/api/health", timeout=0.6) as respuesta:
             estado = json.loads(respuesta.read().decode("utf-8"))
+        raiz_activa = estado.get("repository_root")
+        misma_raiz = (
+            isinstance(raiz_activa, str)
+            and os.path.normcase(os.path.abspath(raiz_activa))
+            == os.path.normcase(str(RAIZ_REPOSITORIO.resolve()))
+        )
         return (
             estado.get("app") == "Lumbre"
+            and misma_raiz
             and (id_instancia is None or estado.get("instance_id") == id_instancia)
         )
     except Exception:
-        # Compatibilidad con una instancia que siga abierta desde una versión
-        # anterior, que aún no publica /api/health.
-        if id_instancia is not None:
-            return False
-        try:
-            with urlopen(f"{url.rstrip('/')}/api/scenes", timeout=0.6) as respuesta:
-                escenas = json.loads(respuesta.read().decode("utf-8"))
-            with urlopen(f"{url.rstrip('/')}/api/detectors", timeout=0.6) as respuesta:
-                detectores = json.loads(respuesta.read().decode("utf-8"))
-            return isinstance(escenas.get("scenes"), list) and isinstance(
-                detectores.get("detectors"), list
-            )
-        except Exception:
-            return False
+        # Si la instancia no publica identidad verificable, no la reutilizamos:
+        # podría pertenecer a otra carpeta o a una versión antigua del proyecto.
+        return False
 
 
 def _buscar_instancia_activa(host: str, puerto: int) -> str | None:
@@ -567,7 +563,12 @@ class LumbreHandler(BaseHTTPRequestHandler):
         if ruta == "/api/health":
             self._json(
                 200,
-                {"app": "Lumbre", "instance_id": _ID_INSTANCIA, "pid": os.getpid()},
+                {
+                    "app": "Lumbre",
+                    "instance_id": _ID_INSTANCIA,
+                    "pid": os.getpid(),
+                    "repository_root": str(RAIZ_REPOSITORIO.resolve()),
+                },
             )
             return
         if ruta == "/api/scenes":
@@ -814,7 +815,12 @@ def ejecutar_servidor(host: str = "127.0.0.1", puerto: int = 8501, abrir_navegad
             else:
                 print(f"Lumbre ya está abierta en {url_existente}/.")
         else:
-            print("Lumbre se está iniciando en otra ventana. No se abrió otro servidor.")
+            print(
+                "No pude verificar la identidad del servidor que mantiene ocupado "
+                "el bloqueo de esta carpeta. Si hay una ventana negra antigua de "
+                "Lumbre abierta desde ESTA carpeta, ciérrala con Ctrl+C y vuelve "
+                "a ejecutar el lanzador."
+            )
         return False
 
     servidor = None

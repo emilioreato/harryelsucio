@@ -117,7 +117,13 @@ function App() {
         const availableDetectors = detectorResponse.detectors || [];
         setScenes(availableScenes);
         setDetectors(availableDetectors);
-        if (availableScenes.length) setSceneId(availableScenes[0].id);
+        if (availableScenes.length) {
+          setSceneId(availableScenes[0].id);
+        } else {
+          // Sin muestras locales, abre directamente el flujo de carga para no
+          // dejar deshabilitado el botón de segmentación en "Escenas".
+          setSource("upload");
+        }
         if (availableDetectors.length && !availableDetectors.some((item) => item.id === method)) {
           setMethod(availableDetectors[0].id);
         }
@@ -336,7 +342,7 @@ function App() {
               <section className="source-content">
                 <label className="field-label" htmlFor="scene-select">Escena</label>
                 <select className="field-control" id="scene-select" value={sceneId} onChange={(event) => setSceneId(event.target.value)}>
-                  {scenes.length ? scenes.map((scene) => <option value={scene.id} key={scene.id}>{scene.label}</option>) : <option value="">Buscando imágenes…</option>}
+                  {scenes.length ? scenes.map((scene) => <option value={scene.id} key={scene.id}>{scene.label}</option>) : <option value="">{connection.ready ? "No hay escenas precargadas" : "Buscando imágenes…"}</option>}
                 </select>
               </section>
             ) : (
@@ -345,7 +351,9 @@ function App() {
                 <input className="file-control" name="true-color-file" id="true-color-file" type="file" accept=".jpg,.jpeg,.png,.tif,.tiff,image/*" />
                 <label className="field-label second-file-label" htmlFor="swir-file">Imagen SWIR</label>
                 <input className="file-control" name="swir-file" id="swir-file" type="file" accept=".jpg,.jpeg,.png,.tif,.tiff,image/*" />
-                <p className="field-help">True Color y SWIR de la misma fecha.</p>
+                <p className="field-help">{scenes.length === 0
+                  ? "No hay escenas precargadas en esta copia. Carga dos imágenes alineadas de la misma escena y fecha para poder segmentar."
+                  : "True Color y SWIR de la misma fecha."}</p>
               </section>
             )}
 
