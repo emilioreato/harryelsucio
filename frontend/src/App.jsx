@@ -97,7 +97,13 @@ function App() {
         const availableDetectors = detectorResponse.detectors || [];
         setScenes(availableScenes);
         setDetectors(availableDetectors);
-        if (availableScenes.length) setSceneId(availableScenes[0].id);
+        if (availableScenes.length) {
+          setSceneId(availableScenes[0].id);
+        } else {
+          // Una copia sin datos de ejemplo debe abrir el flujo de carga, no dejar
+          // el botón de segmentación deshabilitado en la pestaña de escenas.
+          setSource("upload");
+        }
         if (availableDetectors.length && !availableDetectors.some((item) => item.id === method)) {
           setMethod(availableDetectors[0].id);
         }
@@ -124,6 +130,7 @@ function App() {
       setSceneId((current) => availableScenes.some((item) => item.id === current)
         ? current
         : availableScenes[0]?.id || "");
+      if (!availableScenes.length) setSource("upload");
       setMethod((current) => availableDetectors.some((item) => item.id === current)
         ? current
         : availableDetectors[0]?.id || "kmeans");
@@ -360,7 +367,9 @@ function App() {
                 <input className="file-control" name="true-color-file" id="true-color-file" type="file" accept=".jpg,.jpeg,.png,.tif,.tiff,image/*" />
                 <label className="field-label second-file-label" htmlFor="swir-file">Imagen SWIR</label>
                 <input className="file-control" name="swir-file" id="swir-file" type="file" accept=".jpg,.jpeg,.png,.tif,.tiff,image/*" />
-                <p className="field-help">Usa dos imágenes alineadas de la misma escena y fecha.</p>
+                <p className="field-help">{scenes.length === 0
+                  ? "No hay escenas precargadas en esta copia. Carga las dos imágenes alineadas de la misma escena y fecha para poder segmentar."
+                  : "Usa dos imágenes alineadas de la misma escena y fecha."}</p>
               </section>
             )}
 
