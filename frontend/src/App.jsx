@@ -337,11 +337,13 @@ function App() {
               {detectors.map((detector) => <option value={detector.id} key={detector.id}>{detector.name}</option>)}
             </select>
 
-            <div className="range-row">
-              <label className="field-label" htmlFor="sensitivity">Sensibilidad</label>
-              <output className="range-value">{sensitivity}</output>
-            </div>
-            <input className="range-control" id="sensitivity" type="range" min="1" max="10" value={sensitivity} onChange={(event) => setSensitivity(Number(event.target.value))} />
+            {selectedDetector?.uses_sensitivity !== false && <>
+              <div className="range-row">
+                <label className="field-label" htmlFor="sensitivity">Sensibilidad</label>
+                <output className="range-value">{sensitivity}</output>
+              </div>
+              <input className="range-control" id="sensitivity" type="range" min="1" max="10" value={sensitivity} onChange={(event) => setSensitivity(Number(event.target.value))} />
+            </>}
 
             {selectedDetector?.uses_num_classes !== false && <>
               <div className="range-row">
@@ -486,8 +488,9 @@ function App() {
               <Card className="metric-card" size="1"><span>Área</span><strong>{formatArea(metrics.area, metrics.area_unit)}</strong></Card>
               <Card className="metric-card" size="1"><span>Perímetro</span><strong>{formatLength(metrics.perimeter, metrics.perimeter_unit)}</strong></Card>
               <Card className="metric-card" size="1"><span>Humo probable</span><strong>{formatNumber(metrics.smoke_pct, 1)} %</strong></Card>
+              {metrics.active_fire_px > 0 && <Card className="metric-card" size="1"><span>Fuego activo posible</span><strong>{formatNumber(metrics.active_fire_px)} px</strong></Card>}
             </div>
-            <p className="result-caveat">Resultado orientativo; revisa la máscara. En fucsia: {formatNumber(metrics.smoke_covered_candidates_px)} px con evidencia de superficie afectada bajo humo; es una hipótesis, no se suma al área ni detecta fuego activo.</p>
+            <p className="result-caveat">Resultado orientativo; revisa la máscara. En fucsia: {formatNumber(metrics.smoke_covered_candidates_px)} px con evidencia de superficie afectada bajo humo; es una hipótesis y no se suma al área. El fuego activo se informa aparte cuando el modelo lo clasifica.</p>
           </>}
 
           <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("overlay-true-color", "lumbre_mapa_segmentado.png")}><span>Mapa con contorno</span><span>PNG ↓</span></button>

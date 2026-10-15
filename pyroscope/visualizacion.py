@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 
 from .segmentacion import ResultadoAreaAfectada
+from .ontologia import ClaseSemantica
 
 
 def crear_superposicion(
@@ -26,6 +27,24 @@ def crear_superposicion(
         resultado.mascara_humo,
         color=(0, 165, 255),
         opacidad=0.42,
+    )
+    salida = superponer_mascara(
+        salida,
+        resultado.clase_por_pixel == ClaseSemantica.AGUA_POSIBLE,
+        color=(25, 105, 255),
+        opacidad=0.5,
+    )
+    salida = superponer_mascara(
+        salida,
+        resultado.clase_por_pixel == ClaseSemantica.FUEGO_ACTIVO_POSIBLE,
+        color=(255, 245, 0),
+        opacidad=0.78,
+    )
+    salida = superponer_mascara(
+        salida,
+        resultado.clase_por_pixel == ClaseSemantica.NUBE_BRUMA,
+        color=(170, 175, 185),
+        opacidad=0.28,
     )
 
     if resultado.contornos:
@@ -54,11 +73,29 @@ def crear_vista_clasificacion(
         color=(220, 55, 175),
         opacidad=0.62,
     )
-    return superponer_mascara(
+    salida = superponer_mascara(
         salida,
         resultado.mascara_humo,
         color=(0, 165, 255),
         opacidad=0.48,
+    )
+    salida = superponer_mascara(
+        salida,
+        resultado.clase_por_pixel == ClaseSemantica.AGUA_POSIBLE,
+        color=(25, 105, 255),
+        opacidad=0.58,
+    )
+    salida = superponer_mascara(
+        salida,
+        resultado.clase_por_pixel == ClaseSemantica.FUEGO_ACTIVO_POSIBLE,
+        color=(255, 245, 0),
+        opacidad=0.82,
+    )
+    return superponer_mascara(
+        salida,
+        resultado.clase_por_pixel == ClaseSemantica.NUBE_BRUMA,
+        color=(170, 175, 185),
+        opacidad=0.3,
     )
 
 

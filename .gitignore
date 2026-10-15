@@ -22,3 +22,7 @@ frontend/.vite/
 tmp_pyroscope/
 tmp_algorithm_review/
 /tmp/
+
+# Datos y modelos locales del clasificador supervisado
+/training Random Forest/dataset/
+/training Random Forest/random_forest.joblib

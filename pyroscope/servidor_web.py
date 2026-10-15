@@ -31,6 +31,7 @@ from .detectores import listar_detectores_superficie, obtener_detector_superfici
 from .detectores.kmeans import PESOS_SCORE_POR_DEFECTO
 from .agua import UMBRALES_AGUA_POR_DEFECTO
 from .humo import PESOS_CONFIANZA_HUMO_POR_DEFECTO
+from .ontologia import ClaseSemantica
 from .visualizacion import crear_superposicion, crear_vista_clasificacion
 
 
@@ -500,6 +501,11 @@ def _iniciar_analisis(job_id: str, true_bytes: bytes, swir_bytes: bytes, ajustes
                 ),
                 "pixel_count": pixeles,
                 "water_excluded": int(resultado.pixeles_agua_excluidos),
+                "active_fire_px": int(
+                    np.count_nonzero(
+                        resultado.clase_por_pixel == ClaseSemantica.FUEGO_ACTIVO_POSIBLE
+                    )
+                ),
                 "remote_regions_discarded": int(resultado.componentes_remotos_descartados),
                 "grid_width": int(sistema.ancho_px),
                 "grid_height": int(sistema.alto_px),
@@ -557,6 +563,7 @@ class LumbreHandler(BaseHTTPRequestHandler):
                             "name": detector.nombre,
                             "description": detector.descripcion,
                             "uses_num_classes": detector.usa_numero_clases,
+                            "uses_sensitivity": detector.usa_sensibilidad,
                         }
                         for detector in listar_detectores_superficie()
                     ]

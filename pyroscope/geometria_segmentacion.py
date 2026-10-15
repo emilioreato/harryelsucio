@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 
 from .modelos_segmentacion import ResultadoClasificacionSemantica, ResultadoRegionesEspaciales
+from .ontologia import ClaseSemantica
 from .progreso import ProgresoSegmentacion, informar_progreso as _informar_progreso
 
 
@@ -26,10 +27,12 @@ def segmentar_regiones_espaciales(
     mascara = clasificacion.mascara_candidata
     mascara_agua = clasificacion.mascara_agua
     mascara_humo = clasificacion.mascara_humo
+    clases = clasificacion.clase_por_pixel
     if (
         mascara.ndim != 2
         or mascara_agua.shape != mascara.shape
         or mascara_humo.shape != mascara.shape
+        or clases.shape != mascara.shape
     ):
         raise ValueError("Las máscaras semánticas deben ser rejillas 2D del mismo tamaño.")
     if not 0 <= area_minima_pct <= 10:
@@ -48,8 +51,16 @@ def segmentar_regiones_espaciales(
     )
     pixeles_agua_excluidos = int(np.count_nonzero(mascara_u8[mascara_agua]))
     pixeles_humo_excluidos = int(np.count_nonzero(mascara_u8[mascara_humo]))
-    mascara_u8[mascara_agua] = 0
-    mascara_u8[mascara_humo] = 0
+    clases_protegidas = np.isin(
+        clases,
+        (
+            ClaseSemantica.AGUA_POSIBLE,
+            ClaseSemantica.HUMO_PROBABLE,
+            ClaseSemantica.FUEGO_ACTIVO_POSIBLE,
+            ClaseSemantica.NUBE_BRUMA,
+        ),
+    )
+    mascara_u8[clases_protegidas | mascara_agua | mascara_humo] = 0
 
     cantidad, etiquetas_cc, stats, _ = cv2.connectedComponentsWithStats(
         mascara_u8, connectivity=8

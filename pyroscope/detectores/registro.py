@@ -8,6 +8,10 @@ from typing import Callable
 from ..modelos_segmentacion import ResultadoClasificacionSemantica
 from .fusion import clasificar_fusion_ponderada
 from .kmeans import clasificar_pixeles_area_afectada
+from .random_forest import (
+    MODELO_RANDOM_FOREST,
+    clasificar_random_forest,
+)
 from .swir_histeresis import clasificar_pixeles_area_afectada_swir
 
 
@@ -23,6 +27,7 @@ class DetectorSuperficie:
     descripcion: str
     usa_numero_clases: bool
     clasificar: Clasificador
+    usa_sensibilidad: bool = True
 
 
 DETECTORES_SUPERFICIE: tuple[DetectorSuperficie, ...] = (
@@ -56,6 +61,23 @@ DETECTORES_SUPERFICIE: tuple[DetectorSuperficie, ...] = (
         ),
         usa_numero_clases=True,
         clasificar=clasificar_fusion_ponderada,
+    ),
+    *(
+        (
+            DetectorSuperficie(
+                id="random_forest",
+                nombre="Random Forest supervisado",
+                descripcion=(
+                    "Clasifica vegetación, agua, humo, área quemada, fuego activo, "
+                    "nubes y suelo con un modelo entrenado con etiquetas revisadas."
+                ),
+                usa_numero_clases=False,
+                clasificar=clasificar_random_forest,
+                usa_sensibilidad=False,
+            ),
+        )
+        if MODELO_RANDOM_FOREST.is_file()
+        else ()
     ),
 )
 
