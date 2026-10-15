@@ -1,6 +1,6 @@
-# harryelsucio
+# Espejo Ustorio
 
-Proyecto harryelsucio para el análisis y la segmentación de imágenes satelitales de incendios. La orientación técnica y los supuestos iniciales están en [`DOCUMENTACION/Ideas/inicial.md`](DOCUMENTACION/Ideas/inicial.md).
+**Espejo Ustorio** es una herramienta para analizar y segmentar imágenes satelitales de incendios. El nombre rinde homenaje al espejo ustorio asociado a Arquímedes. La orientación técnica y los supuestos iniciales están en [`DOCUMENTACION/Ideas/inicial.md`](DOCUMENTACION/Ideas/inicial.md).
 
 ## Preparación del entorno de desarrollo
 
