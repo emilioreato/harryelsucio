@@ -10,7 +10,7 @@ const LAYERS = [
 const TOOLS = [
   ["view", "Vista"],
   ["distance", "Flechas"],
-  ["polygon", "Polígono"],
+  ["polygon", "Área manual"],
 ];
 
 function visibleLayer(layer, showSegmentation) {
@@ -24,6 +24,7 @@ function renderMeasurement(tool, marks, polygonClosed, grid) {
   if (!grid) return "";
   const unit = grid.gsd_x_m ? "m" : "px";
   if (tool === "distance") {
+    if (!marks.length) return "Haz clic en la imagen para marcar el inicio de una flecha.";
     const segments = [];
     for (let index = 0; index + 1 < marks.length; index += 2) {
       segments.push(`Flecha ${index / 2 + 1}: ${formatLength(distanceBetween(marks[index], marks[index + 1], grid), unit)}`);
@@ -33,7 +34,7 @@ function renderMeasurement(tool, marks, polygonClosed, grid) {
   }
   if (tool === "polygon") {
     if (!polygonClosed || marks.length < 3) {
-      return marks.length < 3 ? "Marca al menos tres vértices." : "Cierra el polígono para calcular área y perímetro.";
+      return marks.length < 3 ? "Marca al menos tres puntos para delimitar un área." : "Cierra el área para calcular su superficie.";
     }
     return `Área manual: ${formatArea(polygonArea(marks, grid), grid.gsd_x_m ? "m²" : "px²")}`;
   }
