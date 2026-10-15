@@ -50,7 +50,7 @@ function AdvancedViewer({
   const availableLayers = new Set(metrics?.available_layers || []);
   const choices = INPUT_LAYERS.filter(([id]) => availableLayers.has(id));
   if (availableLayers.has("reference-wildfires")) {
-    choices.push(["reference-wildfires", "Wildfires · ref.", Layers3]);
+    choices.push(["reference-wildfires", "Wildfires", Layers3]);
   }
   const source = jobId ? `${advancedApi.layerUrl(jobId, layer)}?v=${jobId}` : "";
 
@@ -162,7 +162,7 @@ function AdvancedViewer({
               alt={layer === "fire-hotspots"
                 ? "Candidatos visuales de focos resaltados para revisión"
                 : layer === "reference-wildfires"
-                  ? "Referencia Wildfires, solo para comparación visual"
+                  ? "Composición Wildfires usada para extraer los focos"
                   : `Capa avanzada ${layer}`}
               draggable="false"
               onLoad={drawScenario}
@@ -182,13 +182,13 @@ function AdvancedViewer({
       </div>
       <p className="advanced-viewer-caption">
         {layer === "fire-hotspots"
-          ? "Amarillo: candidato cálido coincidente en RGB y SWIR. Naranja: anomalía SWIR junto al humo, con menor confianza. El fucsia marca el halo; no representa temperatura."
+          ? "Amarillo con halo fucsia: marcas extraídas directamente de Wildfires, también bajo humo."
           : layer === "vegetation"
             ? "Verde: verdor aparente coincidente entre composiciones; no es una clasificación validada de cobertura vegetal."
             : layer === "possible-active-fire"
               ? "Naranja: píxeles etiquetados como posible fuego por el clasificador activo; requiere revisión independiente."
               : layer === "reference-wildfires"
-                ? "Wildfires es una referencia de comparación y no se usa como verdad terreno."
+                ? "Los focos se extraen de las marcas cálidas brillantes de esta composición Wildfires."
                 : "Las capas son estimaciones a partir de composiciones renderizadas."}
       </p>
     </div>
@@ -407,7 +407,7 @@ export default function AdvancedWorkspace({ version, onVersionChange }) {
   const hasResult = analysis?.state === "complete";
   const progressionFront = scenario?.frames?.[scenarioFrame]?.front || null;
   const layerName = INPUT_LAYERS.find(([id]) => id === layer)?.[1]
-    || (layer === "reference-wildfires" ? "Wildfires · ref." : "Resultado");
+    || (layer === "reference-wildfires" ? "Wildfires" : "Resultado");
 
   return (
     <main className="workspace advanced-workspace">
@@ -462,7 +462,7 @@ export default function AdvancedWorkspace({ version, onVersionChange }) {
                         <span><img src={advancedApi.scenePreviewUrl(scene.id, "swir")} alt="" loading="lazy" /><small>SWIR</small></span>
                         {scene.has_wildfires_reference && <span><img src={advancedApi.scenePreviewUrl(scene.id, "wildfires")} alt="" loading="lazy" /><small>Wildfires</small></span>}
                       </span>
-                      <span className="advanced-scene-label"><strong>{scene.label}</strong><small>{scene.has_wildfires_reference ? "Incluye referencia Wildfires" : "Pareja True Color + SWIR"}</small></span>
+                      <span className="advanced-scene-label"><strong>{scene.label}</strong><small>{scene.has_wildfires_reference ? "Incluye Wildfires para los focos" : "Pareja True Color + SWIR"}</small></span>
                     </button>
                   ))}
                 </div>
@@ -476,7 +476,7 @@ export default function AdvancedWorkspace({ version, onVersionChange }) {
               <input className="file-control" id="advanced-true-color" name="advanced-true-color" type="file" accept=".jpg,.jpeg,.png,.tif,.tiff,image/*" />
               <label className="field-label" htmlFor="advanced-swir">Imagen SWIR</label>
               <input className="file-control" id="advanced-swir" name="advanced-swir" type="file" accept=".jpg,.jpeg,.png,.tif,.tiff,image/*" />
-              <label className="field-label" htmlFor="advanced-wildfires">Referencia Wildfires <small>opcional</small></label>
+              <label className="field-label" htmlFor="advanced-wildfires">Wildfires <small>para obtener focos</small></label>
               <input className="file-control" id="advanced-wildfires" name="advanced-wildfires" type="file" accept=".jpg,.jpeg,.png,.tif,.tiff,image/*" />
               <p className="field-help">Wildfires solo se muestra para comparar; no entra en la detección.</p>
             </section>
@@ -500,7 +500,7 @@ export default function AdvancedWorkspace({ version, onVersionChange }) {
           {analysis?.state === "error" && <p className="form-error" role="alert">{analysis.error}</p>}
         </form>
         <p className="advanced-method-note">
-          El flujo avanzado mantiene su propio análisis y resultados. Calcula verdor aparente y separa los focos corroborados en RGB+SWIR de las anomalías SWIR próximas al humo.
+          Los focos se extraen directamente de Wildfires, también bajo humo. True Color y SWIR se usan para las demás capas.
         </p>
       </aside>
 
@@ -534,8 +534,7 @@ export default function AdvancedWorkspace({ version, onVersionChange }) {
             <p className="advanced-result-layer-label">Capa visible: <strong>{layerName}</strong></p>
             <div className="advanced-metric-grid">
               <article className="advanced-metric-card"><span>Verdor aparente</span><strong>{formatNumber(metrics?.vegetation_pct || 0, 1)} %</strong><small>{formatNumber(metrics?.vegetation_pixels || 0)} px · visual</small></article>
-              <article className="advanced-metric-card is-hotspot"><span>Focos RGB + SWIR</span><strong>{formatNumber(metrics?.hotspot_rgb_swir_components || 0)}</strong><small>{formatNumber(metrics?.hotspot_rgb_swir_pixels || 0)} px · mayor corroboración</small></article>
-              <article className="advanced-metric-card is-hotspot"><span>Anomalías SWIR junto al humo</span><strong>{formatNumber(metrics?.hotspot_swir_contextual_components || 0)}</strong><small>{formatNumber(metrics?.hotspot_swir_contextual_pixels || 0)} px · menor confianza</small></article>
+              <article className="advanced-metric-card is-hotspot"><span>Focos Wildfires</span><strong>{metrics?.hotspot_source === "wildfires" ? formatNumber(metrics.hotspot_wildfires_components || 0) : "—"}</strong><small>{metrics?.hotspot_source === "wildfires" ? `${formatNumber(metrics.hotspot_wildfires_pixels || 0)} px · extraídos de Wildfires` : "Wildfires no disponible"}</small></article>
               {metrics?.active_fire_class_available && <article className="advanced-metric-card"><span>Clase de fuego posible</span><strong>{formatNumber(metrics.active_fire_class_pixels)} px</strong></article>}
               <article className="advanced-metric-card"><span>Superficie afectada candidata</span><strong>{formatNumber(metrics?.burned_surface_candidate_pct || 0, 2)} %</strong><small>{formatNumber(metrics?.burned_surface_area || 0, 1)} {metrics?.burned_surface_area_unit}</small></article>
               <article className="advanced-metric-card"><span>Humo probable</span><strong>{formatNumber(metrics?.smoke_pct || 0, 1)} %</strong></article>
@@ -592,7 +591,7 @@ export default function AdvancedWorkspace({ version, onVersionChange }) {
               </div>}
             </section>
 
-            <p className="advanced-caveat">Los candidatos se calculan sobre composiciones JPG/PNG: el amarillo requiere coincidencia RGB+SWIR y el naranja usa evidencia SWIR próxima al humo con menor confianza. No miden temperatura ni confirman fuego activo; cero candidatos tampoco descarta un incendio. El verdor es aparente. La progresión es geométrica en píxeles, no una predicción validada. Wildfires solo sirve para comparar: no es verdad terreno.</p>
+            <p className="advanced-caveat">Los focos reproducen las marcas cálidas brillantes de Wildfires; el humo y la máscara de superficie no las descartan. La extracción trabaja con colores JPG/PNG y no mide temperatura. El verdor es aparente. La progresión es geométrica en píxeles, no una predicción validada.</p>
             {metrics?.reference_warning && <p className="form-error" role="status">{metrics.reference_warning}</p>}
           </>
         ) : (

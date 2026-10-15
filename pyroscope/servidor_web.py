@@ -34,7 +34,7 @@ from .detectores.kmeans import PESOS_SCORE_POR_DEFECTO
 from .agua import UMBRALES_AGUA_POR_DEFECTO
 from .cobertura import detectar_verdor_aparente
 from .escenarios import generar_escenario_progresion
-from .focos import crear_superposicion_focos, detectar_focos_visuales
+from .focos import crear_superposicion_focos, detectar_focos_wildfires
 from .humo import PESOS_CONFIANZA_HUMO_POR_DEFECTO
 from .ontologia import ClaseSemantica
 from .visualizacion import (
@@ -814,10 +814,32 @@ def _iniciar_analisis_avanzado(
             )
             _actualizar_trabajo_avanzado(
                 job_id,
-                stage="Buscando candidatos visuales de focos activos",
+                stage="Extrayendo focos de Wildfires",
                 progress=95,
             )
-            focos = detectar_focos_visuales(tc, swir, resultado)
+            wildfires = None
+            aviso_referencia = None
+            if referencia_wildfires_bytes:
+                try:
+                    with Image.open(BytesIO(true_bytes)) as original:
+                        tamano_original = original.size
+                    with Image.open(BytesIO(referencia_wildfires_bytes)) as referencia:
+                        if referencia.size != tamano_original:
+                            aviso_referencia = (
+                                "Wildfires debe tener las mismas dimensiones y encuadre que True Color; "
+                                "no se extrajeron focos."
+                            )
+                        else:
+                            wildfires = np.asarray(referencia.convert("RGB").resize(
+                                (tc.shape[1], tc.shape[0]), Image.Resampling.LANCZOS,
+                            ))
+                except Exception:
+                    aviso_referencia = "No se pudo leer Wildfires; no se extrajeron focos."
+            else:
+                aviso_referencia = "Carga la composición Wildfires para obtener los focos."
+            focos = detectar_focos_wildfires(
+                wildfires if wildfires is not None else np.zeros_like(tc)
+            )
             clases = resultado.clase_por_pixel
             mascara_vegetacion = detectar_verdor_aparente(tc, swir, resultado)
             mascara_fuego = clases == ClaseSemantica.FUEGO_ACTIVO_POSIBLE
@@ -839,24 +861,8 @@ def _iniciar_analisis_avanzado(
                 outputs["possible-active-fire"] = _png_bytes(
                     superponer_mascara(tc, mascara_fuego, color=(255, 92, 24), opacidad=0.86)
                 )
-            aviso_referencia = None
-            if referencia_wildfires_bytes:
-                try:
-                    with Image.open(BytesIO(referencia_wildfires_bytes)) as referencia:
-                        proporcion_referencia = referencia.width / referencia.height
-                        proporcion_rejilla = sistema.ancho_px / sistema.alto_px
-                        if abs(proporcion_referencia - proporcion_rejilla) > 0.002:
-                            aviso_referencia = (
-                                "La referencia Wildfires tiene una proporción distinta y no se mostró."
-                            )
-                        else:
-                            referencia = referencia.convert("RGB").resize(
-                                (sistema.ancho_px, sistema.alto_px),
-                                Image.Resampling.LANCZOS,
-                            )
-                            outputs["reference-wildfires"] = _png_bytes(np.asarray(referencia))
-                except Exception:
-                    aviso_referencia = "No se pudo leer la referencia Wildfires; el análisis sí terminó."
+            if wildfires is not None:
+                outputs["reference-wildfires"] = _png_bytes(wildfires)
 
             pixeles_area = int(np.count_nonzero(resultado.mascara))
             pixeles_vegetacion = int(np.count_nonzero(mascara_vegetacion))
@@ -866,6 +872,9 @@ def _iniciar_analisis_avanzado(
                 "available_layers": list(outputs),
                 "warnings": list(resultado.avisos),
                 "reference_warning": aviso_referencia,
+                "hotspot_source": "wildfires" if wildfires is not None else None,
+                "hotspot_wildfires_pixels": int(np.count_nonzero(focos.mascara)),
+                "hotspot_wildfires_components": focos.componentes,
                 "vegetation_pixels": pixeles_vegetacion,
                 "vegetation_pct": float(np.mean(mascara_vegetacion) * 100),
                 "vegetation_method": "verdor visual relativo en RGB/SWIR renderizados",
@@ -1225,7 +1234,7 @@ class LumbreHandler(BaseHTTPRequestHandler):
                         else None
                     )
                     if not true_bytes or not swir_bytes:
-                        raise ValueError("Carga True Color y SWIR; Wildfires es una referencia opcional.")
+                        raise ValueError("Carga True Color y SWIR; adjunta Wildfires para obtener focos.")
                 else:
                     raise ValueError("El origen de las imágenes avanzadas no es válido.")
 

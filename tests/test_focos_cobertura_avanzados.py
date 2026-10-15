@@ -8,9 +8,9 @@ from pyroscope.focos import detectar_focos_visuales
 from pyroscope.ontologia import ClaseSemantica
 
 
-def _resultado(shape, *, smoke=None, classified=None, classes=None):
+def _resultado(shape, *, burned=None, smoke=None, classified=None, classes=None):
     return SimpleNamespace(
-        mascara=np.zeros(shape, dtype=bool),
+        mascara=np.zeros(shape, dtype=bool) if burned is None else burned,
         mascara_clasificada=(
             np.zeros(shape, dtype=bool) if classified is None else classified
         ),
@@ -28,24 +28,34 @@ def test_foco_estricto_sigue_separado_de_anomalia_swir_contextual():
     strict_block = np.array([245, 65, 20], dtype=np.uint8)
     true_color[8:13, 8:13] = strict_block
     swir[8:13, 8:13] = strict_block
+    true_color[44:49, 44:49] = strict_block
+    swir[44:49, 44:49] = strict_block
 
     contextual_block = np.array([245, 65, 20], dtype=np.uint8)
     swir[27:32, 27:32] = contextual_block
     smoke = np.zeros(shape, dtype=bool)
     smoke[37, 20:43] = True
+    smoke[18, 44:56] = True
     classified = np.zeros(shape, dtype=bool)
     classified[25:34, 25:34] = True
+    classified[6:15, 44:53] = True
+    burned = np.zeros(shape, dtype=bool)
+    burned[7:14, 7:14] = True
+    burned[25:34, 25:34] = True
+    swir[8:13, 45:50] = contextual_block
 
     result = detectar_focos_visuales(
         true_color,
         swir,
-        _resultado(shape, smoke=smoke, classified=classified),
+        _resultado(shape, burned=burned, smoke=smoke, classified=classified),
     )
 
     assert result.componentes_rgb_swir >= 1
     assert result.componentes_swir_contextual >= 1
     assert np.any(result.mascara_rgb_swir[8:13, 8:13])
     assert np.any(result.mascara_swir_contextual[27:32, 27:32])
+    assert not np.any(result.mascara_rgb_swir[44:49, 44:49])
+    assert not np.any(result.mascara_swir_contextual[8:13, 45:50])
     assert not np.any(result.mascara_rgb_swir[27:32, 27:32])
 
 

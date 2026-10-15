@@ -17,6 +17,9 @@ from .segmentacion import ResultadoAreaAfectada
 from .visualizacion import superponer_mascara
 
 
+DISTANCIA_MAXIMA_SUPERFICIE_FOCO_PX = 8
+
+
 @dataclass(frozen=True)
 class ResultadoFocos:
     """Máscara y evidencia visual relativa, separadas de la superficie afectada."""
@@ -29,6 +32,42 @@ class ResultadoFocos:
     mascara_swir_contextual: np.ndarray | None = None
     componentes_rgb_swir: int = 0
     componentes_swir_contextual: int = 0
+    mascara_wildfires: np.ndarray | None = None
+
+
+def detectar_focos_wildfires(wildfires: np.ndarray) -> ResultadoFocos:
+    """Extrae las marcas cálidas brillantes de la composición Wildfires.
+
+    No reclasifica el terreno ni veta humo: conserva la señal ya representada
+    en Wildfires. Es una extracción de colores renderizados, no temperatura.
+    """
+    if wildfires.ndim != 3 or wildfires.shape[2] != 3 or wildfires.dtype != np.uint8:
+        raise ValueError("Wildfires debe ser una imagen RGB de 8 bits.")
+    hsv = cv2.cvtColor(wildfires, cv2.COLOR_RGB2HSV)
+    hue, saturacion, valor = cv2.split(hsv)
+    rojo = wildfires[:, :, 0].astype(np.int16)
+    azul = wildfires[:, :, 2].astype(np.int16)
+    marcas = (hue <= 35) & (saturacion >= 120) & (valor >= 230) & (rojo - azul >= 90)
+    cantidad, etiquetas, estadisticas, _ = cv2.connectedComponentsWithStats(
+        marcas.astype(np.uint8), 8
+    )
+    # Conservar el borde cálido conectado a una marca intensa; una parcela
+    # beige clara sin ese núcleo no basta para generar un foco.
+    nucleos = marcas & ((saturacion >= 170) | ((hue <= 10) & (saturacion >= 150)))
+    apoyo = np.bincount(etiquetas[nucleos], minlength=cantidad)
+    conservar = (estadisticas[:, cv2.CC_STAT_AREA] >= 3) & (apoyo >= 3)
+    conservar[0] = False
+    mascara = conservar[etiquetas]
+    vacia = np.zeros_like(mascara)
+    return ResultadoFocos(
+        mascara=mascara,
+        contraste_local=np.zeros(mascara.shape, dtype=np.float32),
+        puntuacion_visual=mascara.astype(np.float32),
+        componentes=int(np.count_nonzero(conservar)),
+        mascara_rgb_swir=vacia,
+        mascara_swir_contextual=vacia.copy(),
+        mascara_wildfires=mascara,
+    )
 
 
 def detectar_focos_visuales(
@@ -46,8 +85,9 @@ def detectar_focos_visuales(
     La coincidencia cálida en ambas composiciones sigue la lógica conservadora
     documentada en `algoritmos_segmentacion_fuego_humo_agua.md`. Por separado,
     se conservan anomalías cálidas SWIR pequeñas junto al borde del humo y
-    dentro de la superficie candidata. Ambas señales usan colores renderizados:
-    sus umbrales son valores iniciales para revisar, no magnitudes físicas.
+    próximas a la superficie afectada candidata. Ambas señales usan colores
+    renderizados: sus umbrales son valores iniciales para revisar, no magnitudes
+    físicas. Ningún candidato se conserva a más de ocho píxeles de esa máscara.
     """
     validar_par_alineado(true_color, swir)
     if resultado.mascara.shape != true_color.shape[:2]:
@@ -84,12 +124,21 @@ def detectar_focos_visuales(
     contraste = np.maximum(contraste_rgb, contraste_swir)
 
     agua = resultado.clase_por_pixel == ClaseSemantica.AGUA_POSIBLE
+    superficie_final = np.asarray(resultado.mascara, dtype=bool)
+    kernel_cercania_superficie = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE,
+        (2 * DISTANCIA_MAXIMA_SUPERFICIE_FOCO_PX + 1,) * 2,
+    )
+    cerca_de_superficie = cv2.dilate(
+        superficie_final.astype(np.uint8), kernel_cercania_superficie, iterations=1
+    ) > 0
     mascara_estricta = calido_rgb & calido_swir & (contraste >= contraste_minimo)
     mascara_estricta &= ~agua & ~resultado.mascara_humo
 
     binaria = mascara_estricta.astype(np.uint8)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
     binaria = cv2.morphologyEx(binaria, cv2.MORPH_CLOSE, kernel)
+    binaria &= cerca_de_superficie.astype(np.uint8)
     cantidad, etiquetas, estadisticas, _ = cv2.connectedComponentsWithStats(binaria, 8)
     limpia_estricta = np.zeros_like(binaria, dtype=bool)
     componentes_estrictos = 0
@@ -99,9 +148,10 @@ def detectar_focos_visuales(
             componentes_estrictos += 1
 
     # La rama SWIR de contexto es evidencia de menor confianza. Solo busca
-    # anomalías cálidas pequeñas dentro de la superficie candidata y junto al
-    # borde del humo; el núcleo de humo, el agua y la referencia Wildfires se
-    # excluyen. Se entrega separada de la coincidencia estricta RGB+SWIR.
+    # anomalías cálidas pequeñas junto al borde del humo, dentro de la superficie
+    # clasificada y a ocho píxeles como máximo de la máscara final afectada; el
+    # núcleo de humo, el agua y la coincidencia RGB+SWIR se excluyen. Se entrega
+    # separada de la señal estricta.
     rojo_swir = swir[:, :, 0].astype(np.float32)
     fondo_rojo_swir = cv2.GaussianBlur(rojo_swir, (lado, lado), 0)
     contraste_rojo_swir = np.maximum(rojo_swir - fondo_rojo_swir, 0.0)
@@ -116,6 +166,7 @@ def detectar_focos_visuales(
         & (contraste_rojo_swir >= contraste_swir_contextual_minimo)
         & superficie
         & cerca_del_humo
+        & cerca_de_superficie
         & ~humo
         & ~agua
         & ~limpia_estricta
@@ -163,6 +214,8 @@ def crear_superposicion_focos(imagen_rgb: np.ndarray, focos: ResultadoFocos) -> 
         if focos.mascara_rgb_swir is not None
         else focos.mascara.astype(bool)
     )
+    if focos.mascara_wildfires is not None:
+        mascara_estricta = focos.mascara_wildfires
     mascara_contextual = (
         focos.mascara_swir_contextual.astype(bool)
         if focos.mascara_swir_contextual is not None

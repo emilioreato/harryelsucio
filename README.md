@@ -93,6 +93,8 @@ El filtro espacial prioriza por defecto el componente candidato más grande y pu
 
 K-Means exige un predominio rojo SWIR mínimo de 0,05 por píxel, además del ranking relativo entre grupos: así una escena gris o verde uniforme no se convierte entera en superficie candidata. Este umbral es heurístico y puede omitir señales débiles; no implica exactitud validada. En la fusión, un umbral de voto cero admite votos positivos, pero nunca píxeles sin apoyo de los detectores.
 
+En el **reto avanzado**, la capa de focos extrae directamente las marcas rojas, naranjas y amarillas brillantes de la composición **Wildfires**. No exige coincidencia con True Color/SWIR ni excluye marcas bajo humo o fuera de la máscara de superficie. Las escenas que incluyen Wildfires la usan automáticamente; en cargas manuales hay que adjuntarla para obtener focos. Debe tener las mismas dimensiones y encuadre que la pareja. La extracción usa colores renderizados, no mide temperatura; True Color y SWIR siguen alimentando las demás capas.
+
 ### Random Forest supervisado
 
 El detector Random Forest aparece tras entrenar un modelo con máscaras revisadas por escena. Las instrucciones, IDs de clase y estructura del conjunto están en la [guía de entrenamiento](<training Random Forest/README.md>). El entrenamiento reserva escenas completas para evaluación, usa RGB renderizado y textura local, y mantiene separados fuego activo, área quemada, humo, agua, nube o bruma, suelo y vegetación. Las capturas de referencia no sustituyen máscaras alineadas; no se trata como validado hasta evaluar escenas independientes.
