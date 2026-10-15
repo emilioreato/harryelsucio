@@ -28,19 +28,19 @@ exit /b 1
 
 :usar_python312
 echo Usando Python 3.12.
-py -3.12 app.py
+py -3.12 "%~dp0app.py"
 if errorlevel 2 goto ya_activa
 goto final
 
 :usar_python311
 echo Usando Python 3.11.
-py -3.11 app.py
+py -3.11 "%~dp0app.py"
 if errorlevel 2 goto ya_activa
 goto final
 
 :usar_python_predeterminado
 echo Usando el Python predeterminado del sistema.
-python app.py
+python "%~dp0app.py"
 if errorlevel 2 goto ya_activa
 goto final
 

@@ -36,6 +36,7 @@ from .visualizacion import crear_superposicion, crear_vista_clasificacion
 
 _WEB = RAIZ_REPOSITORIO / "web"
 _MAX_BODY_BYTES = 120 * 1024 * 1024
+_MAX_JOBS = 12
 _JOBS: dict[str, dict[str, Any]] = {}
 _JOBS_LOCK = threading.RLock()
 _ANALYSIS_LOCK = threading.Lock()
@@ -208,20 +209,17 @@ def cerrar_servidor_local() -> bool:
         if url_antigua:
             print(
                 "Lumbre está abierta, pero no se encontró el estado de cierre de esta copia. "
-                "Ciérrala con Ctrl+C en su ventana."
+                "Se buscará el proceso exacto del proyecto como último recurso."
             )
         else:
-            print("Lumbre no está abierta.")
+            print("Lumbre ya estaba cerrada.")
+            return True
         return False
 
     url = str(estado["url"])
     instance_id = str(estado["instance_id"])
     if not _es_instancia_lumbre(url, instance_id):
-        print("Lumbre no está abierta; se encontró un estado antiguo y se ha descartado.")
-        try:
-            _RUTA_ESTADO_INSTANCIA.unlink()
-        except FileNotFoundError:
-            pass
+        print("El servidor no responde; se comprobará el proceso registrado como último recurso.")
         return False
 
     solicitud = Request(
@@ -675,8 +673,23 @@ class LumbreHandler(BaseHTTPRequestHandler):
                 ]
                 for key in expirados:
                     _JOBS.pop(key, None)
-                if len(_JOBS) >= 12:
-                    raise ValueError("Hay demasiados análisis guardados en esta sesión. Reinicia la aplicación.")
+                if len(_JOBS) >= _MAX_JOBS:
+                    # Las máscaras terminadas conservan imágenes en memoria. Cuando
+                    # se alcanza el cupo, libera primero los resultados más antiguos
+                    # y mantiene intactos todos los trabajos pendientes o activos.
+                    terminados = sorted(
+                        (
+                            (key, item)
+                            for key, item in _JOBS.items()
+                            if item["state"] in ("complete", "error")
+                        ),
+                        key=lambda par: par[1]["updated_at"],
+                    )
+                    while len(_JOBS) >= _MAX_JOBS and terminados:
+                        key, _ = terminados.pop(0)
+                        _JOBS.pop(key, None)
+                if len(_JOBS) >= _MAX_JOBS:
+                    raise ValueError("Hay doce análisis activos o en cola. Espera a que termine alguno antes de iniciar otro.")
                 _JOBS[job_id] = {
                     "id": job_id,
                     "state": "queued",

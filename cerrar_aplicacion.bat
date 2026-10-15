@@ -14,31 +14,38 @@ if not errorlevel 1 (
 python --version >nul 2>nul
 if not errorlevel 1 goto usar_python_predeterminado
 
-echo No se encontro Python para cerrar Lumbre.
-pause
-endlocal
-exit /b 1
+echo No se encontro Python. Se intentara cerrar procesos identificables de Lumbre.
+goto cierre_procesos
 
 :usar_python312
-py -3.12 app.py --close
+py -3.12 "%~dp0app.py" --close
 goto resultado
 
 :usar_python311
-py -3.11 app.py --close
+py -3.11 "%~dp0app.py" --close
 goto resultado
 
 :usar_python_predeterminado
-python app.py --close
+python "%~dp0app.py" --close
 
 :resultado
 set "RESULTADO=%ERRORLEVEL%"
-if "%RESULTADO%"=="0" goto cerrado
-echo No se pudo cerrar Lumbre. Consulta el mensaje anterior.
+if not "%RESULTADO%"=="0" echo El cierre normal no confirmo la salida. Buscando procesos de Lumbre.
+
+:cierre_procesos
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0cerrar_procesos_lumbre.ps1"
+set "RESULTADO=%ERRORLEVEL%"
+if not "%RESULTADO%"=="0" goto error
+goto cerrado
+
+:error
+echo No se pudo confirmar el cierre. Revisa los mensajes anteriores.
 pause
 endlocal
 exit /b %RESULTADO%
 
 :cerrado
+echo Lumbre esta cerrada.
 pause
 endlocal
 exit /b 0

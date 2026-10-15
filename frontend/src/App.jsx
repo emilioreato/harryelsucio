@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import AdvancedSettings from "./components/AdvancedSettings.jsx";
 import ImageViewer from "./components/ImageViewer.jsx";
 import { api, fileToBase64 } from "./services/api.js";
+import { Button, Card } from "@radix-ui/themes";
+import { Activity, Crosshair, MousePointer2, Play, Ruler, ScanLine, SlidersHorizontal } from "lucide-react";
 import { distanceBetween, formatArea, formatLength, formatNumber, polygonArea, polylineLength } from "./domain/measurements.js";
 
 const DEFAULT_KMEANS_WEIGHTS = {
@@ -27,6 +29,13 @@ const DEFAULT_WATER_THRESHOLDS = {
   swir_red_max: 0.55,
   swir_red_green_max: 0.55,
 };
+
+const TOOL_OPTIONS = [
+  { id: "view", label: "Ver", Icon: MousePointer2 },
+  { id: "distance", label: "Regla", Icon: Ruler },
+  { id: "polygon", label: "Área", Icon: Crosshair },
+  { id: "pixel", label: "Píxel", Icon: ScanLine },
+];
 
 function defaultAdvancedSettings() {
   return {
@@ -59,15 +68,6 @@ function saveBlob(blob, filename) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function loadNotes() {
-  try {
-    const notes = JSON.parse(localStorage.getItem("pyroscope-notes") || "[]");
-    return Array.isArray(notes) ? notes.slice(0, 12) : [];
-  } catch {
-    return [];
-  }
-}
-
 function App() {
   const [scenes, setScenes] = useState([]);
   const [detectors, setDetectors] = useState([]);
@@ -79,6 +79,7 @@ function App() {
   const [numClasses, setNumClasses] = useState(7);
   const [minimumArea, setMinimumArea] = useState("0.15");
   const [maxDistance, setMaxDistance] = useState("10");
+  const [gsd, setGsd] = useState("");
   const [keepSeparate, setKeepSeparate] = useState(false);
   const [advanced, setAdvanced] = useState(defaultAdvancedSettings);
   const [running, setRunning] = useState(false);
@@ -96,8 +97,6 @@ function App() {
   const [distancePreview, setDistancePreview] = useState(null);
   const [polygonClosed, setPolygonClosed] = useState(false);
   const [inspectedPixel, setInspectedPixel] = useState(null);
-  const [notes, setNotes] = useState(loadNotes);
-  const [noteText, setNoteText] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -153,6 +152,8 @@ function App() {
     const minimum = numberFromInput(minimumArea, "El área mínima");
     if (minimum < 0.01 || minimum > 1) throw new Error("El área mínima debe estar entre 0,01 y 1 %.");
     const distance = numberFromInput(maxDistance, "El radio máximo");
+    const gsdNumber = gsd.trim() ? numberFromInput(gsd, "El GSD") : null;
+    if (gsdNumber !== null && gsdNumber <= 0) throw new Error("El GSD debe ser positivo en metros por píxel.");
     if (!keepSeparate && (!Number.isInteger(distance) || distance < 3 || distance > 20)) {
       throw new Error("El radio máximo debe ser un entero entre 3 y 20 %.");
     }
@@ -183,7 +184,7 @@ function App() {
       minimum_area_pct: minimum,
       max_distance_pct: keepSeparate ? 10 : distance,
       keep_separate: keepSeparate,
-      gsd_m_per_px: null,
+      gsd_m_per_px: gsdNumber,
       advanced,
     };
   };
@@ -260,19 +261,6 @@ function App() {
     }
   };
 
-  const addNote = (event) => {
-    event.preventDefault();
-    const text = noteText.trim();
-    if (!text) return;
-    const next = [
-      { time: new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }), text },
-      ...notes,
-    ].slice(0, 12);
-    setNotes(next);
-    localStorage.setItem("pyroscope-notes", JSON.stringify(next));
-    setNoteText("");
-  };
-
   const downloadMeasurements = () => {
     if (!jobId || !grid) return;
     const elements = marks.map((point, index) => ({
@@ -308,14 +296,12 @@ function App() {
   const summary = metrics && settingsUsed
     ? `${metrics.detector}. Rejilla ${metrics.grid_width} × ${metrics.grid_height} px. Píxeles excluidos como agua: ${formatNumber(metrics.water_excluded)}. Regiones remotas descartadas: ${metrics.remote_regions_discarded}. ${metrics.gsd_x_m ? `GSD efectivo ${formatNumber(metrics.gsd_x_m, 3)} × ${formatNumber(metrics.gsd_y_m, 3)} m/píxel.` : "Sin GSD; las medidas se expresan en píxeles."}`
     : "Al terminar, aquí se muestran el detector y la rejilla usada.";
-  const notesAsText = notes.map((note) => `${note.time} · ${note.text}`);
-
   return (
     <>
       <main className="workspace">
         <aside className="control-panel" aria-label="Configuración del análisis">
           <div className="panel-heading">
-            <h1>Configurar análisis</h1>
+            <h1><SlidersHorizontal size={15} aria-hidden="true" />Análisis</h1>
             <span className={`connection-pill${connection.ready ? " is-ready" : error ? " is-error" : ""}`}>
               <span className="status-dot" />{connection.label}
             </span>
@@ -387,9 +373,10 @@ function App() {
 
             <AdvancedSettings value={advanced} onChange={setAdvanced} onReset={() => setAdvanced(defaultAdvancedSettings())} method={method} />
 
-            <button className="run-button" id="run-analysis" type="button" onClick={runAnalysis} disabled={!canRun}>
-              <span className="run-icon" aria-hidden="true">▶</span><span>{running ? "Analizando…" : "Iniciar segmentación"}</span>
-            </button>
+            <Button className="run-button" id="run-analysis" type="button" onClick={runAnalysis} disabled={!canRun} size="3">
+              {running ? <Activity size={16} aria-hidden="true" /> : <Play size={15} aria-hidden="true" fill="currentColor" />}
+              <span>{running ? "Analizando…" : "Iniciar segmentación"}</span>
+            </Button>
             {error && <p className="form-error" role="alert">{error}</p>}
           </form>
         </aside>
@@ -434,8 +421,10 @@ function App() {
           <section className="measurement-panel" aria-label="Herramientas de medición">
             <p className="panel-kicker">HERRAMIENTAS</p>
             <div className="tool-grid" role="group" aria-label="Seleccionar herramienta">
-              {[["view", "Ver"], ["distance", "Regla"], ["polygon", "Área"], ["pixel", "Píxel"]].map(([id, label]) => (
-                <button key={id} className={`tool-button${tool === id ? " is-active" : ""}`} type="button" disabled={!hasResult} aria-pressed={tool === id} onClick={() => selectTool(id)}>{label}</button>
+              {TOOL_OPTIONS.map(({ id, label, Icon }) => (
+                <Button key={id} className={`tool-button${tool === id ? " is-active" : ""}`} variant={tool === id ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult} aria-pressed={tool === id} onClick={() => selectTool(id)}>
+                  <Icon size={14} aria-hidden="true" /><span>{label}</span>
+                </Button>
               ))}
             </div>
             <p className="measurement-hint" aria-live="polite">
@@ -459,9 +448,13 @@ function App() {
                 setMarks([]); setInspectedPixel(null); setDistancePreview(null); setPolygonClosed(false);
               }}>Borrar marcas</button>
             </div>
-            <Separator className="measurement-separator" />
-            <section className="resolution-reference" aria-labelledby="resolution-title">
-              <h3 id="resolution-title">Resolución y superficie</h3>
+            <hr className="measurement-separator" />
+            <label className="scale-input" htmlFor="gsd"><span>GSD <small>metros por píxel</small></span>
+              <input className="field-control" id="gsd" type="number" min="0.000001" step="any" inputMode="decimal" placeholder="Opcional" value={gsd} onChange={(event) => setGsd(event.target.value)} disabled={running} />
+            </label>
+            <p className="field-help">Se aplica en el siguiente análisis. Sin GSD, las medidas quedan en píxeles.</p>
+            <details className="resolution-reference">
+              <summary>Área por píxel y referencia</summary>
               <p className="resolution-formula">Para píxeles cuadrados: superficie/píxel = tamaño de píxel²</p>
               <table className="resolution-table">
                 <tbody>
@@ -480,7 +473,7 @@ function App() {
                 <p><strong>Siguiente paso:</strong> confirmar la composición de cada producto y documentar cualquier remuestreo antes de calcular hectáreas.</p>
               </div>
               </details>
-            </section>
+            </details>
           </section>
 
           <div className="results-heading results-subheading"><h2>Resultado</h2></div>
