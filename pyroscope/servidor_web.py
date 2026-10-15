@@ -103,24 +103,26 @@ def _liberar_bloque_instancia() -> None:
 
 
 def _es_instancia_lumbre(url: str, id_instancia: str | None = None) -> bool:
-    """Comprueba que una URL pertenece a esta copia concreta de Lumbre."""
+    """Comprueba la identidad de una instancia sin confundir copias distintas."""
     try:
         with urlopen(f"{url.rstrip('/')}/api/health", timeout=0.6) as respuesta:
             estado = json.loads(respuesta.read().decode("utf-8"))
+        if estado.get("app") != "Lumbre":
+            return False
+        if id_instancia is not None and estado.get("instance_id") != id_instancia:
+            return False
+
         raiz_activa = estado.get("repository_root")
-        misma_raiz = (
-            isinstance(raiz_activa, str)
-            and os.path.normcase(os.path.abspath(raiz_activa))
+        if not isinstance(raiz_activa, str):
+            # Las versiones anteriores no publicaban la carpeta. Solo las
+            # aceptamos si su UUID coincide con el estado guardado en ESTA copia.
+            return id_instancia is not None
+
+        return (
+            os.path.normcase(os.path.abspath(raiz_activa))
             == os.path.normcase(str(RAIZ_REPOSITORIO.resolve()))
         )
-        return (
-            estado.get("app") == "Lumbre"
-            and misma_raiz
-            and (id_instancia is None or estado.get("instance_id") == id_instancia)
-        )
     except Exception:
-        # Si la instancia no publica identidad verificable, no la reutilizamos:
-        # podría pertenecer a otra carpeta o a una versión antigua del proyecto.
         return False
 
 
@@ -795,33 +797,59 @@ def ejecutar_servidor(host: str = "127.0.0.1", puerto: int = 8501, abrir_navegad
         return False
 
     if not _adquirir_bloque_instancia():
-        # El proceso que obtuvo el bloqueo puede seguir preparando el servidor.
+        # Puede seguir viva una versión anterior de esta misma carpeta. Si el
+        # archivo de estado y su UUID lo confirman, la cerramos limpiamente para
+        # que el nuevo código Python pueda arrancar sin reutilizar otra copia.
+        estado_local = None
+        url_existente = None
         limite = time.monotonic() + 4
         while time.monotonic() < limite:
             estado = _leer_estado_instancia()
             if estado and _es_instancia_lumbre(
                 str(estado["url"]), str(estado["instance_id"])
             ):
-                url_existente = str(estado["url"])
+                estado_local = estado
                 break
             url_existente = _buscar_instancia_activa(host, puerto)
             if url_existente:
                 break
             time.sleep(0.15)
-        if url_existente:
+
+        if estado_local:
+            print("He detectado una versión anterior de esta carpeta. Cerrándola para actualizar…")
+            if not cerrar_servidor_local():
+                print(
+                    "No se pudo cerrar la instancia anterior automáticamente. "
+                    "Pulsa Ctrl+C en la ventana negra anterior y vuelve a iniciar."
+                )
+                return False
+
+            limite = time.monotonic() + 5
+            while time.monotonic() < limite:
+                if _adquirir_bloque_instancia():
+                    break
+                time.sleep(0.15)
+            else:
+                print(
+                    "La versión anterior se cerró, pero Windows todavía mantiene "
+                    "el bloqueo. Espera un momento y vuelve a ejecutar el lanzador."
+                )
+                return False
+            print("Instancia anterior cerrada; iniciando la versión actualizada.")
+        elif url_existente:
             if abrir_navegador:
-                print(f"Lumbre ya está abierta en {url_existente}/. Abriendo esa instancia.")
+                print(f"Lumbre ya está abierta en esta carpeta: {url_existente}/. Abriendo esa instancia.")
                 _abrir_navegador(f"{url_existente}/")
             else:
-                print(f"Lumbre ya está abierta en {url_existente}/.")
+                print(f"Lumbre ya está abierta en esta carpeta: {url_existente}/.")
+            return False
         else:
             print(
-                "No pude verificar la identidad del servidor que mantiene ocupado "
-                "el bloqueo de esta carpeta. Si hay una ventana negra antigua de "
-                "Lumbre abierta desde ESTA carpeta, ciérrala con Ctrl+C y vuelve "
-                "a ejecutar el lanzador."
+                "Otra ejecución mantiene bloqueada esta carpeta, pero no he podido "
+                "verificarla. No se ha cerrado ningún proceso. Pulsa Ctrl+C en la "
+                "ventana negra que esté ejecutando esta misma carpeta y vuelve a iniciar."
             )
-        return False
+            return False
 
     servidor = None
     try:
