@@ -22,6 +22,7 @@ from pyroscope import (
     reducir_par_alineado,
     segmentar_superficie_afectada,
 )
+from pyroscope.detectores import listar_detectores_superficie
 
 
 ROOT = Path(__file__).resolve().parent
@@ -148,16 +149,15 @@ with st.sidebar:
         pareja_disponible = True
 
     st.header("Ajustes del análisis")
-    nombre_detector = st.selectbox(
+    detectores = {detector.id: detector for detector in listar_detectores_superficie()}
+    metodo = st.selectbox(
         "Detector de superficie",
-        ("K-Means conjunto", "Contraste SWIR + histéresis (V2)"),
-        help=(
-            "K-Means agrupa señales de ambas composiciones. V2 busca semillas con contraste "
-            "rojizo SWIR y crece por zonas contiguas; True Color ayuda a vetar agua y "
-            "vegetación muy verde. Ambos apartan antes las zonas con posible humo."
-        ),
+        tuple(detectores),
+        format_func=lambda detector_id: detectores[detector_id].nombre,
+        help=" ".join(detector.descripcion for detector in detectores.values()),
     )
-    metodo = "kmeans" if nombre_detector == "K-Means conjunto" else "swir_histeresis"
+    detector_actual = detectores[metodo]
+    nombre_detector = detector_actual.nombre
     sensibilidad = st.slider(
         "Sensibilidad", min_value=1, max_value=10, value=5,
         help=(
@@ -168,7 +168,7 @@ with st.sidebar:
     numero_clases = st.slider(
         "Grupos de color por escena", min_value=4, max_value=10, value=7,
         help="El agrupamiento se ajusta a los colores de cada pareja, no a una máscara etiquetada.",
-        disabled=metodo != "kmeans",
+        disabled=not detector_actual.usa_numero_clases,
     )
     area_minima_pct = st.slider(
         "Descartar objetos menores (% de imagen)",
