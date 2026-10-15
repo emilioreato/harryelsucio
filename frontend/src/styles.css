@@ -477,3 +477,60 @@ h1, h2 { color: #f1f0e8; font-size: 17px; font-weight: 600; letter-spacing: -.02
   .viewer-select-label, .measurement-select-label { flex-basis: auto; justify-content: space-between; }
   .viewer-select { flex: 1; width: auto; }
 }
+
+
+/* Ajustes finales: paneles compactos y jerarquía consistente */
+.parameter-settings, .developer-settings { margin-top: 10px; }
+.parameter-settings > summary, .developer-settings > summary {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  list-style: none;
+  cursor: pointer;
+  color: #e1ad68;
+  font-size: 10px;
+  font-weight: 650;
+}
+.parameter-settings > summary::-webkit-details-marker,
+.developer-settings > summary::-webkit-details-marker { display: none; }
+.parameter-settings > summary::after,
+.developer-settings > summary::after { content: "+"; color: #d8b17b; font-size: 16px; font-weight: 400; }
+.parameter-settings[open] > summary::after,
+.developer-settings[open] > summary::after { content: "−"; }
+.parameter-content { padding: 2px 0 8px; }
+.parameter-content .compact-fields { margin-top: 5px; }
+.parameter-content .section-rule { margin-top: 13px; }
+.developer-settings .developer-content { padding-top: 3px; }
+.developer-settings .field-help { line-height: 1.45; }
+.results-column .details-panel { margin-top: 10px; }
+.results-column .details-panel > summary { min-height: 30px; }
+.results-column .note-form { margin-top: 7px; }
+.results-column .notes-list { margin-top: 8px; }
+.export-button { border-color: rgba(220, 226, 215, .12); background: rgba(8, 13, 15, .22); }
+.export-button:hover:not(:disabled) { border-color: rgba(224, 164, 90, .34); background: rgba(224, 164, 90, .06); }
+@media (max-width: 1150px) {
+  .workspace { overflow-y: auto; }
+  .control-panel, .results-column { max-height: none; }
+  .analysis-column { min-height: 560px; }
+}
+@media (max-width: 760px) {
+  body { overflow: auto; }
+  .workspace { display: flex; flex-direction: column; gap: 12px; padding: 10px; overflow: visible; }
+  .control-panel, .results-column { overflow: visible; }
+  .analysis-column { min-height: 460px; order: 1; }
+  .control-panel { order: 0; }
+  .results-column { order: 2; }
+  .analysis-title h2 { max-width: 52vw; }
+  .viewer-card { min-height: 400px; }
+  .image-stage { min-height: 280px; }
+  .measurement-toolbar { align-items: flex-start; flex-direction: column; }
+  .mark-actions { width: 100%; justify-content: flex-start; gap: 14px; }
+}
+@media (max-width: 380px) {
+  .topbar { padding-inline: 10px; }
+  .topbar-context { max-width: 130px; font-size: 9px; }
+  .brand-copy strong { font-size: 14px; }
+  .workspace { padding-inline: 7px; }
+}
