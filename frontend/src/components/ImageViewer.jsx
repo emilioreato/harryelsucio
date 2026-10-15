@@ -9,7 +9,7 @@ const LAYERS = [
 ];
 const TOOLS = [
   ["view", "Vista"],
-  ["distance", "Distancia"],
+  ["distance", "Flechas"],
   ["polygon", "Polígono"],
   ["pixel", "Píxel"],
 ];
@@ -237,16 +237,21 @@ export default function ImageViewer({
         <label className="measurement-select-label">
           <span>Herramienta</span>
           <select className="viewer-select" aria-label="Herramienta de medición" value={tool} disabled={!hasResult} onChange={(event) => {
-            setTool(event.target.value);
-            if (event.target.value === "pixel") setInspectedPixel(null);
+            const nextTool = event.target.value;
+            if (nextTool !== tool) {
+              setMarks([]);
+              setPolygonClosed(false);
+              setInspectedPixel(null);
+            }
+            setTool(nextTool);
           }}>
             {TOOLS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
           </select>
         </label>
         <div className="mark-actions">
           <button className="text-button" type="button" disabled={!hasResult || (!marks.length && !inspectedPixel)} onClick={undo}>Deshacer</button>
-          <button className="text-button" type="button" disabled={!canClosePolygon} onClick={closePolygon}>Cerrar área</button>
-          <button className="text-button" type="button" disabled={!hasResult || (!marks.length && !inspectedPixel)} onClick={clear}>Borrar marcas</button>
+          {tool === "polygon" && <button className="text-button" type="button" disabled={!canClosePolygon} onClick={closePolygon}>Cerrar área</button>}
+          <button className="text-button" type="button" disabled={!hasResult || (!marks.length && !inspectedPixel)} onClick={clear}>Limpiar</button>
         </div>
       </div>
       <div className="measurement-result" aria-live="polite">{measurement}</div>
