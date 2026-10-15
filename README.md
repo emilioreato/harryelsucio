@@ -12,6 +12,8 @@ Proyecto harryelsucio para el análisis y la segmentación de imágenes satelita
 
 En VS Code conviene instalar las extensiones oficiales **Python** (Microsoft) y **Pylance** (Microsoft). **Jupyter** es opcional si se van a usar notebooks.
 
+La interfaz está escrita con **React** y **Vite**. Para ejecutar la aplicación ya preparada no hace falta instalar Node.js: el lanzador sirve el paquete web incluido en `web/`. Si vas a modificar la interfaz, instala Node.js 20.19 o posterior y npm; en `frontend/`, ejecuta `npm ci` una vez y `npm run build` cada vez que quieras actualizar la versión servida por el lanzador.
+
 ### Instalar las dependencias
 
 Abre una terminal de PowerShell en la carpeta del repositorio y ejecuta:
@@ -60,6 +62,8 @@ python app.py
 
 En Windows también puedes iniciarla con doble clic en [`encender_aplicacion.bat`](encender_aplicacion.bat), situado en la raíz del repositorio. El script selecciona Python 3.12 o 3.11 si están disponibles y abre la página local en el navegador. Deja esa ventana abierta mientras uses la aplicación; para detenerla, pulsa `Ctrl+C`.
 
+Para desarrollar la interfaz React con recarga automática, abre dos terminales: en una inicia `python app.py --no-browser`; en la otra entra en `frontend/` y ejecuta `npm run dev`. Vite sirve la interfaz en `http://127.0.0.1:5173/` y reenvía `/api` al servidor Python local. Si el puerto 8501 está ocupado y Python anuncia otro puerto, configura `PYROSCOPE_API_TARGET` con esa dirección antes de arrancar Vite.
+
 Se abre en el navegador. Permite elegir una escena precargada o subir una pareja True Color/SWIR. Las parejas precargadas se guardan en `imagenes/<nombre-de-escena>/`, una carpeta por escena con solo un archivo True Color y otro SWIR de la misma adquisición. La aplicación descubre esas carpetas al cargarse; admite JPEG, PNG y TIFF. El panel **Plano de análisis** alterna las composiciones, la superposición y la capa de candidatos/humo; también permite medir distancias y polígonos e inspeccionar píxeles. El panel lateral resume área, perímetro, oclusión por humo y otros datos calculados, y ofrece descargas y notas temporales de campo. El progreso avanza al terminar etapas del algoritmo, no estima el tiempo restante. Sin escala, las medidas quedan en píxeles; cuando se conozca el GSD real de la pareja, se introduce en metros por píxel. No hay que suponer que un JPEG conserva la resolución nominal del satélite.
 
 ### Detectores y tratamiento del humo
@@ -70,7 +74,7 @@ Antes de clasificar el suelo, la aplicación estima humo probable con ambas comp
 
 El filtro espacial prioriza por defecto el componente candidato más grande y puede descartar candidatos alejados. Si la escena puede contener focos independientes, activa **Conservar regiones desconectadas**; así se mantienen los componentes que superan el tamaño mínimo. Las coberturas mostradas son fracciones de píxeles candidatos, no una medida de precisión ni una estimación de fuego activo.
 
-La web propia vive en `web/` (HTML, CSS y JavaScript) y se sirve junto con una API local delgada en Python. El servidor ejecuta los algoritmos, informa del progreso y entrega las capas y exportaciones a la página; no usa Streamlit ni requiere una segunda instalación de frontend. La preparación de imágenes y el motor científico siguen en `pyroscope/`.
+La interfaz React se desarrolla en `frontend/` y Vite compila el sitio estático en `web/`. El servidor Python local sirve esa interfaz y la API de análisis; ejecuta los algoritmos, informa del progreso y entrega capas y exportaciones. La aplicación no usa Streamlit. Para usar la app normal no hace falta abrir Vite ni desplegar nada: el lanzador inicia un único servidor local y una sola pestaña. La preparación de imágenes y el motor científico siguen en `pyroscope/`.
 
 La aplicación y sus resultados usan una rejilla común de píxeles con origen arriba a la izquierda. Máscaras, marcas manuales y capas auxiliares deben compartir esa rejilla; para combinar en el futuro capas meteorológicas o geográficas será necesario transformarlas/alinearlas a la imagen y conservar su CRS y transformación geográfica. El GSD basta para mediciones métricas locales, pero no para obtener latitud/longitud. Los pasos del algoritmo y sus límites se explican en [`DOCUMENTACION/Ideas/segmentacion_basica.md`](DOCUMENTACION/Ideas/segmentacion_basica.md).
 

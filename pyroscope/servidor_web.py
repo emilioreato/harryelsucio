@@ -371,12 +371,6 @@ class PyroScopeHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - nombre requerido por BaseHTTPRequestHandler
         ruta = urlsplit(self.path).path
-        if ruta == "/":
-            self._servir_archivo(_WEB / "index.html")
-            return
-        if ruta in ("/styles.css", "/app.js"):
-            self._servir_archivo(_WEB / ruta.lstrip("/"))
-            return
         if ruta == "/api/scenes":
             escenas = [
                 {"id": escena.nombre, "label": escena.etiqueta, "name": escena.nombre, "date": escena.fecha}
@@ -424,7 +418,31 @@ class PyroScopeHandler(BaseHTTPRequestHandler):
                 self._bytes(200, datos, "image/png")
             return
 
-        self._json(404, {"error": "Ruta no encontrada."})
+        if ruta.startswith("/api/"):
+            self._json(404, {"error": "Ruta no encontrada."})
+            return
+
+        if ruta == "/":
+            self._servir_archivo(_WEB / "index.html")
+            return
+
+        archivo = _WEB / ruta.lstrip("/")
+        try:
+            archivo_resuelto = archivo.resolve(strict=True)
+            archivo_resuelto.relative_to(_WEB.resolve())
+            es_archivo = archivo_resuelto.is_file()
+        except (OSError, ValueError):
+            es_archivo = False
+        if es_archivo:
+            self._servir_archivo(archivo)
+            return
+
+        # Las rutas de cliente sin extensión pertenecen a la SPA de React.
+        if not Path(ruta).suffix:
+            self._servir_archivo(_WEB / "index.html")
+            return
+
+        self._json(404, {"error": "Archivo no encontrado."})
 
     def do_POST(self) -> None:  # noqa: N802
         ruta = urlsplit(self.path).path
