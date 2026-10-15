@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 import streamlit as st
 
 from .entrada import renderizar_barra_lateral
@@ -19,63 +21,78 @@ def main() -> None:
         st.stop()
 
     st.markdown(
-        f'<div class="pyro-section-heading"><strong>{entrada.escena}</strong>'
-        '<span>ENTRADA · TRUE COLOR + SWIR</span></div>',
+        f'<div class="pyro-context"><strong>{entrada.escena}</strong><span>Análisis</span></div>',
         unsafe_allow_html=True,
     )
-    with st.container(border=True):
-        st.markdown(
-            '<div class="pyro-section-heading"><strong>Progreso del análisis</strong>'
-            '<span>AVANCE POR ETAPAS DEL MOTOR</span></div>',
-            unsafe_allow_html=True,
-        )
-        progress_label = st.empty()
-        progress_bar = st.progress(0, text="Esperando validación de las imágenes")
+    progress_label = st.empty()
+    progress_bar = st.progress(0)
 
     def actualizar_progreso(etapa: str, porcentaje: int) -> None:
         porcentaje = max(0, min(100, int(porcentaje)))
         progress_label.markdown(
-            f'<div class="pyro-mono">{etapa}</div>',
+            f'<div class="pyro-stage"><span>{etapa}</span><strong>{porcentaje}%</strong></div>',
             unsafe_allow_html=True,
         )
-        progress_bar.progress(porcentaje, text=f"{porcentaje}%")
+        progress_bar.progress(porcentaje)
 
-    actualizar_progreso("Leyendo y alineando las composiciones", 3)
-    try:
-        pareja = preparar_pareja(
-            entrada.true_color,
-            entrada.swir,
-            ajustes.gsd_m_por_px,
-        )
-    except Exception as exc:
-        st.error(f"No se pudieron leer o alinear las imágenes: {exc}")
-        st.stop()
+    digest = hashlib.sha256()
+    digest.update(entrada.true_color)
+    digest.update(entrada.swir)
+    clave_procesamiento = (
+        digest.hexdigest(),
+        ajustes.gsd_m_por_px,
+        ajustes.detector.id,
+        ajustes.sensibilidad,
+        ajustes.numero_clases,
+        ajustes.area_minima_pct,
+        ajustes.distancia_maxima_pct,
+        ajustes.conservar_regiones_separadas,
+    )
+    cache_sesion = st.session_state.get("_pyroscope_resultado_cache")
+    if cache_sesion and cache_sesion[0] == clave_procesamiento:
+        tc, swir, resultado = cache_sesion[1]
+        actualizar_progreso("Listo", 100)
+    else:
+        actualizar_progreso("Leyendo y alineando las imágenes", 3)
+        try:
+            pareja = preparar_pareja(
+                entrada.true_color,
+                entrada.swir,
+                ajustes.gsd_m_por_px,
+            )
+        except Exception as exc:
+            st.error(f"No se pudieron leer o alinear las imágenes: {exc}")
+            st.stop()
 
-    try:
-        tc, swir, resultado = procesar_pareja(
-            pareja.true_color,
-            pareja.swir,
-            ajustes.sensibilidad,
-            ajustes.numero_clases,
-            ajustes.area_minima_pct,
-            ajustes.distancia_maxima_pct,
-            pareja.gsd_x_m,
-            pareja.gsd_y_m,
-            ajustes.detector.id,
-            ajustes.conservar_regiones_separadas,
-            actualizar_progreso,
-        )
-        actualizar_progreso("Análisis completado; resultados listos", 100)
-    except Exception as exc:
-        progress_label.markdown(
-            '<div class="pyro-mono">No se pudo completar el análisis</div>',
-            unsafe_allow_html=True,
-        )
-        st.error(f"No se pudo segmentar esta pareja: {exc}")
-        st.stop()
+        try:
+            tc, swir, resultado = procesar_pareja(
+                pareja.true_color,
+                pareja.swir,
+                ajustes.sensibilidad,
+                ajustes.numero_clases,
+                ajustes.area_minima_pct,
+                ajustes.distancia_maxima_pct,
+                pareja.gsd_x_m,
+                pareja.gsd_y_m,
+                ajustes.detector.id,
+                ajustes.conservar_regiones_separadas,
+                actualizar_progreso,
+            )
+            st.session_state["_pyroscope_resultado_cache"] = (
+                clave_procesamiento,
+                (tc, swir, resultado),
+            )
+            actualizar_progreso("Completado", 100)
+        except Exception as exc:
+            progress_label.markdown(
+                '<div class="pyro-stage"><span>No se pudo completar el análisis</span></div>',
+                unsafe_allow_html=True,
+            )
+            st.error(f"No se pudo segmentar esta pareja: {exc}")
+            st.stop()
 
-    vista_col, telemetria_col = st.columns([3.2, 1.05], gap="large")
-    superposicion, vista_semantica, descarga_overlay, descarga_mascara = renderizar_plano(
+    vista_col, telemetria_col = st.columns([2.8, 1.2], gap="medium")
+    vista_semantica, descarga_overlay, descarga_mascara = renderizar_plano(
         vista_col,
         tc,
         swir,

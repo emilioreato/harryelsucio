@@ -1,0 +1,13 @@
+# Python y herramientas locales
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Configuración local y secretos de Streamlit
+.streamlit/secrets.toml
+.streamlit/credentials.toml
+
+# Salidas temporales de experimentos y logs locales
+tmp_pyroscope/

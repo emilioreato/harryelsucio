@@ -14,15 +14,21 @@ Esos números describen las bandas del sensor, **no se pueden recuperar con cert
 
 ## Diseño modular
 
-- `app.py` contiene la interfaz web Streamlit, la selección/carga de escenas y las marcas interactivas.
+- `app.py` es solo el punto de entrada de Streamlit; `pyroscope/interfaz/aplicacion.py` coordina la vista web.
+- `pyroscope/interfaz/entrada.py` recoge la pareja de imágenes y los ajustes; `procesamiento.py` lee, valida y llama al análisis cacheado; `mediciones.py` presenta capas, marcas, distancias y áreas; `resultados.py` muestra telemetría y exportaciones; `presentacion.py` reúne estilo y formatos comunes.
 - `pyroscope/imagenes.py` lee imágenes RGB, valida que la pareja comparta dimensiones y reduce ambas con el mismo factor.
 - `pyroscope/caracteristicas.py` calcula las señales por píxel de las dos composiciones.
 - `pyroscope/humo.py` puntúa la oclusión probable usando conjuntamente True Color y la firma cromática de la composición SWIR.
 - `pyroscope/ontologia.py` declara los nombres de clase que comparten el motor y las interfaces.
-- `pyroscope/segmentacion.py` separa la clasificación semántica por píxel de la formación espacial de regiones y devuelve máscaras, clases, contornos y métricas (`ResultadoAreaAfectada`).
-- `pyroscope/segmentacion_swir.py` ofrece un segundo clasificador determinista por contraste SWIR, doble umbral e histéresis; comparte la misma salida que K-Means.
+- `pyroscope/segmentacion.py` resuelve el detector y coordina clasificación semántica con la formación espacial de regiones; devuelve máscaras, clases, contornos y métricas (`ResultadoAreaAfectada`).
+- `pyroscope/detectores/` contiene un módulo por clasificador de superficie. `registro.py` declara sus identificadores, descripciones, opciones y funciones; la interfaz ofrece los métodos registrados sin duplicar esa lista.
+- `pyroscope/modelos_segmentacion.py` define los contratos de salida compartidos por los detectores y el pipeline. Todo detector nuevo debe devolver `ResultadoClasificacionSemantica` y dejar el agrupado espacial al pipeline común.
+- `pyroscope/geometria_segmentacion.py` limpia candidatos, agrupa componentes y produce perímetros; no decide qué significa el color.
+- `pyroscope/segmentacion_swir.py` se conserva como ruta de importación de compatibilidad. El código vigente está en `pyroscope/detectores/swir_histeresis.py`.
 - `pyroscope/coordenadas.py` define la rejilla de píxeles compartida por imágenes, medidas y capas auxiliares; convierte entre píxeles y coordenadas locales métricas con GSD, o entre píxeles y coordenadas geográficas con transformación affine y CRS.
 - `pyroscope/visualizacion.py` pinta la máscara y el perímetro sobre True Color.
+
+Al ampliar la aplicación, conserva el recorrido `entrada → procesamiento → mediciones/resultados` y las reglas del motor fuera de los componentes Streamlit. Añade un detector registrable para otra estrategia semántica; reserva un contrato y una etapa propios para la futura detección de fuego activo, porque no es la misma salida que la superficie afectada.
 
 Esta separación mantiene el área afectada como resultado propio. En una fase avanzada, el detector de actividad de fuego debe ser otro módulo con su propia máscara/puntuación; los focos activos no se deben sumar al área quemada ni tratar como la misma clase.
 

@@ -31,77 +31,77 @@ class AjustesAnalisis:
 def renderizar_barra_lateral() -> tuple[EntradaImagenes | None, AjustesAnalisis]:
     """Muestra la selección de pareja y ajustes; devuelve valores sin analizar."""
     with st.sidebar:
-        st.markdown(
-            '<div class="pyro-eyebrow">PyroScope · estación de análisis</div>',
-            unsafe_allow_html=True,
+        st.header("Imágenes")
+        origen = st.radio(
+            "Origen",
+            ("Ejemplo del reto", "Subir una pareja"),
+            horizontal=True,
         )
-        st.header("Entrada de imágenes")
-        origen = st.radio("Imágenes", ("Ejemplo del reto", "Subir una pareja"))
         entrada = _leer_entrada(origen)
 
-        st.header("Ajustes del análisis")
-        detectores = {d.id: d for d in listar_detectores_superficie()}
-        metodo = st.selectbox(
-            "Detector de superficie",
-            tuple(detectores),
-            format_func=lambda detector_id: detectores[detector_id].nombre,
-            help=" ".join(d.descripcion for d in detectores.values()),
-        )
-        detector = detectores[metodo]
-        sensibilidad = st.slider(
-            "Sensibilidad",
-            min_value=1,
-            max_value=10,
-            value=5,
-            help=(
-                "K-Means amplía la tolerancia del candidato cromático; V2 baja los umbrales "
-                "de semilla y crecimiento SWIR. En ambos casos puede aumentar el área candidata."
-            ),
-        )
-        numero_clases = st.slider(
-            "Grupos de color por escena",
-            min_value=4,
-            max_value=10,
-            value=7,
-            help="El agrupamiento se ajusta a los colores de cada pareja, no a una máscara etiquetada.",
-            disabled=not detector.usa_numero_clases,
-        )
-        area_minima_pct = st.slider(
-            "Descartar objetos menores (% de imagen)",
-            min_value=0.01,
-            max_value=1.0,
-            value=0.15,
-            step=0.01,
-        )
-        conservar_regiones = st.checkbox(
-            "Conservar regiones desconectadas",
-            value=False,
-            help=(
-                "Por defecto se prioriza la región principal y se filtran candidatos remotos. "
-                "Activa esta opción si la escena puede contener varios focos independientes."
-            ),
-        )
-        distancia_maxima_pct = st.slider(
-            "Distancia máxima del foco principal (% del lado mayor)",
-            min_value=3,
-            max_value=20,
-            value=10,
-            help=(
-                "En el modo de foco principal se descartan regiones que excedan esta distancia. "
-                "Se desactiva al conservar regiones desconectadas."
-            ),
-            disabled=conservar_regiones,
-        )
-        st.header("Escala de medición")
-        gsd_texto = st.text_input(
-            "GSD de la imagen (metros por píxel)",
-            value="",
-            placeholder="Déjalo vacío hasta conocerlo",
-            help=(
-                "Introduce el GSD real de la pareja exportada. No se deduce del JPEG: "
-                "las bandas Sentinel-2 pueden tener resoluciones distintas y el visor puede reescalar la imagen."
-            ),
-        )
+        with st.expander("Ajustes", expanded=False):
+            detectores = listar_detectores_superficie()
+            detectores_por_nombre = {detector.nombre: detector for detector in detectores}
+            metodo = st.selectbox(
+                "Detector de superficie",
+                tuple(detectores_por_nombre),
+                help=" ".join(d.descripcion for d in detectores),
+            )
+            detector = detectores_por_nombre[metodo]
+            sensibilidad = st.slider(
+                "Sensibilidad",
+                min_value=1,
+                max_value=10,
+                value=5,
+                help=(
+                    "K-Means amplía la tolerancia del candidato cromático; V2 baja los umbrales "
+                    "de semilla y crecimiento SWIR. En ambos casos puede aumentar el área candidata."
+                ),
+            )
+            numero_clases = st.slider(
+                "Grupos de color por escena",
+                min_value=4,
+                max_value=10,
+                value=7,
+                help="El agrupamiento se ajusta a los colores de cada pareja, no a una máscara etiquetada.",
+                disabled=not detector.usa_numero_clases,
+            )
+            area_minima_pct = st.slider(
+                "Descartar objetos menores (% de imagen)",
+                min_value=0.01,
+                max_value=1.0,
+                value=0.15,
+                step=0.01,
+            )
+            conservar_regiones = st.checkbox(
+                "Conservar regiones desconectadas",
+                value=False,
+                help=(
+                    "Por defecto se prioriza la región principal y se filtran candidatos remotos. "
+                    "Activa esta opción si la escena puede contener varios focos independientes."
+                ),
+            )
+            distancia_maxima_pct = st.slider(
+                "Distancia máxima del foco principal (% del lado mayor)",
+                min_value=3,
+                max_value=20,
+                value=10,
+                help=(
+                    "En el modo de foco principal se descartan regiones que excedan esta distancia. "
+                    "Se desactiva al conservar regiones desconectadas."
+                ),
+                disabled=conservar_regiones,
+            )
+            st.subheader("Escala")
+            gsd_texto = st.text_input(
+                "GSD (metros por píxel)",
+                value="",
+                placeholder="Opcional",
+                help=(
+                    "Introduce el GSD real de la pareja exportada. No se deduce del JPEG: "
+                    "las bandas Sentinel-2 pueden tener resoluciones distintas y el visor puede reescalar la imagen."
+                ),
+            )
 
     return entrada, AjustesAnalisis(
         detector=detector,
@@ -132,7 +132,7 @@ def _leer_entrada(origen: str) -> EntradaImagenes | None:
         "SWIR", type=("jpg", "jpeg", "png", "tif", "tiff"), key="swir"
     )
     if true_file is None or swir_file is None:
-        st.caption("Sube las dos composiciones de la misma escena y adquisición.")
+        st.caption("Carga las dos imágenes de la misma escena y fecha.")
         return None
     return EntradaImagenes(
         "Imágenes cargadas",

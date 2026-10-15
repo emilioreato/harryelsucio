@@ -10,7 +10,7 @@ from .configuracion import RAIZ_REPOSITORIO
 
 
 def configurar_pagina() -> None:
-    """Aplica los estilos locales y el encabezado común de la aplicación."""
+    """Aplica los estilos locales y el encabezado compacto de la aplicación."""
     st.set_page_config(page_title="PyroScope · Área afectada", layout="wide")
     css = (RAIZ_REPOSITORIO / "assets" / "pyroscope.css").read_text(encoding="utf-8")
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
@@ -20,12 +20,10 @@ def configurar_pagina() -> None:
           <div class="pyro-brand">
             <div class="pyro-brand-mark">🔥</div>
             <div>
-              <div class="pyro-eyebrow">PyroScope · análisis satelital</div>
-              <h1 class="pyro-title">Área afectada</h1>
-              <div class="pyro-subtitle">Clasificación y revisión de una pareja True Color + SWIR</div>
+              <h1 class="pyro-title">PyroScope</h1>
+              <div class="pyro-subtitle">Área afectada</div>
             </div>
           </div>
-          <div class="pyro-live"><span class="pyro-live-dot"></span> MOTOR PYTHON · LISTO</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -38,9 +36,8 @@ def mostrar_estado_vacio() -> None:
         """
         <div class="pyro-empty">
           <div>
-            <div class="pyro-empty-icon">🛰️</div>
-            <strong>Carga las dos composiciones para comenzar</strong>
-            <span>True Color y SWIR deben corresponder a la misma escena, fecha y rejilla. Puedes subirlas en el panel lateral o elegir un ejemplo del reto.</span>
+            <strong>Elige una escena o carga las imágenes</strong>
+            <span>Usa dos imágenes alineadas de la misma fecha.</span>
           </div>
         </div>
         """,

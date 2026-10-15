@@ -22,6 +22,7 @@ class ParejaPreparada:
     gsd_y_m: float | None
 
 
+@st.cache_data(show_spinner=False, max_entries=8)
 def preparar_pareja(
     true_bytes: bytes,
     swir_bytes: bytes,
@@ -48,7 +49,6 @@ def preparar_pareja(
     return ParejaPreparada(true_color, swir, gsd_x, gsd_y)
 
 
-@st.cache_data(show_spinner=False, max_entries=8)
 def procesar_pareja(
     true_color: np.ndarray,
     swir: np.ndarray,
@@ -60,7 +60,7 @@ def procesar_pareja(
     gsd_y_m: float | None,
     metodo: str,
     conservar_regiones_separadas: bool,
-    _on_progress: ProgresoSegmentacion | None = None,
+    on_progress: ProgresoSegmentacion | None = None,
 ) -> tuple[np.ndarray, np.ndarray, ResultadoAreaAfectada]:
     """Reduce en pareja y llama al servicio de segmentación compartido."""
     true_reducido, swir_reducida = reducir_par_alineado(
@@ -82,7 +82,7 @@ def procesar_pareja(
         area_minima_pct=area_minima_pct,
         distancia_maxima_pct=distancia_maxima_pct,
         sistema_coordenadas=sistema,
-        on_progress=_on_progress,
+        on_progress=on_progress,
         metodo=metodo,
         conservar_regiones_separadas=conservar_regiones_separadas,
     )
