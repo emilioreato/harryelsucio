@@ -14,6 +14,8 @@ class ClaseSemantica(IntEnum):
     HUMO_PROBABLE = 3
     SUPERFICIE_AFECTADA_CANDIDATA = 4
     FUEGO_ACTIVO_POSIBLE = 5
+    NUBE_BRUMA = 6
+    SUELO_DESNUDO_URBANO = 7
 
 
 ETIQUETAS_CLASE = {
@@ -23,4 +25,6 @@ ETIQUETAS_CLASE = {
     ClaseSemantica.HUMO_PROBABLE: "Humo probable (oclusión)",
     ClaseSemantica.SUPERFICIE_AFECTADA_CANDIDATA: "Superficie afectada candidata",
     ClaseSemantica.FUEGO_ACTIVO_POSIBLE: "Posible fuego activo",
+    ClaseSemantica.NUBE_BRUMA: "Nube o bruma",
+    ClaseSemantica.SUELO_DESNUDO_URBANO: "Suelo desnudo o urbano",
 }

@@ -36,11 +36,15 @@ if not errorlevel 1 (
   )
 )
 if not defined PYTHON (
-  python --version >nul 2>&1
+  py -3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>&1
+  if not errorlevel 1 set "PYTHON=py -3"
+)
+if not defined PYTHON (
+  python -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>&1
   if not errorlevel 1 set "PYTHON=python"
 )
 if not defined PYTHON (
-  echo ERROR: Windows no encuentra Python 3.12 ni 3.11.
+  echo ERROR: Windows no encuentra Python 3.11 o posterior.
   echo Instala Python de 64 bits desde https://www.python.org/downloads/windows/
   echo Durante la instalacion, marca "Add Python to PATH".
   echo Despues, vuelve a ejecutar este archivo.
@@ -87,8 +91,13 @@ echo Deja esta ventana abierta mientras uses la aplicacion.
 echo Si no se abre el navegador, prueba http://127.0.0.1:8501/
 echo Para detener el servidor, pulsa Ctrl+C.
 echo.
-%PYTHON% "%~dp0app.py"
+%PYTHON% "%~dp0app.py" %*
 set "APP_EXIT=%ERRORLEVEL%"
+if "%APP_EXIT%"=="2" (
+  echo.
+  echo Lumbre ya estaba abierta. Se reutiliza la instancia existente.
+  exit /b 0
+)
 if not "%APP_EXIT%"=="0" (
   echo.
   echo ERROR: La aplicacion se ha cerrado con codigo %APP_EXIT%.

@@ -1,4 +1,4 @@
-# Compatible con Python 3.11 y 3.12 en Windows.
+# Python 3.11 o posterior; no se requiere una version menor especifica.
 # Límites amplios para permitir ruedas compatibles sin fijar versiones prematuramente.
 numpy>=1.26,<3
 pandas>=2.1,<4

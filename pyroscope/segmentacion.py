@@ -50,12 +50,13 @@ def segmentar_superficie_afectada(
     avanzado = ajustes_avanzados or {}
     informar_progreso(on_progress, "Pareja alineada; iniciando clasificación", 5)
     opciones_detector: dict[str, object] = {
-        "sensibilidad": sensibilidad,
         "on_progress": on_progress,
         "pesos_humo": avanzado.get("smoke_weights"),
         "umbral_humo": avanzado.get("smoke_threshold", 0.55),
         "umbrales_agua": avanzado.get("water_thresholds"),
     }
+    if detector.usa_sensibilidad:
+        opciones_detector["sensibilidad"] = sensibilidad
     if detector.usa_numero_clases:
         opciones_detector.update(numero_clases=numero_clases, semilla=semilla)
     if detector.id in ("kmeans", "fusion_ponderada"):

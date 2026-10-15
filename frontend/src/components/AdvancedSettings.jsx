@@ -71,6 +71,7 @@ export default function AdvancedSettings({ value, onChange, onReset, method }) {
   const updateTop = (key, nextValue) => onChange({ ...value, [key]: nextValue });
   const hasKMeans = ["kmeans", "fusion_ponderada"].includes(method);
   const hasSwir = ["swir_histeresis", "fusion_ponderada"].includes(method);
+  if (method === "random_forest") return null;
 
   return (
     <details className="details-panel developer-settings">

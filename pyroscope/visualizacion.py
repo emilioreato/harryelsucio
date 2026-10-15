@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 
 from .segmentacion import ResultadoAreaAfectada
+from .ontologia import ClaseSemantica
 
 
 def crear_superposicion(
@@ -16,11 +17,23 @@ def crear_superposicion(
 
     superficie = resultado.mascara | resultado.mascara_candidata_bajo_humo
     salida = superponer_mascara(imagen_base, superficie)
-    contornos, _ = cv2.findContours(superficie.astype(np.uint8), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-    if contornos:
+    salida = _superponer_clases_adicionales(
+        salida,
+        resultado,
+        opacidad_agua=0.5,
+        opacidad_fuego=0.78,
+        opacidad_nube=0.28,
+    )
+    salida = superponer_mascara(
+        salida,
+        resultado.mascara_humo,
+        color=(0, 165, 255),
+        opacidad=0.28,
+    )
+    if resultado.contornos:
         grosor = max(2, round(max(salida.shape[:2]) / 900))
-        cv2.drawContours(salida, list(contornos), -1, (255, 238, 60), grosor)
-    return _superponer_oclusiones(salida, resultado)
+        cv2.drawContours(salida, list(resultado.contornos), -1, (255, 238, 60), grosor)
+    return salida
 
 
 def crear_vista_clasificacion(
@@ -37,16 +50,54 @@ def crear_vista_clasificacion(
         color=(245, 65, 35),
         opacidad=0.36,
     )
-    return _superponer_oclusiones(salida, resultado)
-
-
-def _superponer_oclusiones(imagen: np.ndarray, resultado: ResultadoAreaAfectada) -> np.ndarray:
-    """Capa atmosférica superior; superficie e incertidumbre se exportan aparte."""
-    return superponer_mascara(
-        imagen,
+    salida = _superponer_clases_adicionales(
+        salida,
+        resultado,
+        opacidad_agua=0.58,
+        opacidad_fuego=0.82,
+        opacidad_nube=0.3,
+    )
+    salida = superponer_mascara(
+        salida,
         resultado.mascara_humo,
         color=(0, 165, 255),
         opacidad=0.28,
+    )
+    return salida
+
+
+def _superponer_clases_adicionales(
+    imagen: np.ndarray,
+    resultado: ResultadoAreaAfectada,
+    *,
+    opacidad_agua: float,
+    opacidad_fuego: float,
+    opacidad_nube: float,
+) -> np.ndarray:
+    """Pinta clases semánticas cuando el resultado incluye esa capa opcional."""
+    clases = getattr(resultado, "clase_por_pixel", None)
+    if clases is None:
+        return imagen
+    if clases.shape != imagen.shape[:2]:
+        raise ValueError("La imagen y las clases semánticas deben tener las mismas dimensiones.")
+
+    salida = superponer_mascara(
+        imagen,
+        clases == ClaseSemantica.AGUA_POSIBLE,
+        color=(25, 105, 255),
+        opacidad=opacidad_agua,
+    )
+    salida = superponer_mascara(
+        salida,
+        clases == ClaseSemantica.FUEGO_ACTIVO_POSIBLE,
+        color=(255, 245, 0),
+        opacidad=opacidad_fuego,
+    )
+    return superponer_mascara(
+        salida,
+        clases == ClaseSemantica.NUBE_BRUMA,
+        color=(170, 175, 185),
+        opacidad=opacidad_nube,
     )
 
 

@@ -23,3 +23,7 @@ tmp_pyroscope/
 tmp_algorithm_review/
 /tmp/
 resultados_contextual/
+
+# Datos y modelos locales del clasificador supervisado
+/training Random Forest/dataset/
+/training Random Forest/random_forest.joblib
