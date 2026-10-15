@@ -534,3 +534,71 @@ h1, h2 { color: #f1f0e8; font-size: 17px; font-weight: 600; letter-spacing: -.02
   .brand-copy strong { font-size: 14px; }
   .workspace { padding-inline: 7px; }
 }
+
+
+/* Mensaje útil en el visor vacío: el fondo oscuro es un estado inicial, no un fallo */
+.image-stage {
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(224, 164, 90, .075), transparent 58%),
+    #141b1e;
+}
+.empty-state {
+  width: min(100%, 500px);
+  gap: 12px;
+  padding: clamp(22px, 4vw, 44px);
+}
+.empty-state strong {
+  color: #f0e8d8;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(17px, 2vw, 23px);
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+}
+.empty-state > span:last-child {
+  max-width: 350px;
+  color: #b8c0b8;
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
+}
+.empty-mark {
+  display: grid;
+  width: 62px;
+  height: 62px;
+  place-items: center;
+  margin-bottom: 2px;
+  border: 1px solid rgba(224, 164, 90, .35);
+  border-radius: 50%;
+  color: #e7b873;
+  background: radial-gradient(circle, rgba(224, 164, 90, .14), transparent 72%);
+  font-size: 30px;
+}
+.empty-state.is-error .empty-mark {
+  border-color: rgba(226, 126, 109, .45);
+  color: #f09a89;
+  background: radial-gradient(circle, rgba(226, 126, 109, .14), transparent 72%);
+}
+.empty-state.is-error strong { color: #f3b1a5; }
+.viewer-select-label, .measurement-select-label { font-size: 10px; }
+.viewer-select { height: 34px; font-size: 10px; }
+.mark-actions .text-button {
+  min-height: 29px;
+  padding: 5px 9px;
+  border: 1px solid rgba(224, 164, 90, .16);
+  border-radius: 7px;
+  color: #c9b89c;
+  background: rgba(8, 13, 15, .28);
+  font-size: 10px;
+}
+.mark-actions .text-button:hover:not(:disabled) {
+  border-color: rgba(224, 164, 90, .42);
+  color: #f3d6a6;
+  background: rgba(224, 164, 90, .07);
+}
+.measurement-result { font-size: 10px; line-height: 1.55; }
+.result-state { font-size: 11px; }
+@media (max-width: 760px) {
+  .empty-state { padding: 24px 14px; }
+  .empty-state > span:last-child { font-size: 11px; }
+}
