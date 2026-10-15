@@ -14,6 +14,13 @@ import numpy as np
 from .imagenes import validar_par_alineado
 
 
+PESOS_CONFIANZA_HUMO_POR_DEFECTO = {
+    "cyan": 0.65,
+    "luminance": 0.20,
+    "neutrality": 0.15,
+}
+
+
 @dataclass(frozen=True)
 class ResultadoHumo:
     """Capa de humo probable y su confianza por píxel."""
@@ -28,6 +35,8 @@ def detectar_humo_probable(
     swir: np.ndarray,
     *,
     area_minima_componente_pct: float = 0.035,
+    pesos_confianza: dict[str, float] | None = None,
+    umbral_confianza: float = 0.55,
 ) -> ResultadoHumo:
     """Estima humo usando la firma cian SWIR y el velo claro de True Color.
 
@@ -44,6 +53,24 @@ def detectar_humo_probable(
     validar_par_alineado(true_color, swir)
     if not 0 <= area_minima_componente_pct <= 5:
         raise ValueError("El área mínima de componente debe estar entre 0 y 5 por ciento.")
+    pesos = dict(
+        PESOS_CONFIANZA_HUMO_POR_DEFECTO if pesos_confianza is None else pesos_confianza
+    )
+    if set(pesos) != set(PESOS_CONFIANZA_HUMO_POR_DEFECTO):
+        raise ValueError("Los pesos de humo deben incluir las tres señales reconocidas.")
+    coeficientes = np.asarray(
+        [pesos[nombre] for nombre in PESOS_CONFIANZA_HUMO_POR_DEFECTO], dtype=np.float32
+    )
+    if (
+        not np.all(np.isfinite(coeficientes))
+        or np.any(coeficientes < 0)
+        or np.any(coeficientes > 1)
+        or not np.any(coeficientes)
+    ):
+        raise ValueError("Los pesos de humo deben estar entre 0 y 1 y alguno debe ser positivo.")
+    if not np.isfinite(umbral_confianza) or not 0 <= umbral_confianza <= 1:
+        raise ValueError("El umbral de confianza del humo debe estar entre 0 y 1.")
+    coeficientes /= coeficientes.sum()
 
     tc = true_color.astype(np.float32) / 255.0
     sw = swir.astype(np.float32) / 255.0
@@ -86,16 +113,16 @@ def detectar_humo_probable(
         1,
     )
     confianza = (
-        0.65 * evidencia_cian
-        + 0.20 * evidencia_luminosidad
-        + 0.15 * evidencia_neutralidad
+        coeficientes[0] * evidencia_cian
+        + coeficientes[1] * evidencia_luminosidad
+        + coeficientes[2] * evidencia_neutralidad
     ).astype(np.float32)
 
     candidata = (
         (firma_cian >= umbral_cian)
         & (luminosidad_tc >= umbral_luminosidad)
         & (neutralidad_tc >= umbral_neutralidad)
-        & (confianza >= 0.55)
+        & (confianza >= umbral_confianza)
     )
     mascara_u8 = candidata.astype(np.uint8)
     mascara_u8 = cv2.morphologyEx(

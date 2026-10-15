@@ -31,6 +31,7 @@ def segmentar_superficie_afectada(
     on_progress: ProgresoSegmentacion | None = None,
     metodo: str = "kmeans",
     conservar_regiones_separadas: bool = False,
+    ajustes_avanzados: dict[str, object] | None = None,
 ) -> ResultadoAreaAfectada:
     """Ejecuta un detector registrado y la etapa espacial común.
 
@@ -45,13 +46,31 @@ def segmentar_superficie_afectada(
         raise ValueError("La rejilla de coordenadas debe coincidir con la imagen analizada.")
 
     detector = obtener_detector_superficie(metodo)
+    avanzado = ajustes_avanzados or {}
     informar_progreso(on_progress, "Pareja alineada; iniciando clasificación", 5)
     opciones_detector: dict[str, object] = {
         "sensibilidad": sensibilidad,
         "on_progress": on_progress,
+        "pesos_humo": avanzado.get("smoke_weights"),
+        "umbral_humo": avanzado.get("smoke_threshold", 0.55),
+        "umbrales_agua": avanzado.get("water_thresholds"),
     }
     if detector.usa_numero_clases:
         opciones_detector.update(numero_clases=numero_clases, semilla=semilla)
+    if detector.id in ("kmeans", "fusion_ponderada"):
+        opciones_detector["pesos_kmeans"] = avanzado.get("kmeans_weights")
+        if detector.id == "kmeans":
+            opciones_detector["pesos_score"] = opciones_detector.pop("pesos_kmeans")
+    if detector.id in ("swir_histeresis", "fusion_ponderada"):
+        opciones_detector["umbrales_swir"] = avanzado.get("swir_thresholds")
+        if detector.id == "swir_histeresis":
+            opciones_detector["umbrales_percentil"] = opciones_detector.pop("umbrales_swir")
+    if detector.id == "fusion_ponderada":
+        opciones_detector.update(
+            peso_kmeans=avanzado.get("fusion_kmeans_weight", 0.5),
+            peso_swir=avanzado.get("fusion_swir_weight", 0.5),
+            umbral_voto=avanzado.get("fusion_threshold", 0.55),
+        )
 
     clasificacion = detector.clasificar(true_color, swir, **opciones_detector)
     regiones = segmentar_regiones_espaciales(

@@ -1,6 +1,8 @@
-"""Punto de entrada Streamlit; la interfaz vive en :mod:`pyroscope.interfaz`."""
+"""Punto de entrada de la web PyroScope y su backend Python."""
 
-from pyroscope.interfaz import main
+from pyroscope.servidor_web import ejecutar_servidor
 
 
-main()
+if __name__ == "__main__":
+    if not ejecutar_servidor():
+        raise SystemExit(2)

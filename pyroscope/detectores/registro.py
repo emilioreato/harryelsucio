@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from ..modelos_segmentacion import ResultadoClasificacionSemantica
+from .fusion import clasificar_fusion_ponderada
 from .kmeans import clasificar_pixeles_area_afectada
 from .swir_histeresis import clasificar_pixeles_area_afectada_swir
 
@@ -40,10 +41,21 @@ DETECTORES_SUPERFICIE: tuple[DetectorSuperficie, ...] = (
         nombre="Contraste SWIR + histéresis (V2)",
         descripcion=(
             "Busca semillas de contraste SWIR alto y las expande por regiones "
-            "contiguas; True Color aporta contexto para vetar agua y vegetación."
+            "contiguas; True Color aporta el verdor y ambas vistas confirman "
+            "oscuridad compatible con agua."
         ),
         usa_numero_clases=False,
         clasificar=clasificar_pixeles_area_afectada_swir,
+    ),
+    DetectorSuperficie(
+        id="fusion_ponderada",
+        nombre="Fusión ponderada (K-Means + SWIR)",
+        descripcion=(
+            "Combina las máscaras de ambos detectores. En Herramientas de desarrollo "
+            "puedes ponderar sus votos y ajustar sus scores y umbrales."
+        ),
+        usa_numero_clases=True,
+        clasificar=clasificar_fusion_ponderada,
     ),
 )
 

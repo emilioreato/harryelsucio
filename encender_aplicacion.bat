@@ -2,23 +2,23 @@
 setlocal
 cd /d "%~dp0"
 
-echo Iniciando PyroScope. Se abrira en el navegador cuando Streamlit este listo.
+echo Iniciando PyroScope. Se abrira la pagina propia de la aplicacion.
 echo Deja esta ventana abierta mientras uses la aplicacion. Pulsa Ctrl+C para detenerla.
 echo.
 
 where py >nul 2>nul
 if not errorlevel 1 (
-    py -3.12 -m streamlit --version >nul 2>nul
+    py -3.12 --version >nul 2>nul
     if not errorlevel 1 goto usar_python312
 
-    py -3.11 -m streamlit --version >nul 2>nul
+    py -3.11 --version >nul 2>nul
     if not errorlevel 1 goto usar_python311
 )
 
-python -m streamlit --version >nul 2>nul
+python --version >nul 2>nul
 if not errorlevel 1 goto usar_python_predeterminado
 
-echo No se encontro Streamlit en Python 3.12, 3.11 ni en el Python predeterminado.
+echo No se encontro Python 3.12, 3.11 ni un Python predeterminado.
 echo Instala Python y las dependencias desde esta carpeta con:
 echo   py -3.12 -m pip install -r requirements.txt
 echo Si usas Python 3.11, cambia 3.12 por 3.11.
@@ -28,17 +28,26 @@ exit /b 1
 
 :usar_python312
 echo Usando Python 3.12.
-py -3.12 -m streamlit run app.py --server.address 127.0.0.1
+py -3.12 app.py
+if errorlevel 2 goto ya_activa
 goto final
 
 :usar_python311
 echo Usando Python 3.11.
-py -3.11 -m streamlit run app.py --server.address 127.0.0.1
+py -3.11 app.py
+if errorlevel 2 goto ya_activa
 goto final
 
 :usar_python_predeterminado
 echo Usando el Python predeterminado del sistema.
-python -m streamlit run app.py --server.address 127.0.0.1
+python app.py
+if errorlevel 2 goto ya_activa
+goto final
+
+:ya_activa
+echo PyroScope ya esta abierto. No se inicio otra ventana de servidor.
+endlocal
+exit /b 0
 
 :final
 echo.

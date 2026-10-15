@@ -2,16 +2,28 @@
 
 from __future__ import annotations
 
-import cv2
 import numpy as np
 from sklearn.cluster import MiniBatchKMeans
 
+from ..agua import detectar_agua_probable
 from ..caracteristicas import extraer_caracteristicas_pareja
 from ..humo import detectar_humo_probable
 from ..imagenes import validar_par_alineado
 from ..modelos_segmentacion import ResultadoClasificacionSemantica
 from ..ontologia import ClaseSemantica
 from ..progreso import ProgresoSegmentacion, informar_progreso as _informar_progreso
+
+
+PESOS_SCORE_POR_DEFECTO = {
+    "swir_red": 1.25,
+    "swir_chroma": 0.18,
+    "true_green": -0.62,
+    "true_luminance": -0.22,
+    "swir_luminance": -0.12,
+    "true_chroma": 0.10,
+    "swir_red_green": 0.22,
+    "true_blue": -0.30,
+}
 
 
 def clasificar_pixeles_area_afectada(
@@ -21,6 +33,10 @@ def clasificar_pixeles_area_afectada(
     numero_clases: int = 7,
     sensibilidad: int = 5,
     semilla: int = 42,
+    pesos_score: dict[str, float] | None = None,
+    pesos_humo: dict[str, float] | None = None,
+    umbral_humo: float = 0.55,
+    umbrales_agua: dict[str, float] | None = None,
     on_progress: ProgresoSegmentacion | None = None,
 ) -> ResultadoClasificacionSemantica:
     """Clasifica evidencias de área afectada usando ambas imágenes por píxel.
@@ -34,11 +50,24 @@ def clasificar_pixeles_area_afectada(
         raise ValueError("El número de clases debe estar entre 2 y 12.")
     if not 1 <= sensibilidad <= 10:
         raise ValueError("La sensibilidad debe estar entre 1 y 10.")
+    pesos = dict(PESOS_SCORE_POR_DEFECTO if pesos_score is None else pesos_score)
+    if set(pesos) != set(PESOS_SCORE_POR_DEFECTO):
+        raise ValueError("Los pesos K-Means deben incluir las ocho señales reconocidas.")
+    coeficientes = np.asarray([pesos[nombre] for nombre in PESOS_SCORE_POR_DEFECTO], dtype=np.float32)
+    if not np.all(np.isfinite(coeficientes)):
+        raise ValueError("Los pesos K-Means deben ser números finitos.")
+    if not np.any(coeficientes):
+        raise ValueError("Al menos un peso de K-Means debe ser distinto de cero.")
 
     # La oclusión atmosférica se modela primero. Los píxeles cubiertos por humo
     # no enseñan al agrupador cómo se ve una superficie despejada.
     _informar_progreso(on_progress, "Buscando zonas con posible humo", 12)
-    humo = detectar_humo_probable(true_color, swir)
+    humo = detectar_humo_probable(
+        true_color,
+        swir,
+        pesos_confianza=pesos_humo,
+        umbral_confianza=umbral_humo,
+    )
     mascara_humo = humo.mascara_probable
     _informar_progreso(on_progress, "Extrayendo señales de color", 25)
     features = extraer_caracteristicas_pareja(true_color, swir)
@@ -91,16 +120,7 @@ def clasificar_pixeles_area_afectada(
             centros[clase, 6:] = pixeles_clase.mean(axis=0)
 
     # La puntuación fusiona evidencias de ambas composiciones en cada clase.
-    puntuaciones = (
-        1.25 * centros[:, 0]
-        + 0.18 * centros[:, 1]
-        - 0.62 * centros[:, 2]
-        - 0.22 * centros[:, 3]
-        - 0.12 * centros[:, 4]
-        + 0.10 * centros[:, 5]
-        + 0.22 * centros[:, 6]
-        - 0.30 * centros[:, 7]
-    )
+    puntuaciones = centros[:, :8] @ coeficientes
 
     elegibles = (centros[:, 4] > -2.0) | (
         (centros[:, 0] > 1.5) & (centros[:, 1] > 0.0)
@@ -121,16 +141,7 @@ def clasificar_pixeles_area_afectada(
     normalizado_3d = normalizado.reshape(alto, ancho, numero_caracteristicas)
     etiquetas = modelo.predict(normalizado[:, :6]).reshape(alto, ancho)
     _informar_progreso(on_progress, "Clasificando píxeles", 72)
-    puntuacion_pixel = (
-        1.25 * normalizado_3d[:, :, 0]
-        + 0.18 * normalizado_3d[:, :, 1]
-        - 0.62 * normalizado_3d[:, :, 2]
-        - 0.22 * normalizado_3d[:, :, 3]
-        - 0.12 * normalizado_3d[:, :, 4]
-        + 0.10 * normalizado_3d[:, :, 5]
-        + 0.22 * normalizado_3d[:, :, 6]
-        - 0.30 * normalizado_3d[:, :, 7]
-    )
+    puntuacion_pixel = normalizado_3d[:, :, :8] @ coeficientes
     margen_pixel = 0.35 + (sensibilidad - 1) * 0.16
     mascara = np.isin(etiquetas, seleccionadas) & (
         puntuacion_pixel >= puntuaciones[mejor] - margen_pixel
@@ -141,19 +152,10 @@ def clasificar_pixeles_area_afectada(
     rojo_verde_minimo = max(-0.75, float(np.quantile(muestra_z[:, 6], 0.35)))
     mascara &= normalizado_3d[:, :, 6] >= rojo_verde_minimo
 
-    # True Color aporta el contexto para reducir confusiones con agua oscura.
-    muestra_cruda = plano[indices]
-    luma_tc_oscura = float(np.quantile(muestra_cruda[:, 3], 0.18))
-    tc_azul_umbral = max(0.04, float(np.quantile(muestra_cruda[:, 7], 0.85)))
-    tc_croma_baja = float(np.quantile(muestra_cruda[:, 5], 0.20))
-    swir_rg_no_rojo = float(np.quantile(muestra_cruda[:, 6], 0.70))
-    visible_oscura = features[:, :, 3] <= luma_tc_oscura
-    agua_azulada = visible_oscura & (features[:, :, 7] >= tc_azul_umbral)
-    agua_oscura_ambigua = visible_oscura & (
-        (features[:, :, 5] <= tc_croma_baja)
-        | (features[:, :, 6] <= swir_rg_no_rojo)
+    # True Color y SWIR deben coincidir antes de vetar un píxel como agua.
+    mascara_agua = detectar_agua_probable(
+        features, mascara_humo, umbrales_percentil=umbrales_agua
     )
-    mascara_agua = (agua_azulada | agua_oscura_ambigua) & ~mascara_humo
     mascara &= ~mascara_agua
     # Bajo humo no se aplica la regla cromática de terreno despejado. El fondo
     # queda indeterminado hasta disponer de bandas/calidad para otra política.

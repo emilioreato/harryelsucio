@@ -7,14 +7,14 @@ from .segmentacion import ResultadoAreaAfectada
 
 
 def crear_superposicion(
-    true_color: np.ndarray,
+    imagen_base: np.ndarray,
     resultado: ResultadoAreaAfectada,
 ) -> np.ndarray:
-    """Dibuja relleno translúcido y perímetro sobre True Color."""
-    if true_color.shape[:2] != resultado.mascara.shape:
+    """Dibuja relleno translúcido y perímetro sobre una composición RGB."""
+    if imagen_base.shape[:2] != resultado.mascara.shape:
         raise ValueError("La imagen y la máscara deben tener las mismas dimensiones.")
 
-    salida = superponer_mascara(true_color, resultado.mascara)
+    salida = superponer_mascara(imagen_base, resultado.mascara)
     salida = superponer_mascara(
         salida,
         resultado.mascara_humo,

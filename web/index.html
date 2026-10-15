@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#f4ead8">
+    <title>PyroScope · Área afectada</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="PyroScope, inicio">
+        <span class="brand-mark" aria-hidden="true">🔥</span>
+        <span class="brand-copy"><strong>PyroScope</strong><small>Área afectada</small></span>
+      </a>
+      <div class="topbar-context">
+        <span class="status-dot" id="connection-dot"></span>
+        <span id="connection-label">Conectando con el motor local…</span>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="control-panel" aria-label="Configuración del análisis">
+        <div class="panel-heading">
+          <div><p class="eyebrow">ENTRADA</p><h1>Preparar análisis</h1></div>
+          <span class="step-badge">01</span>
+        </div>
+
+        <div class="source-switch" role="tablist" aria-label="Origen de las imágenes">
+          <button class="source-tab is-active" type="button" data-source="preloaded" role="tab" aria-selected="true">Escenas</button>
+          <button class="source-tab" type="button" data-source="upload" role="tab" aria-selected="false">Subir pareja</button>
+        </div>
+
+        <section class="source-content" id="preloaded-source">
+          <label class="field-label" for="scene-select">Escena precargada</label>
+          <select class="field-control" id="scene-select" aria-describedby="scene-help">
+            <option value="">Buscando imágenes…</option>
+          </select>
+          <p class="field-help" id="scene-help">Cada escena incluye True Color y SWIR de la misma adquisición.</p>
+        </section>
+
+        <section class="source-content is-hidden" id="upload-source">
+          <label class="field-label" for="true-file">Imagen True Color</label>
+          <input class="file-control" id="true-file" type="file" accept=".jpg,.jpeg,.png,.tif,.tiff,image/*">
+          <label class="field-label second-file-label" for="swir-file">Imagen SWIR</label>
+          <input class="file-control" id="swir-file" type="file" accept=".jpg,.jpeg,.png,.tif,.tiff,image/*">
+          <p class="field-help">Usa dos imágenes alineadas de la misma escena y fecha.</p>
+        </section>
+
+        <div class="section-rule"><span>SEGMENTACIÓN</span></div>
+        <label class="field-label" for="detector-select">Método de detección</label>
+        <select class="field-control" id="detector-select"></select>
+        <p class="field-help" id="detector-help"></p>
+
+        <div class="range-row">
+          <label class="field-label" for="sensitivity">Sensibilidad</label>
+          <output class="range-value" id="sensitivity-value" for="sensitivity">5</output>
+        </div>
+        <input class="range-control" id="sensitivity" type="range" min="1" max="10" value="5">
+
+        <div class="range-row" id="classes-row">
+          <label class="field-label" for="num-classes">Grupos de color</label>
+          <output class="range-value" id="classes-value" for="num-classes">7</output>
+        </div>
+        <input class="range-control" id="num-classes" type="range" min="4" max="10" value="7">
+
+        <div class="compact-fields">
+          <div>
+            <label class="field-label" for="minimum-area">Área mínima (%)</label>
+            <input class="field-control" id="minimum-area" type="number" min="0.01" max="1" step="0.01" value="0.15">
+          </div>
+          <div>
+            <label class="field-label" for="max-distance">Radio máximo (%)</label>
+            <input class="field-control" id="max-distance" type="number" min="3" max="20" step="1" value="10">
+          </div>
+        </div>
+
+        <label class="check-row" for="keep-separate">
+          <input id="keep-separate" type="checkbox">
+          <span>Conservar focos separados</span>
+        </label>
+
+        <details class="details-panel developer-settings" id="developer-settings">
+          <summary>Herramientas de desarrollo</summary>
+          <div class="developer-content">
+            <p class="field-help">Ajustes experimentales del score y los umbrales. Los resultados son hipótesis visuales, no probabilidades calibradas.</p>
+
+            <details class="tuning-group">
+              <summary>Score compartido de humo</summary>
+              <div class="tuning-content">
+                <p class="field-help">Los pesos se normalizan por su suma. Un umbral mayor exige más evidencia antes de marcar humo.</p>
+                <div class="range-row">
+                  <label class="field-label" for="smoke-cyan-weight">Firma cian SWIR</label>
+                  <output class="range-value" id="smoke-cyan-weight-value" for="smoke-cyan-weight">65 %</output>
+                </div>
+                <input class="range-control" id="smoke-cyan-weight" type="range" min="0" max="1" step="0.05" value="0.65">
+                <div class="range-row">
+                  <label class="field-label" for="smoke-luminance-weight">Luminosidad True Color</label>
+                  <output class="range-value" id="smoke-luminance-weight-value" for="smoke-luminance-weight">20 %</output>
+                </div>
+                <input class="range-control" id="smoke-luminance-weight" type="range" min="0" max="1" step="0.05" value="0.20">
+                <div class="range-row">
+                  <label class="field-label" for="smoke-neutrality-weight">Neutralidad True Color</label>
+                  <output class="range-value" id="smoke-neutrality-weight-value" for="smoke-neutrality-weight">15 %</output>
+                </div>
+                <input class="range-control" id="smoke-neutrality-weight" type="range" min="0" max="1" step="0.05" value="0.15">
+                <div class="range-row">
+                  <label class="field-label" for="smoke-threshold">Confianza mínima</label>
+                  <output class="range-value" id="smoke-threshold-value" for="smoke-threshold">55 %</output>
+                </div>
+                <input class="range-control" id="smoke-threshold" type="range" min="0" max="1" step="0.05" value="0.55">
+              </div>
+            </details>
+
+            <details class="tuning-group">
+              <summary>Veto de agua entre las dos vistas</summary>
+              <div class="tuning-content tuning-grid">
+                <label class="tuning-field" for="water-true-darkness"><span>Oscuridad True Color · percentil</span><input id="water-true-darkness" type="number" min="0.01" max="0.99" step="0.01" value="0.20"></label>
+                <label class="tuning-field" for="water-swir-darkness"><span>Oscuridad SWIR · percentil</span><input id="water-swir-darkness" type="number" min="0.01" max="0.99" step="0.01" value="0.10"></label>
+                <label class="tuning-field" for="water-swir-red"><span>Máximo rojo SWIR · percentil</span><input id="water-swir-red" type="number" min="0.01" max="0.99" step="0.01" value="0.55"></label>
+                <label class="tuning-field" for="water-swir-red-green"><span>Máximo rojo/verde SWIR · percentil</span><input id="water-swir-red-green" type="number" min="0.01" max="0.99" step="0.01" value="0.55"></label>
+                <p class="field-help tuning-note">El veto exige concordancia de oscuridad en ambas imágenes y ausencia de rojo SWIR. Los percentiles más bajos son más restrictivos.</p>
+              </div>
+            </details>
+
+            <details class="tuning-group is-hidden" id="fusion-adjustments">
+              <summary>Ponderación entre algoritmos</summary>
+              <div class="tuning-content">
+                <p class="field-help">El voto de cada detector se normaliza por la suma de los pesos. El umbral indica cuánto voto hace falta para aceptar un píxel.</p>
+                <div class="range-row">
+                  <label class="field-label" for="fusion-kmeans-weight">Peso K-Means</label>
+                  <output class="range-value" id="fusion-kmeans-weight-value" for="fusion-kmeans-weight">50 %</output>
+                </div>
+                <input class="range-control" id="fusion-kmeans-weight" type="range" min="0" max="1" step="0.05" value="0.5">
+                <div class="range-row">
+                  <label class="field-label" for="fusion-swir-weight">Peso SWIR + histéresis</label>
+                  <output class="range-value" id="fusion-swir-weight-value" for="fusion-swir-weight">50 %</output>
+                </div>
+                <input class="range-control" id="fusion-swir-weight" type="range" min="0" max="1" step="0.05" value="0.5">
+                <div class="range-row">
+                  <label class="field-label" for="fusion-threshold">Voto mínimo</label>
+                  <output class="range-value" id="fusion-threshold-value" for="fusion-threshold">55 %</output>
+                </div>
+                <input class="range-control" id="fusion-threshold" type="range" min="0" max="1" step="0.05" value="0.55">
+              </div>
+            </details>
+
+            <details class="tuning-group is-hidden" id="kmeans-adjustments">
+              <summary>Score de K-Means</summary>
+              <div class="tuning-content tuning-grid">
+                <label class="tuning-field" for="weight-swir-red"><span>Predominio rojo SWIR</span><input id="weight-swir-red" type="number" min="-3" max="3" step="0.05" value="1.25"></label>
+                <label class="tuning-field" for="weight-swir-chroma"><span>Cromaticidad SWIR</span><input id="weight-swir-chroma" type="number" min="-3" max="3" step="0.05" value="0.18"></label>
+                <label class="tuning-field" for="weight-true-green"><span>Verdor True Color</span><input id="weight-true-green" type="number" min="-3" max="3" step="0.05" value="-0.62"></label>
+                <label class="tuning-field" for="weight-true-luminance"><span>Luminosidad True Color</span><input id="weight-true-luminance" type="number" min="-3" max="3" step="0.05" value="-0.22"></label>
+                <label class="tuning-field" for="weight-swir-luminance"><span>Luminosidad SWIR</span><input id="weight-swir-luminance" type="number" min="-3" max="3" step="0.05" value="-0.12"></label>
+                <label class="tuning-field" for="weight-true-chroma"><span>Cromaticidad True Color</span><input id="weight-true-chroma" type="number" min="-3" max="3" step="0.05" value="0.10"></label>
+                <label class="tuning-field" for="weight-swir-red-green"><span>Rojo sobre verde SWIR</span><input id="weight-swir-red-green" type="number" min="-3" max="3" step="0.05" value="0.22"></label>
+                <label class="tuning-field" for="weight-true-blue"><span>Predominio azul True Color</span><input id="weight-true-blue" type="number" min="-3" max="3" step="0.05" value="-0.30"></label>
+                <p class="field-help tuning-note">Un peso positivo favorece esa señal en el score; uno negativo la penaliza. Los pesos se aplican a señales normalizadas por escena.</p>
+              </div>
+            </details>
+
+            <details class="tuning-group is-hidden" id="swir-adjustments">
+              <summary>Percentiles SWIR e histéresis</summary>
+              <div class="tuning-content tuning-grid">
+                <label class="tuning-field" for="swir-seed-red"><span>Semilla · rojo SWIR</span><input id="swir-seed-red" type="number" min="0.80" max="0.9999" step="0.001" placeholder="Automático"></label>
+                <label class="tuning-field" for="swir-grow-red"><span>Crecimiento · rojo SWIR</span><input id="swir-grow-red" type="number" min="0.50" max="0.98" step="0.001" placeholder="Automático"></label>
+                <label class="tuning-field" for="swir-seed-rg"><span>Semilla · rojo/verde</span><input id="swir-seed-rg" type="number" min="0.40" max="0.99" step="0.001" placeholder="Automático"></label>
+                <label class="tuning-field" for="swir-grow-rg"><span>Crecimiento · rojo/verde</span><input id="swir-grow-rg" type="number" min="0.30" max="0.98" step="0.001" placeholder="Automático"></label>
+                <label class="tuning-field tuning-field-wide" for="swir-vegetation-max"><span>Límite de verdor True Color</span><input id="swir-vegetation-max" type="number" min="0.50" max="1" step="0.001" placeholder="Automático"></label>
+                <p class="field-help tuning-note">Deja un campo vacío para que el percentil se adapte a la sensibilidad y al histograma de la escena. Un percentil de semilla mayor exige una señal más intensa.</p>
+              </div>
+            </details>
+
+            <button class="text-button reset-tuning" id="reset-tuning" type="button">Restablecer ajustes finos</button>
+          </div>
+        </details>
+
+        <div class="section-rule measurement-rule"><span>MEDICIÓN</span></div>
+        <label class="field-label" for="gsd">GSD · metros por píxel <span class="optional">opcional</span></label>
+        <input class="field-control" id="gsd" type="number" min="0.000001" step="any" inputmode="decimal" placeholder="Sin escala: medidas en píxeles">
+
+        <button class="run-button" id="run-analysis" type="button">
+          <span class="run-icon" aria-hidden="true">▶</span><span>Iniciar segmentación</span>
+        </button>
+        <p class="form-error" id="form-error" role="alert"></p>
+      </aside>
+
+      <section class="analysis-column" aria-label="Plano y progreso">
+        <div class="analysis-heading">
+          <div class="analysis-title">
+            <p class="eyebrow">PLANO DE ANÁLISIS</p>
+            <h2 id="analysis-scene">Selecciona una escena</h2>
+          </div>
+          <div class="progress-summary" aria-live="polite">
+            <span id="progress-label">Listo para analizar</span>
+            <strong id="progress-value">0%</strong>
+          </div>
+        </div>
+
+        <div class="progress-track" role="progressbar" aria-label="Progreso del análisis" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress-track">
+          <span id="progress-fill"></span>
+        </div>
+
+        <div class="viewer-card">
+          <div class="viewer-toolbar">
+            <div class="layer-control" role="group" aria-label="Composición visible">
+              <button class="layer-choice" type="button" data-layer="true-color" aria-pressed="false" disabled>True Color</button>
+              <button class="layer-choice is-active" type="button" data-layer="swir" aria-pressed="true" disabled>SWIR</button>
+              <button class="layer-choice" type="button" data-layer="candidates" aria-pressed="false" disabled>Clases + humo</button>
+            </div>
+            <label class="toggle-control view-mode-toggle" for="show-segmentation">
+              <input id="show-segmentation" type="checkbox" checked disabled>
+              <span class="toggle-track"><span></span></span>
+              <span id="segmentation-label">Con segmentación</span>
+            </label>
+            <label class="toggle-control" for="show-marks">
+              <input id="show-marks" type="checkbox" checked disabled>
+              <span class="toggle-track"><span></span></span>
+              <span>Marcas</span>
+            </label>
+          </div>
+
+          <div class="image-stage" id="image-stage">
+            <div class="empty-state" id="empty-state">
+              <span class="empty-mark" aria-hidden="true">⌁</span>
+              <strong>La imagen aparecerá aquí</strong>
+              <span>Elige una escena y ejecuta la segmentación.</span>
+            </div>
+            <img id="analysis-image" alt="Vista de análisis satelital" hidden>
+            <canvas id="mark-canvas" hidden></canvas>
+            <div class="pixel-readout" id="pixel-readout" hidden></div>
+          </div>
+
+          <div class="measurement-toolbar" aria-label="Herramientas de medición">
+            <div class="tool-group" role="group" aria-label="Herramienta">
+              <button class="tool-button is-active" type="button" data-tool="view" disabled>Vista</button>
+              <button class="tool-button" type="button" data-tool="distance" disabled>Distancia</button>
+              <button class="tool-button" type="button" data-tool="polygon" disabled>Polígono</button>
+              <button class="tool-button" type="button" data-tool="pixel" disabled>Píxel</button>
+            </div>
+            <div class="mark-actions">
+              <button class="text-button" id="undo-mark" type="button" disabled>Deshacer</button>
+              <button class="text-button" id="close-polygon" type="button" disabled>Cerrar área</button>
+              <button class="text-button" id="clear-marks" type="button" disabled>Borrar marcas</button>
+            </div>
+          </div>
+          <div class="measurement-result" id="measurement-result" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <aside class="results-column" aria-label="Resultado de la segmentación">
+        <div class="results-heading">
+          <div><p class="eyebrow">SALIDA</p><h2>Resultado</h2></div>
+          <span class="step-badge">02</span>
+        </div>
+        <div class="result-state" id="result-state">Aún no hay un análisis.</div>
+        <div class="metrics-grid" id="metrics-grid" hidden>
+          <article class="metric-card metric-primary"><span>Superficie candidata</span><strong id="metric-coverage">—</strong></article>
+          <article class="metric-card"><span>Área</span><strong id="metric-area">—</strong></article>
+          <article class="metric-card"><span>Perímetro</span><strong id="metric-perimeter">—</strong></article>
+          <article class="metric-card"><span>Humo probable</span><strong id="metric-smoke">—</strong></article>
+        </div>
+        <p class="result-caveat" id="result-caveat" hidden>Hipótesis automática; requiere revisión humana. El humo y las cubiertas oscuras pueden generar zonas indeterminadas o falsos positivos.</p>
+
+        <div class="section-rule result-rule"><span>EXPORTAR</span></div>
+        <button class="export-button" id="download-map" type="button" disabled><span>Mapa con contorno</span><span>PNG ↓</span></button>
+        <button class="export-button" id="download-mask" type="button" disabled><span>Máscara segmentada</span><span>PNG ↓</span></button>
+        <button class="export-button" id="download-measurements" type="button" disabled><span>Puntos y medidas</span><span>JSON ↓</span></button>
+
+        <details class="details-panel">
+          <summary>Detalles del análisis</summary>
+          <div id="analysis-details" class="details-content">Al terminar, aquí se muestran el detector y la rejilla usada.</div>
+        </details>
+
+        <details class="details-panel notes-panel">
+          <summary>Notas de campo</summary>
+          <form id="note-form" class="note-form">
+            <label class="sr-only" for="note-text">Nueva nota</label>
+            <input id="note-text" class="field-control" type="text" maxlength="240" placeholder="Añadir una nota…">
+            <button class="icon-button" type="submit" aria-label="Guardar nota">+</button>
+          </form>
+          <ul class="notes-list" id="notes-list"></ul>
+        </details>
+      </aside>
+    </main>
+  </body>
+</html>

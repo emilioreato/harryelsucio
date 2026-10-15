@@ -1,4 +1,4 @@
-"""Contrato de progreso para informar hitos sin acoplar el motor a Streamlit."""
+"""Contrato de progreso para informar hitos sin acoplar el motor a una interfaz."""
 
 from __future__ import annotations
 

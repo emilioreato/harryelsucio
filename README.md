@@ -46,8 +46,7 @@ No mezcles `python` y `py -3.12` entre instalación y ejecución: deben apuntar 
 Desde la raíz del repositorio, ejecuta:
 
 ```powershell
-python -c "import numpy, pandas, scipy, rasterio, skimage, cv2, sklearn, PIL, geopandas, shapely, pyproj, streamlit, plotly, requests; print('Dependencias principales: OK')"
-python -m streamlit --version
+python -c "import numpy, pandas, scipy, rasterio, skimage, cv2, sklearn, PIL, geopandas, shapely, pyproj, plotly, requests; print('Dependencias principales: OK')"
 python -m pytest
 ```
 
@@ -56,12 +55,12 @@ El último comando ejecuta las pruebas disponibles. Si todavía no hay tests, py
 La primera versión de la aplicación, centrada en el reto básico, se ejecuta desde la raíz así:
 
 ```powershell
-python -m streamlit run app.py
+python app.py
 ```
 
-En Windows también puedes iniciarla con doble clic en [`encender_aplicacion.bat`](encender_aplicacion.bat), situado en la raíz del repositorio. El script selecciona Python 3.12 o 3.11 si están disponibles, abre la página local en el navegador y mantiene una ventana de consola con los mensajes de Streamlit. Deja esa ventana abierta mientras uses la aplicación; para detenerla, pulsa `Ctrl+C`.
+En Windows también puedes iniciarla con doble clic en [`encender_aplicacion.bat`](encender_aplicacion.bat), situado en la raíz del repositorio. El script selecciona Python 3.12 o 3.11 si están disponibles y abre la página local en el navegador. Deja esa ventana abierta mientras uses la aplicación; para detenerla, pulsa `Ctrl+C`.
 
-Se abre en el navegador. Permite elegir una escena de ejemplo o cargar una pareja alineada True Color/SWIR. El panel **Plano de análisis** alterna las composiciones, la superposición y la capa de candidatos/humo; también permite medir distancias y polígonos e inspeccionar píxeles. El panel lateral resume área, perímetro, oclusión por humo y otros datos calculados, y ofrece descargas y notas temporales de campo. El progreso avanza al terminar etapas del algoritmo, no estima el tiempo restante. Sin escala, las medidas quedan en píxeles; cuando se conozca el GSD real de la pareja, se introduce en metros por píxel. No hay que suponer que un JPEG conserva la resolución nominal del satélite.
+Se abre en el navegador. Permite elegir una escena precargada o subir una pareja True Color/SWIR. Las parejas precargadas se guardan en `imagenes/<nombre-de-escena>/`, una carpeta por escena con solo un archivo True Color y otro SWIR de la misma adquisición. La aplicación descubre esas carpetas al cargarse; admite JPEG, PNG y TIFF. El panel **Plano de análisis** alterna las composiciones, la superposición y la capa de candidatos/humo; también permite medir distancias y polígonos e inspeccionar píxeles. El panel lateral resume área, perímetro, oclusión por humo y otros datos calculados, y ofrece descargas y notas temporales de campo. El progreso avanza al terminar etapas del algoritmo, no estima el tiempo restante. Sin escala, las medidas quedan en píxeles; cuando se conozca el GSD real de la pareja, se introduce en metros por píxel. No hay que suponer que un JPEG conserva la resolución nominal del satélite.
 
 ### Detectores y tratamiento del humo
 
@@ -71,7 +70,7 @@ Antes de clasificar el suelo, la aplicación estima humo probable con ambas comp
 
 El filtro espacial prioriza por defecto el componente candidato más grande y puede descartar candidatos alejados. Si la escena puede contener focos independientes, activa **Conservar regiones desconectadas**; así se mantienen los componentes que superan el tamaño mínimo. Las coberturas mostradas son fracciones de píxeles candidatos, no una medida de precisión ni una estimación de fuego activo.
 
-La interfaz web se sirve con Streamlit y ejecuta el motor Python en el servidor. Los estilos están separados en `assets/pyroscope.css`; el algoritmo y las coordenadas siguen en `pyroscope/`. Aún no hay una API REST independiente: si más adelante se cambia a otro frontend, el motor puede exponerse sin rehacer los cálculos.
+La web propia vive en `web/` (HTML, CSS y JavaScript) y se sirve junto con una API local delgada en Python. El servidor ejecuta los algoritmos, informa del progreso y entrega las capas y exportaciones a la página; no usa Streamlit ni requiere una segunda instalación de frontend. La preparación de imágenes y el motor científico siguen en `pyroscope/`.
 
 La aplicación y sus resultados usan una rejilla común de píxeles con origen arriba a la izquierda. Máscaras, marcas manuales y capas auxiliares deben compartir esa rejilla; para combinar en el futuro capas meteorológicas o geográficas será necesario transformarlas/alinearlas a la imagen y conservar su CRS y transformación geográfica. El GSD basta para mediciones métricas locales, pero no para obtener latitud/longitud. Los pasos del algoritmo y sus límites se explican en [`DOCUMENTACION/Ideas/segmentacion_basica.md`](DOCUMENTACION/Ideas/segmentacion_basica.md).
 

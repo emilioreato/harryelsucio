@@ -29,7 +29,7 @@ La detección de cada clase tiene errores distintos; no debe utilizarse toda el 
 
 - **QGIS:** inspección de imágenes, coordenadas, bandas, superposición, recortes, relieve y control de calidad cartográfica.
 - **Python:** `rasterio`, `numpy`, `scipy`, `scikit-image`/`opencv`, `scikit-learn` para procesamiento y análisis; `geopandas`/`shapely` cuando se necesiten geometrías.
-- **Streamlit:** interfaz rápida, mapas, controles, superposiciones y descarga de resultados.
+- **Interfaz web:** HTML, CSS y JavaScript propios; Python sirve la página y mantiene el procesamiento en el backend.
 - **Detección incremental:** índice espectral y umbral → limpieza morfológica y contornos → clasificación supervisada simple si hace falta. Otsu y K-Means pueden servir de línea base; Random Forest puede aprender con píxeles etiquetados. SAM es opcional, no imprescindible y no entiende automáticamente la semántica del fuego.
 
 Si están disponibles **B08 (NIR) y B12 (SWIR)**, evaluar el índice **NBR = (B08 − B12) / (B08 + B12)** para estudiar superficies quemadas; no inventar un NBR exacto a partir de una imagen de falso color. Un **dNBR** temporal exige imágenes de fechas diferentes, preferiblemente antes y después del incendio.
@@ -110,7 +110,7 @@ Para evaluar detección, utilizar ejemplos etiquetados y, cuando exista referenc
 - El gradiente del DEM debe calcularse respecto a **distancias horizontales**, no normalizarse por la altura absoluta o percentil de elevación.
 - El adaptador meteorológico automático es todavía un **stub** y las constantes de propagación, riesgo y humo son **orientativas**, no un modelo calibrado.
 
-No descartar el manual: conservar su estructura útil (Python, Streamlit, módulos y pruebas), pero **validar primero el tratamiento de imágenes y las capas históricas antes de ampliar la simulación**.
+Conservar del manual la estructura modular de Python y las pruebas; **validar primero el tratamiento de imágenes y las capas históricas antes de ampliar la simulación**.
 
 ## 7. Orden de trabajo propuesto
 

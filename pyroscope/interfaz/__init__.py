@@ -1,5 +1,1 @@
-"""Capa de presentación Streamlit separada del motor científico."""
-
-from .aplicacion import main
-
-__all__ = ["main"]
+"""Carga de escenas y preparación de parejas para la interfaz web propia."""

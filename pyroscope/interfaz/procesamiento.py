@@ -1,11 +1,10 @@
-"""Carga, validación y ejecución cacheada del motor de análisis."""
+"""Carga, validación y ejecución del motor de análisis."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
-import streamlit as st
 
 from ..coordenadas import SistemaCoordenadasImagen
 from ..imagenes import abrir_rgb, reducir_par_alineado
@@ -22,7 +21,6 @@ class ParejaPreparada:
     gsd_y_m: float | None
 
 
-@st.cache_data(show_spinner=False, max_entries=8)
 def preparar_pareja(
     true_bytes: bytes,
     swir_bytes: bytes,
@@ -61,6 +59,7 @@ def procesar_pareja(
     metodo: str,
     conservar_regiones_separadas: bool,
     on_progress: ProgresoSegmentacion | None = None,
+    ajustes_avanzados: dict[str, object] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, ResultadoAreaAfectada]:
     """Reduce en pareja y llama al servicio de segmentación compartido."""
     true_reducido, swir_reducida = reducir_par_alineado(
@@ -85,5 +84,6 @@ def procesar_pareja(
         on_progress=on_progress,
         metodo=metodo,
         conservar_regiones_separadas=conservar_regiones_separadas,
+        ajustes_avanzados=ajustes_avanzados,
     )
     return true_reducido, swir_reducida, resultado

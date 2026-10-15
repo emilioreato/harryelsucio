@@ -5,6 +5,7 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
+from ..agua import detectar_agua_probable
 from ..caracteristicas import extraer_caracteristicas_pareja
 from ..humo import detectar_humo_probable
 from ..imagenes import validar_par_alineado
@@ -18,21 +19,56 @@ def clasificar_pixeles_area_afectada_swir(
     swir: np.ndarray,
     *,
     sensibilidad: int = 5,
+    umbrales_percentil: dict[str, float | None] | None = None,
+    pesos_humo: dict[str, float] | None = None,
+    umbral_humo: float = 0.55,
+    umbrales_agua: dict[str, float] | None = None,
     on_progress: ProgresoSegmentacion | None = None,
 ) -> ResultadoClasificacionSemantica:
     """Propone superficie afectada con contraste cromático SWIR e histéresis.
 
     El umbral alto localiza semillas con una señal rojiza SWIR marcada; el
     umbral bajo permite crecer desde esas semillas por píxeles contiguos que
-    conservan evidencia cromática moderada. True Color veta posible agua y
-    vegetación muy verde, y la máscara de humo se aplica antes del crecimiento.
+    conservan evidencia cromática moderada. True Color aporta el verdor y la
+    oscuridad visible; ambas vistas se combinan para vetar agua. El humo se
+    aparta antes del crecimiento.
     """
     validar_par_alineado(true_color, swir)
     if not 1 <= sensibilidad <= 10:
         raise ValueError("La sensibilidad debe estar entre 1 y 10.")
+    ajustes_umbral = umbrales_percentil or {}
+    nombres_umbral = {
+        "seed_red",
+        "grow_red",
+        "seed_red_green",
+        "grow_red_green",
+        "vegetation_max",
+    }
+    if set(ajustes_umbral) - nombres_umbral:
+        raise ValueError("Se recibió un percentil SWIR no reconocido.")
+    rangos_percentiles = {
+        "seed_red": (0.80, 0.9999),
+        "grow_red": (0.50, 0.98),
+        "seed_red_green": (0.40, 0.99),
+        "grow_red_green": (0.30, 0.98),
+        "vegetation_max": (0.50, 1.0),
+    }
+    for nombre, valor in ajustes_umbral.items():
+        if valor is None:
+            continue
+        minimo, maximo = rangos_percentiles[nombre]
+        if not np.isfinite(valor) or not minimo <= valor <= maximo:
+            raise ValueError(
+                f"El percentil SWIR '{nombre}' debe estar entre {minimo} y {maximo}."
+            )
 
     _informar_progreso(on_progress, "Buscando zonas con posible humo", 12)
-    humo = detectar_humo_probable(true_color, swir)
+    humo = detectar_humo_probable(
+        true_color,
+        swir,
+        pesos_confianza=pesos_humo,
+        umbral_confianza=umbral_humo,
+    )
     mascara_humo = humo.mascara_probable
     alto, ancho = true_color.shape[:2]
     _informar_progreso(on_progress, "Midiendo contraste SWIR y contexto visible", 35)
@@ -40,7 +76,6 @@ def clasificar_pixeles_area_afectada_swir(
     rojo_swir = caracteristicas[:, :, 0]
     rojo_verde_swir = caracteristicas[:, :, 6]
     verde_visible = caracteristicas[:, :, 2]
-    luma_visible = caracteristicas[:, :, 3]
     despejado = ~mascara_humo
 
     if not np.any(despejado):
@@ -60,17 +95,29 @@ def clasificar_pixeles_area_afectada_swir(
     # Los percentiles por escena toleran estiramientos distintos de la
     # composición. La sensibilidad baja los dos umbrales sin alterar la firma.
     cuantiles = rojo_swir[despejado]
-    fraccion_semilla = 0.994 - (sensibilidad - 1) * 0.006
-    fraccion_crecimiento = 0.94 - (sensibilidad - 1) * 0.010
-    umbral_semilla = float(np.quantile(cuantiles, fraccion_semilla))
-    umbral_crecimiento = float(np.quantile(cuantiles, fraccion_crecimiento))
+    percentiles = {
+        "seed_red": 0.994 - (sensibilidad - 1) * 0.006,
+        "grow_red": 0.94 - (sensibilidad - 1) * 0.010,
+        "seed_red_green": 0.82 - (sensibilidad - 1) * 0.005,
+        "grow_red_green": 0.68 - (sensibilidad - 1) * 0.012,
+        "vegetation_max": 0.90,
+    }
+    percentiles.update({k: v for k, v in ajustes_umbral.items() if v is not None})
+    if percentiles["grow_red"] > percentiles["seed_red"]:
+        raise ValueError("El percentil de crecimiento SWIR debe ser menor o igual al de semilla.")
+    if percentiles["grow_red_green"] > percentiles["seed_red_green"]:
+        raise ValueError("El percentil rojo/verde de crecimiento debe ser menor o igual al de semilla.")
+    umbral_semilla = float(np.quantile(cuantiles, percentiles["seed_red"]))
+    umbral_crecimiento = float(np.quantile(cuantiles, percentiles["grow_red"]))
     umbral_rg_semilla = float(
-        np.quantile(rojo_verde_swir[despejado], 0.82 - (sensibilidad - 1) * 0.005)
+        np.quantile(rojo_verde_swir[despejado], percentiles["seed_red_green"])
     )
     umbral_rg_crecimiento = float(
-        np.quantile(rojo_verde_swir[despejado], 0.68 - (sensibilidad - 1) * 0.012)
+        np.quantile(rojo_verde_swir[despejado], percentiles["grow_red_green"])
     )
-    limite_vegetacion = float(np.quantile(verde_visible[despejado], 0.90))
+    limite_vegetacion = float(
+        np.quantile(verde_visible[despejado], percentiles["vegetation_max"])
+    )
 
     # Evita que los umbrales degeneren si la escena tiene un histograma plano.
     umbral_crecimiento = min(umbral_crecimiento, umbral_semilla)
@@ -87,20 +134,8 @@ def clasificar_pixeles_area_afectada_swir(
         & despejado
     )
 
-    # Agua probable: True Color oscuro/azulado más baja separación SWIR rojo-verde.
-    luma_tc_oscura = float(np.quantile(luma_visible[despejado], 0.18))
-    tc_azul_umbral = max(0.04, float(np.quantile(caracteristicas[:, :, 7][despejado], 0.85)))
-    tc_croma_baja = float(np.quantile(caracteristicas[:, :, 5][despejado], 0.20))
-    swir_rg_no_rojo = float(np.quantile(rojo_verde_swir[despejado], 0.70))
-    visible_oscura = luma_visible <= luma_tc_oscura
-    agua = (
-        visible_oscura
-        & (
-            (caracteristicas[:, :, 7] >= tc_azul_umbral)
-            | (caracteristicas[:, :, 5] <= tc_croma_baja)
-            | (rojo_verde_swir <= swir_rg_no_rojo)
-        )
-        & ~mascara_humo
+    agua = detectar_agua_probable(
+        caracteristicas, mascara_humo, umbrales_percentil=umbrales_agua
     )
     mascara_semillas &= ~agua
     mascara_crecimiento &= ~agua

@@ -14,8 +14,9 @@ Esos números describen las bandas del sensor, **no se pueden recuperar con cert
 
 ## Diseño modular
 
-- `app.py` es solo el punto de entrada de Streamlit; `pyroscope/interfaz/aplicacion.py` coordina la vista web.
-- `pyroscope/interfaz/entrada.py` recoge la pareja de imágenes y los ajustes; `procesamiento.py` lee, valida y llama al análisis cacheado; `mediciones.py` presenta capas, marcas, distancias y áreas; `resultados.py` muestra telemetría y exportaciones; `presentacion.py` reúne estilo y formatos comunes.
+- `app.py` inicia el servidor web local; `web/` contiene la página propia en HTML, CSS y JavaScript.
+- `pyroscope/servidor_web.py` publica la página y la API HTTP, ejecuta análisis en el backend y entrega el progreso, las capas y las exportaciones.
+- `pyroscope/interfaz/configuracion.py` descubre parejas de imágenes; `procesamiento.py` las lee, valida y llama al análisis.
 - `pyroscope/imagenes.py` lee imágenes RGB, valida que la pareja comparta dimensiones y reduce ambas con el mismo factor.
 - `pyroscope/caracteristicas.py` calcula las señales por píxel de las dos composiciones.
 - `pyroscope/humo.py` puntúa la oclusión probable usando conjuntamente True Color y la firma cromática de la composición SWIR.
@@ -28,7 +29,7 @@ Esos números describen las bandas del sensor, **no se pueden recuperar con cert
 - `pyroscope/coordenadas.py` define la rejilla de píxeles compartida por imágenes, medidas y capas auxiliares; convierte entre píxeles y coordenadas locales métricas con GSD, o entre píxeles y coordenadas geográficas con transformación affine y CRS.
 - `pyroscope/visualizacion.py` pinta la máscara y el perímetro sobre True Color.
 
-Al ampliar la aplicación, conserva el recorrido `entrada → procesamiento → mediciones/resultados` y las reglas del motor fuera de los componentes Streamlit. Añade un detector registrable para otra estrategia semántica; reserva un contrato y una etapa propios para la futura detección de fuego activo, porque no es la misma salida que la superficie afectada.
+Al ampliar la aplicación, conserva el recorrido `entrada → procesamiento → mediciones/resultados` y las reglas del motor fuera de la página web. Añade un detector registrable para otra estrategia semántica; reserva un contrato y una etapa propios para la futura detección de fuego activo, porque no es la misma salida que la superficie afectada.
 
 Esta separación mantiene el área afectada como resultado propio. En una fase avanzada, el detector de actividad de fuego debe ser otro módulo con su propia máscara/puntuación; los focos activos no se deben sumar al área quemada ni tratar como la misma clase.
 
@@ -99,7 +100,7 @@ El GSD habilita distancias y áreas métricas **locales**, pero no determina dó
 Desde la raíz del repositorio:
 
 ```powershell
-python -m streamlit run app.py
+python app.py
 ```
 
 Selecciona una de las escenas de ejemplo o carga tu propia pareja True Color/SWIR. Comprueba el perímetro sobre ambas composiciones y ajusta la sensibilidad antes de guardar la superposición. Para medir, usa las herramientas de clic de la web; al introducir el GSD correcto se mostrarán distancias, perímetros y áreas métricas. La aplicación no inventa geolocalización si faltan CRS y transformación.
