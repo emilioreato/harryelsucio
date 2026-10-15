@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { api } from "../services/api.js";
-import { formatNumber, formatArea, formatLength, distanceBetween, polygonArea, polylineLength } from "../domain/measurements.js";
+import { formatArea, formatLength, distanceBetween, polygonArea } from "../domain/measurements.js";
 
 const LAYERS = [
   ["true-color", "True Color"],
@@ -11,7 +11,6 @@ const TOOLS = [
   ["view", "Vista"],
   ["distance", "Flechas"],
   ["polygon", "Polígono"],
-  ["pixel", "Píxel"],
 ];
 
 function visibleLayer(layer, showSegmentation) {
@@ -21,14 +20,9 @@ function visibleLayer(layer, showSegmentation) {
   return "overlay-true-color";
 }
 
-function renderMeasurement(tool, marks, inspectedPixel, polygonClosed, grid) {
+function renderMeasurement(tool, marks, polygonClosed, grid) {
   if (!grid) return "";
   const unit = grid.gsd_x_m ? "m" : "px";
-  if (tool === "pixel" && inspectedPixel) {
-    const x = inspectedPixel.x * (grid.gsd_x_m || 1);
-    const y = inspectedPixel.y * (grid.gsd_y_m || 1);
-    return `Píxel (${Math.round(inspectedPixel.x)}, ${Math.round(inspectedPixel.y)})${grid.gsd_x_m ? ` · ${formatNumber(x, 1)}, ${formatNumber(y, 1)} m` : ""}`;
-  }
   if (tool === "distance") {
     const segments = [];
     for (let index = 0; index + 1 < marks.length; index += 2) {
@@ -41,15 +35,15 @@ function renderMeasurement(tool, marks, inspectedPixel, polygonClosed, grid) {
     if (!polygonClosed || marks.length < 3) {
       return marks.length < 3 ? "Marca al menos tres vértices." : "Cierra el polígono para calcular área y perímetro.";
     }
-    return `Área manual: ${formatArea(polygonArea(marks, grid), grid.gsd_x_m ? "m²" : "px²")} · Perímetro: ${formatLength(polylineLength(marks, grid, true), unit)}`;
+    return `Área manual: ${formatArea(polygonArea(marks, grid), grid.gsd_x_m ? "m²" : "px²")}`;
   }
   return "";
 }
 
 export default function ImageViewer({
   jobId, grid, layer, setLayer, showSegmentation, setShowSegmentation, showMarks, setShowMarks,
-  tool, setTool, marks, setMarks, inspectedPixel, setInspectedPixel, polygonClosed, setPolygonClosed,
-  errorMessage, onError,
+  tool, setTool, marks, setMarks, polygonClosed, setPolygonClosed,
+  loading, errorMessage, onError,
 }) {
   const stageRef = useRef(null);
   const imageRef = useRef(null);
@@ -57,15 +51,16 @@ export default function ImageViewer({
   const currentLayer = jobId ? visibleLayer(layer, showSegmentation) : null;
   const source = currentLayer && jobId ? `${api.layerUrl(jobId, currentLayer)}?v=${jobId}` : "";
   const hasResult = Boolean(jobId && grid);
-  const marksForDraw = tool === "pixel" && inspectedPixel ? [inspectedPixel] : marks;
+  const marksForDraw = marks;
 
   useEffect(() => {
     const image = imageRef.current;
     const canvas = canvasRef.current;
     const stage = stageRef.current;
-    if (!image || !canvas || !stage || !image.complete || !image.naturalWidth) return undefined;
+    if (!image || !canvas || !stage) return undefined;
 
     const draw = () => {
+      if (!image.complete || !image.naturalWidth) return;
       const imageRect = image.getBoundingClientRect();
       const stageRect = stage.getBoundingClientRect();
       const ratio = window.devicePixelRatio || 1;
@@ -156,27 +151,20 @@ export default function ImageViewer({
       x: Math.min(grid.ancho_px - 1, Math.max(0, (event.clientX - rect.left) * grid.ancho_px / rect.width)),
       y: Math.min(grid.alto_px - 1, Math.max(0, (event.clientY - rect.top) * grid.alto_px / rect.height)),
     };
-    if (tool === "pixel") setInspectedPixel(point);
-    else {
-      setMarks((current) => [...current, point]);
-      setPolygonClosed(false);
-    }
+    setMarks((current) => [...current, point]);
+    setPolygonClosed(false);
   };
 
   const undo = () => {
-    if (tool === "pixel") setInspectedPixel(null);
-    else {
-      setMarks((current) => current.slice(0, -1));
-      setPolygonClosed(false);
-    }
+    setMarks((current) => current.slice(0, -1));
+    setPolygonClosed(false);
   };
   const clear = () => {
     setMarks([]);
-    setInspectedPixel(null);
     setPolygonClosed(false);
   };
   const closePolygon = () => marks.length >= 3 && setPolygonClosed(true);
-  const measurement = renderMeasurement(tool, marks, inspectedPixel, polygonClosed, grid);
+  const measurement = renderMeasurement(tool, marks, polygonClosed, grid);
   const canClosePolygon = tool === "polygon" && marks.length >= 3 && !polygonClosed;
 
   return (
@@ -212,10 +200,10 @@ export default function ImageViewer({
 
       <div className="image-stage" ref={stageRef} onClick={handleImageClick}>
         {!hasResult ? (
-          <div className="empty-state">
-            <span className="empty-mark" aria-hidden="true">⌁</span>
-            <strong>{errorMessage ? "No se pudo mostrar el análisis" : "La imagen aparecerá aquí"}</strong>
-            <span>{errorMessage || "Elige una escena y ejecuta la segmentación."}</span>
+          <div className={`empty-state${errorMessage ? " is-error" : ""}`}>
+            <span className="empty-mark" aria-hidden="true">{loading ? "◌" : errorMessage ? "!" : "⌁"}</span>
+            <strong>{loading ? "Procesando imágenes…" : errorMessage ? "No se pudo mostrar el análisis" : "Haz la segmentación"}</strong>
+            <span>{loading ? "La máscara y las composiciones estarán aquí cuando termine." : errorMessage || "Elige una escena o sube una pareja True Color + SWIR y pulsa «Iniciar segmentación»."}</span>
           </div>
         ) : (
           <>
@@ -226,9 +214,6 @@ export default function ImageViewer({
               onError={() => onError("No se pudo cargar la imagen resultante.")}
             />
             <canvas ref={canvasRef} aria-hidden="true" />
-            {tool === "pixel" && inspectedPixel && (
-              <div className="pixel-readout">{renderMeasurement(tool, marks, inspectedPixel, polygonClosed, grid)}</div>
-            )}
           </>
         )}
       </div>
