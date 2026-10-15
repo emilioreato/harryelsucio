@@ -74,7 +74,7 @@ export default function AdvancedSettings({ value, onChange, onReset, method }) {
 
   return (
     <details className="details-panel developer-settings">
-      <summary>Herramientas de desarrollo</summary>
+      <summary>Ajustes experimentales</summary>
       <div className="developer-content">
         <p className="field-help">
           Ajustes experimentales. Los scores ayudan a comparar hipótesis; no son probabilidades calibradas.
