@@ -7,7 +7,7 @@ from pyroscope.humo_visible import ampliar_humo_true_color
 from pyroscope.estimacion_bajo_humo import estimar_bajo_humo
 
 
-def test_suelo_inferido_rojo_y_humo_encima_sin_cambiar_medicion():
+def test_superficie_visible_e_inferida_se_dibujan_en_capas_distintas():
     base = np.full((40, 60, 3), 100, np.uint8)
     visible = np.zeros((40, 60), bool)
     visible[8:32, 8:28] = True
@@ -16,12 +16,20 @@ def test_suelo_inferido_rojo_y_humo_encima_sin_cambiar_medicion():
     resultado = SimpleNamespace(mascara=visible, mascara_candidata_bajo_humo=inferida,
         mascara_humo=inferida, mascara_indeterminada=np.zeros_like(visible), contornos=())
     salida = crear_superposicion(base, resultado)
-    roja = superponer_mascara(base, visible | inferida)
-    esperado = superponer_mascara(roja, inferida, color=(0, 165, 255), opacidad=.28)
-    assert np.array_equal(salida[20, 38], esperado[20, 38])
-    assert np.array_equal(salida[20, 18], roja[20, 18])
-    # Borde común de la superficie, sin frontera artificial en el humo.
-    assert np.array_equal(salida[20, 27], roja[20, 27])
+    humo_azul = superponer_mascara(base, inferida, color=(35, 145, 225), opacidad=.22)
+    suelo_inferido = superponer_mascara(
+        humo_azul, inferida, color=(220, 35, 190), opacidad=.34
+    )
+    superficie_roja = superponer_mascara(
+        base, visible, color=(225, 45, 35), opacidad=.56
+    )
+    assert np.array_equal(salida[20, 38], suelo_inferido[20, 38])
+    assert np.array_equal(salida[20, 18], superficie_roja[20, 18])
+    assert salida[20, 38, 0] > salida[20, 38, 1]
+    assert salida[20, 38, 2] > salida[20, 38, 1]
+    # El borde inferido es discontinuo y no sustituye el contorno observado.
+    assert tuple(salida[20, 28]) == (255, 45, 220)
+    assert np.array_equal(salida[20, 27], superficie_roja[20, 27])
     assert visible.sum() == 480
 
 
