@@ -17,6 +17,7 @@ export const api = {
     body: JSON.stringify(request),
   }),
   job: (jobId) => requestJson(`/api/jobs/${jobId}`),
+  checkpointUrl: (jobId, checkpointId) => `/api/jobs/${jobId}/checkpoints/${encodeURIComponent(checkpointId)}.jpg`,
   layerUrl: (jobId, name) => `/api/jobs/${jobId}/layers/${name}.png`,
   async downloadLayer(jobId, name) {
     const response = await fetch(api.layerUrl(jobId, name));

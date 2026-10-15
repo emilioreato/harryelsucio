@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 import AdvancedSettings from "./components/AdvancedSettings.jsx";
 import ImageViewer from "./components/ImageViewer.jsx";
+import PipelineTimeline from "./components/PipelineTimeline.jsx";
+import CheckpointViewer from "./components/CheckpointViewer.jsx";
 import { api, fileToBase64 } from "./services/api.js";
 import { Button, Card } from "@radix-ui/themes";
 import { Activity, Copy, Crosshair, MousePointer2, Play, Ruler, ScanLine, SlidersHorizontal } from "lucide-react";
@@ -84,7 +86,7 @@ function App() {
   const [connection, setConnection] = useState({ ready: false, label: "Conectando…" });
   const [source, setSource] = useState("preloaded");
   const [sceneId, setSceneId] = useState("");
-  const [method, setMethod] = useState("kmeans");
+  const [method, setMethod] = useState("contextual_hibrida");
   const [sensitivity, setSensitivity] = useState(5);
   const [numClasses, setNumClasses] = useState(7);
   const [minimumArea, setMinimumArea] = useState("0.15");
@@ -97,6 +99,12 @@ function App() {
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
   const [jobId, setJobId] = useState(null);
+  const [checkpoints, setCheckpoints] = useState([]);
+  const [selectedCheckpointId, setSelectedCheckpointId] = useState(null);
+  const [followingLive, setFollowingLive] = useState(true);
+  const [checkpointWarnings, setCheckpointWarnings] = useState([]);
+  const followingLiveRef = useRef(true);
+  const analysisRunRef = useRef(0);
   const [jobLabel, setJobLabel] = useState("Selecciona una escena");
   const [settingsUsed, setSettingsUsed] = useState(null);
   const [layer, setLayer] = useState("swir");
@@ -198,6 +206,10 @@ function App() {
   const activeLabel = source === "upload" ? "Pareja cargada" : selectedScene?.label || "Selecciona una escena";
   const canRun = connection.ready && !running && (source === "upload" || scenes.length > 0);
   const hasResult = Boolean(result && result.state === "complete");
+  const selectedCheckpoint = checkpoints.find((item) => item.id === selectedCheckpointId) || null;
+  const showingHistory = Boolean(selectedCheckpoint && !selectedCheckpoint.final);
+  const showFinalViewer = hasResult && !showingHistory;
+  const canMeasure = hasResult && !showingHistory;
   const grid = result?.grid || null;
   const metrics = result?.metrics || null;
   const diagnosticLayers = (metrics?.available_layers || []).filter((name) => name.startsWith("diagnostic-"));
@@ -213,6 +225,27 @@ function App() {
   const selectTool = (nextTool) => {
     if (nextTool === tool) return;
     setTool(nextTool);
+    setMarks([]);
+    setDistancePreview(null);
+    setSelectedRegion(null);
+    setInspectedPixel(null);
+  };
+
+  const selectCheckpoint = (checkpointId) => {
+    followingLiveRef.current = false;
+    setFollowingLive(false);
+    setSelectedCheckpointId(checkpointId);
+    setMarks([]);
+    setDistancePreview(null);
+    setSelectedRegion(null);
+    setInspectedPixel(null);
+  };
+
+  const followLatestCheckpoint = () => {
+    followingLiveRef.current = true;
+    setFollowingLive(true);
+    const latest = checkpoints.at(-1);
+    setSelectedCheckpointId(latest?.id || null);
     setMarks([]);
     setDistancePreview(null);
     setSelectedRegion(null);
@@ -261,6 +294,7 @@ function App() {
   };
 
   const runAnalysis = async (event) => {
+    const runToken = ++analysisRunRef.current;
     event.preventDefault();
     setError("");
     let request;
@@ -285,6 +319,11 @@ function App() {
 
       setJobLabel(activeLabel);
       setJobId(null);
+      setCheckpoints([]);
+      setSelectedCheckpointId(null);
+      followingLiveRef.current = true;
+      setFollowingLive(true);
+      setCheckpointWarnings([]);
       setResult(null);
       setMarks([]);
       setDistancePreview(null);
@@ -296,21 +335,46 @@ function App() {
       setProgress({ label: "Preparando análisis", value: 0 });
 
       const started = await api.analyze(request);
+      if (runToken !== analysisRunRef.current) return;
       const nextJobId = started.job_id;
       setJobId(nextJobId);
       while (true) {
         const job = await api.job(nextJobId);
-        setProgress({ label: job.stage || "Procesando", value: job.progress || 0 });
+        if (runToken !== analysisRunRef.current) return;
+        const availableCheckpoints = Array.isArray(job.checkpoints) ? job.checkpoints : [];
+        setCheckpoints(availableCheckpoints);
+        setCheckpointWarnings(Array.isArray(job.checkpoint_warnings) ? job.checkpoint_warnings : []);
+        if (availableCheckpoints.length > 0) {
+          setSelectedCheckpointId((current) => {
+            if (followingLiveRef.current) return availableCheckpoints.at(-1).id;
+            return availableCheckpoints.some((item) => item.id === current)
+              ? current
+              : availableCheckpoints[0].id;
+          });
+        }
+        setProgress({ label: job.stage || "Procesando", value: job.progress ?? 0 });
         if (job.state === "complete") {
+          if (followingLiveRef.current && availableCheckpoints.length) {
+            setSelectedCheckpointId(availableCheckpoints.at(-1).id);
+          }
           setResult(job);
           setRunning(false);
           setConnection({ ready: true, label: "Conectado" });
           return;
         }
-        if (job.state === "error") throw new Error(job.error || "No se pudo completar el análisis.");
+        if (job.state === "error") {
+          const message = job.error || "El análisis quedó incompleto.";
+          setResult({ state: "error", error: message });
+          setError(message);
+          setProgress({ label: "Análisis incompleto", value: job.progress ?? 0 });
+          setRunning(false);
+          setConnection({ ready: true, label: "Conectado" });
+          return;
+        }
         await new Promise((resolve) => window.setTimeout(resolve, 650));
       }
     } catch (cause) {
+      if (runToken !== analysisRunRef.current) return;
       const message = cause?.message || "No se pudo iniciar el análisis.";
       setError(message);
       setResult({ state: "error", error: message });
@@ -396,6 +460,17 @@ function App() {
             <div className="progress-track" role="progressbar" aria-label="Progreso del análisis" aria-valuemin="0" aria-valuemax="100" aria-valuenow={progress.value}>
               <span style={{ width: `${progress.value}%` }} />
             </div>
+            <PipelineTimeline
+              checkpoints={checkpoints}
+              progress={progress.value}
+              running={running}
+              jobId={jobId}
+              selectedCheckpointId={selectedCheckpointId}
+              followingLive={followingLive}
+              checkpointWarnings={checkpointWarnings}
+              onSelectCheckpoint={selectCheckpoint}
+              onFollowLive={followLatestCheckpoint}
+            />
           </section>
           {desktopMobileSetup && <details className="phone-access">
             <summary>Abrir Lumbre en el móvil</summary>
@@ -493,30 +568,38 @@ function App() {
 
         <section className="analysis-column" id="mobile-map" aria-label="Visor del análisis">
           <div className="viewer-card">
-            <ImageViewer
-              jobId={hasResult ? jobId : null}
-              grid={hasResult ? grid : null}
-              layer={layer}
-              setLayer={setLayer}
-              showSegmentation={showSegmentation}
-              setShowSegmentation={setShowSegmentation}
-              showMarks={showMarks}
-              setShowMarks={setShowMarks}
-              tool={tool}
-              setTool={setTool}
-              marks={marks}
-              setMarks={setMarks}
-              distancePreview={distancePreview}
-              setDistancePreview={setDistancePreview}
-              inspectedPixel={inspectedPixel}
-              setInspectedPixel={setInspectedPixel}
-              selectedRegion={selectedRegion}
-              onRegionSelect={setSelectedRegion}
-              onRegionsReady={handleRegionsReady}
-              hasWildfiresReference={metrics?.available_layers?.includes("reference-wildfires") || false}
-              errorMessage={running ? "La vista aparecerá al terminar la segmentación." : ""}
-              onError={setError}
-            />
+            {showFinalViewer ? (
+              <ImageViewer
+                jobId={jobId}
+                grid={grid}
+                layer={layer}
+                setLayer={setLayer}
+                showSegmentation={showSegmentation}
+                setShowSegmentation={setShowSegmentation}
+                showMarks={showMarks}
+                setShowMarks={setShowMarks}
+                tool={tool}
+                setTool={setTool}
+                marks={marks}
+                setMarks={setMarks}
+                distancePreview={distancePreview}
+                setDistancePreview={setDistancePreview}
+                inspectedPixel={inspectedPixel}
+                setInspectedPixel={setInspectedPixel}
+                selectedRegion={selectedRegion}
+                onRegionSelect={setSelectedRegion}
+                onRegionsReady={handleRegionsReady}
+                hasWildfiresReference={metrics?.available_layers?.includes("reference-wildfires") || false}
+                onError={setError}
+              />
+            ) : (
+              <CheckpointViewer
+                checkpoint={selectedCheckpoint}
+                jobId={jobId}
+                running={running}
+                incomplete={result?.state === "error"}
+              />
+            )}
           </div>
         </section>
 
@@ -526,13 +609,13 @@ function App() {
             <p className="panel-kicker">HERRAMIENTAS</p>
             <div className="tool-grid" role="group" aria-label="Seleccionar herramienta">
               {TOOL_OPTIONS.map(({ id, label, Icon }) => (
-                <Button key={id} className={`tool-button${tool === id ? " is-active" : ""}`} variant={tool === id ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult || (id === "distance" && !hasMetricScale) || (id === "area" && !regionCount)} title={id === "distance" && hasResult && !hasMetricScale ? "Introduce un GSD y vuelve a analizar para medir en metros." : undefined} aria-pressed={tool === id} onClick={() => selectTool(id)}>
+                <Button key={id} className={`tool-button${tool === id ? " is-active" : ""}`} variant={tool === id ? "soft" : "ghost"} size="1" type="button" disabled={!canMeasure || (id === "distance" && !hasMetricScale) || (id === "area" && !regionCount)} title={showingHistory ? "Las mediciones corresponden al resultado final." : id === "distance" && hasResult && !hasMetricScale ? "Introduce un GSD y vuelve a analizar para medir en metros." : undefined} aria-pressed={tool === id} onClick={() => selectTool(id)}>
                   <Icon size={14} aria-hidden="true" /><span>{label}</span>
                 </Button>
               ))}
             </div>
             <p className="measurement-hint" aria-live="polite">
-              {tool === "distance" && hasResult && !hasMetricScale ? "Introduce el GSD y vuelve a analizar para habilitar la regla en metros." : tool === "distance" ? "Arrastra sobre la imagen para medir una distancia en metros." : tool === "area" && hasResult && !regionCount ? "La máscara no contiene regiones segmentadas para medir." : tool === "area" ? "Haz clic dentro del contorno segmentado para medir esa región." : tool === "pixel" ? "Selecciona un píxel para ver su coordenada." : "Elige una herramienta o compara las capas en el visor."}
+              {showingHistory ? "Esta captura histórica no tiene mediciones propias; las herramientas se habilitan al seleccionar el resultado final." : tool === "distance" && hasResult && !hasMetricScale ? "Introduce el GSD y vuelve a analizar para habilitar la regla en metros." : tool === "distance" ? "Arrastra sobre la imagen para medir una distancia en metros." : tool === "area" && hasResult && !regionCount ? "La máscara no contiene regiones segmentadas para medir." : tool === "area" ? "Haz clic dentro del contorno segmentado para medir esa región." : tool === "pixel" ? "Selecciona un píxel para ver su coordenada." : "Elige una herramienta o compara las capas en el visor."}
             </p>
             {(currentDistance !== null || selectedRegion || (tool === "pixel" && inspectedPixel)) && <div className="measurement-readout" aria-live="polite">
               {currentDistance !== null && <div><span>{distancePreview ? "Midiendo" : "Distancia"}</span><strong>{formatLength(currentDistance, marksUnit)}</strong></div>}
@@ -544,13 +627,13 @@ function App() {
               {tool === "pixel" && inspectedPixel && <div><span>Coordenada</span><strong>({formatNumber(inspectedPixel.x)}, {formatNumber(inspectedPixel.y)}) px</strong></div>}
             </div>}
             <div className="measurement-actions">
-              <button className="text-button" type="button" disabled={!hasResult || (!marks.length && !inspectedPixel && !selectedRegion)} onClick={() => {
+              <button className="text-button" type="button" disabled={!canMeasure || (!marks.length && !inspectedPixel && !selectedRegion)} onClick={() => {
                 if (tool === "pixel") setInspectedPixel(null);
                 else if (tool === "area") setSelectedRegion(null);
                 else setMarks((current) => current.slice(0, tool === "distance" ? -2 : -1));
                 setDistancePreview(null);
               }}>Deshacer</button>
-              <button className="text-button" type="button" disabled={!hasResult || (!marks.length && !inspectedPixel && !selectedRegion)} onClick={() => {
+              <button className="text-button" type="button" disabled={!canMeasure || (!marks.length && !inspectedPixel && !selectedRegion)} onClick={() => {
                 setMarks([]); setInspectedPixel(null); setDistancePreview(null); setSelectedRegion(null);
               }}>Borrar marcas</button>
             </div>
@@ -584,9 +667,10 @@ function App() {
 
           <div className="results-heading results-subheading"><h2>Resultado</h2></div>
           <div className={`result-state${result?.state === "error" ? " is-error" : ""}`}>
-            {running ? "Analizando…" : metrics ? `Detector: ${metrics.detector}` : result?.error || "Pendiente"}
+            {running ? "Analizando…" : showingHistory ? "Vista histórica · resultado final disponible al avanzar" : metrics ? `Detector: ${metrics.detector}` : result?.error || "Pendiente"}
           </div>
-          {metrics && <>
+          {showingHistory && <p className="field-help">Las métricas y descargas de esta sección pertenecen al resultado final, no a la captura histórica visible.</p>}
+          {metrics && !showingHistory && <>
             <div className="metrics-grid">
               <Card className="metric-card metric-primary" size="1"><span>Superficie candidata</span><strong>{formatNumber(metrics.coverage_pct, 1)} %</strong></Card>
               <Card className="metric-card" size="1"><span>Área total segmentada</span><strong>{formatArea(metrics.area, metrics.area_unit)}</strong></Card>
@@ -597,11 +681,11 @@ function App() {
             <p className="result-caveat">Resultado orientativo; revisa la máscara. Rojo y borde amarillo: superficie candidata. Fucsia: {formatNumber(metrics.smoke_covered_candidates_px)} px con hipótesis de superficie afectada bajo humo; no se suman al área observada. Azul: humo probable. Terreno indeterminado bajo humo{metrics.smoke_unknown_px != null ? `: ${formatNumber(metrics.smoke_unknown_px)} px` : ""}; consulta las capas independientes. El fuego activo se informa aparte cuando el detector lo clasifica.</p>
           </>}
 
-          <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("overlay-true-color", "lumbre_mapa_segmentado.png")}><span>Mapa con contorno</span><span>PNG ↓</span></button>
-          <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("mask", "lumbre_mascara_candidata.png")}><span>Máscara segmentada</span><span>PNG ↓</span></button>
-          <button className="export-button" type="button" disabled={!hasResult} onClick={downloadMeasurements}><span>Puntos y medidas</span><span>JSON ↓</span></button>
+          <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("overlay-true-color", "lumbre_mapa_segmentado.png")}><span>Resultado final · mapa</span><span>PNG ↓</span></button>
+          <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("mask", "lumbre_mascara_candidata.png")}><span>Resultado final · máscara</span><span>PNG ↓</span></button>
+          <button className="export-button" type="button" disabled={!canMeasure} onClick={downloadMeasurements}><span>Puntos y medidas finales</span><span>JSON ↓</span></button>
 
-          {hasResult && <details className="details-panel">
+          {hasResult && !showingHistory && <details className="details-panel">
             <summary>Capas de humo y diagnóstico</summary>
             <div className="details-content">
               <p>Máscaras PNG independientes. La hipótesis y el humo pueden coincidir; negro significa ausencia en esa capa.</p>
@@ -618,7 +702,7 @@ function App() {
             </div>
           </details>}
 
-          {metrics && <details className="details-panel">
+          {metrics && !showingHistory && <details className="details-panel">
             <summary>Detalles</summary>
             <div className="details-content">{summary}</div>
           </details>}

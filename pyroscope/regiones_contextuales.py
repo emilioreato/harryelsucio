@@ -13,6 +13,15 @@ from skimage.segmentation import slic, watershed
 
 from .caracteristicas import extraer_caracteristicas_pareja
 from .imagenes import validar_par_alineado
+from .observabilidad_pipeline import CallbackCheckpoint, PublicadorCheckpoint
+from .progreso import ProgresoSegmentacion, informar_progreso
+from .visualizacion_etapas import (
+    previsualizar_clases_regionales,
+    previsualizar_crecimiento,
+    previsualizar_rag,
+    previsualizar_slic,
+    previsualizar_watershed,
+)
 
 
 @dataclass(frozen=True)
@@ -102,7 +111,8 @@ def segmentar_contextual(
     true_color, swir, candidata, agua, humo, *, evidencia=None,
     caracteristicas=None, usar_rag=True, refinar=True,
     representacion="conjunta", area_superpixel=144, distancia_crecimiento_px=8,
-    limitar_contexto=True,
+    limitar_contexto=True, on_progress: ProgresoSegmentacion | None = None,
+    on_checkpoint: CallbackCheckpoint | PublicadorCheckpoint | None = None,
 ):
     """SLIC → estadísticas → RAG restringido → histéresis → Watershed local.
 
@@ -112,6 +122,10 @@ def segmentar_contextual(
     nunca desde regiones recién incorporadas.
     """
     validar_par_alineado(true_color, swir)
+    publicador = (
+        on_checkpoint if isinstance(on_checkpoint, PublicadorCheckpoint)
+        else PublicadorCheckpoint(on_checkpoint)
+    )
     forma = true_color.shape[:2]
     if any(np.asarray(m).shape != forma for m in (candidata, agua, humo)):
         raise ValueError("Las máscaras deben compartir la rejilla de la pareja.")
@@ -144,6 +158,12 @@ def segmentar_contextual(
              "positive-markers": vacia, "negative-markers": vacia,
              "watershed-changes": vacia, "context": vacia}, 0, False)
     etiquetas = _slic_contexto(imagen, contexto, area_superpixel)
+    informar_progreso(on_progress, "Superpíxeles SLIC disponibles", 76)
+    publicador.publicar(
+        "slic", "Superpíxeles SLIC", "Límites de las regiones iniciales sobre True Color.",
+        kind="regions", progress=76,
+        image=lambda: previsualizar_slic(true_color, etiquetas),
+    )
     n = int(etiquetas.max()) + 1
     ids = np.arange(n)
     cuentas = np.maximum(1, np.bincount(etiquetas.ravel(), minlength=n))
@@ -166,6 +186,13 @@ def segmentar_contextual(
     clases[humo_r > .05] = 3
     clases[agua_r > .5] = 0
     clases[0] = 0
+    informar_progreso(on_progress, "Regiones caracterizadas", 77)
+    publicador.publicar(
+        "region-classes", "Clasificación regional",
+        "Interiores candidatos, exteriores, regiones ambiguas y zonas parcialmente ocluidas.",
+        kind="regions", progress=77,
+        image=lambda: previsualizar_clases_regionales(true_color, clases, etiquetas),
+    )
     protegida = agua | humo
     # Conservar evidencia por píxel en superpíxeles mixtos y cicatrices aisladas.
     semillas = original & (score >= .8)
@@ -211,6 +238,13 @@ def segmentar_contextual(
                     padres[rb] = ra
                     uniones += 1
     grupos = np.array([raiz(i) for i in ids])
+    informar_progreso(on_progress, "Agrupaciones RAG disponibles", 78)
+    publicador.publicar(
+        "rag", "Agrupaciones RAG",
+        f"Grupos espaciales tras resolver {uniones} uniones; no representan una máscara final.",
+        kind="regions", progress=78, applied=uniones > 0,
+        image=lambda: previsualizar_rag(true_color, etiquetas, grupos),
+    )
     fiables = np.unique(grupos[(clases == 1)])
     soporte = np.isin(grupos, fiables)[etiquetas]
     # Verdor contradictorio exige además señal SWIR roja positiva.
@@ -222,10 +256,24 @@ def segmentar_contextual(
     con_semilla = np.unique(cc[semillas])
     crecimiento = np.isin(cc, con_semilla[con_semilla != 0]) & permitida
     con_rag = base | crecimiento
+    informar_progreso(on_progress, "Crecimiento contextual disponible", 79)
+    publicador.publicar(
+        "growth", "Crecimiento", "Máscara acumulada; cian indica el crecimiento nuevo y rojo la evidencia inicial.",
+        kind="mask", progress=79, applied=bool(crecimiento.any()),
+        image=lambda: previsualizar_crecimiento(true_color, original, crecimiento),
+    )
     final, aplicado = con_rag.copy(), False
     positivas = negativas = np.zeros(forma, bool)
     if refinar and semillas.any():
         final, aplicado, positivas, negativas = refinar_frontera_local(con_rag, score, gradiente, protegida)
+    if aplicado:
+        informar_progreso(on_progress, "Frontera local refinada con Watershed", 81)
+        publicador.publicar(
+            "watershed", "Watershed local",
+            "Refinamiento de frontera aceptado; amarillo marca los píxeles modificados.",
+            kind="mask", progress=81, applied=True,
+            image=lambda: previsualizar_watershed(true_color, con_rag, final),
+        )
     return ResultadoContextual(
         final, etiquetas,
         {"medias": medias, "medianas": medianas, "dispersion": dispersion,

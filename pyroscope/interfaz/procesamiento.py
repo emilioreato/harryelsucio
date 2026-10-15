@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Callable
 
 import numpy as np
 
@@ -10,6 +11,7 @@ from ..coordenadas import SistemaCoordenadasImagen
 from ..imagenes import abrir_rgb, reducir_par_alineado
 from ..segmentacion import ResultadoAreaAfectada, segmentar_superficie_afectada
 from ..progreso import ProgresoSegmentacion
+from ..observabilidad_pipeline import CallbackCheckpoint
 from .configuracion import MAX_LADO_ANALISIS, MAX_LADO_CONTEXTUAL
 
 
@@ -61,6 +63,8 @@ def procesar_pareja(
     conservar_regiones_separadas: bool,
     on_progress: ProgresoSegmentacion | None = None,
     ajustes_avanzados: dict[str, object] | None = None,
+    on_checkpoint: CallbackCheckpoint | None = None,
+    on_checkpoint_error: Callable[[Exception], None] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, ResultadoAreaAfectada]:
     """Reduce en pareja y llama al servicio de segmentación compartido."""
     true_reducido, swir_reducida = reducir_par_alineado(
@@ -86,5 +90,7 @@ def procesar_pareja(
         metodo=metodo,
         conservar_regiones_separadas=conservar_regiones_separadas,
         ajustes_avanzados=ajustes_avanzados,
+        on_checkpoint=on_checkpoint,
+        on_checkpoint_error=on_checkpoint_error,
     )
     return true_reducido, swir_reducida, resultado

@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
 import ipaddress
 import json
+import logging
 import mimetypes
 import os
 from pathlib import Path
@@ -34,11 +35,16 @@ from .agua import UMBRALES_AGUA_POR_DEFECTO
 from .humo import PESOS_CONFIANZA_HUMO_POR_DEFECTO
 from .ontologia import ClaseSemantica
 from .visualizacion import crear_superposicion, crear_vista_clasificacion, colorear_diagnostico
+from .observabilidad_pipeline import CheckpointPipeline
 
 
 _WEB = RAIZ_REPOSITORIO / "web"
 _MAX_BODY_BYTES = 120 * 1024 * 1024
 _MAX_JOBS = 12
+_MAX_CHECKPOINTS_PER_JOB = 14
+_MAX_CHECKPOINT_BYTES_PER_JOB = 8 * 1024 * 1024
+_MAX_CHECKPOINT_IMAGE_BYTES = 1536 * 1024
+_MAX_CHECKPOINTS_PER_IMAGE = 900
 _JOBS: dict[str, dict[str, Any]] = {}
 _JOBS_LOCK = threading.RLock()
 _ANALYSIS_LOCK = threading.Lock()
@@ -327,11 +333,84 @@ def _resumen_trabajo(trabajo: dict[str, Any]) -> dict[str, Any]:
         "error": trabajo.get("error"),
         "metrics": trabajo.get("metrics"),
         "grid": trabajo.get("grid"),
+        "checkpoints": [dict(item) for item in trabajo.get("checkpoints", ())],
+        "checkpoint_warnings": list(trabajo.get("checkpoint_warnings", ())),
     }
 
 
+def _jpeg_checkpoint(imagen: np.ndarray) -> bytes:
+    """Codifica una vista RGB ligera; se ejecuta fuera del bloqueo de trabajos."""
+    datos = np.asarray(imagen)
+    if datos.ndim != 3 or datos.shape[2] != 3 or datos.dtype != np.uint8 or not datos.size:
+        raise ValueError("La imagen del checkpoint debe ser RGB uint8 y no estar vacía.")
+    vista = Image.fromarray(datos, mode="RGB")
+    vista.thumbnail(
+        (_MAX_CHECKPOINTS_PER_IMAGE, _MAX_CHECKPOINTS_PER_IMAGE),
+        Image.Resampling.LANCZOS,
+    )
+    salida = BytesIO()
+    vista.save(salida, format="JPEG", quality=75, optimize=True)
+    contenido = salida.getvalue()
+    if len(contenido) > _MAX_CHECKPOINT_IMAGE_BYTES:
+        salida = BytesIO()
+        vista.save(salida, format="JPEG", quality=58, optimize=True)
+        contenido = salida.getvalue()
+    if len(contenido) > _MAX_CHECKPOINT_IMAGE_BYTES:
+        raise ValueError("La previsualización supera el límite de memoria por checkpoint.")
+    return contenido
+
+
+def _registrar_aviso_checkpoint(job_id: str, error: Exception) -> None:
+    mensaje = str(error).strip() or error.__class__.__name__
+    logging.getLogger(__name__).warning("No se pudo guardar una captura de %s: %s", job_id, mensaje)
+    with _JOBS_LOCK:
+        trabajo = _JOBS.get(job_id)
+        if trabajo is not None:
+            avisos = trabajo.setdefault("checkpoint_warnings", [])
+            avisos.append(mensaje[:240])
+            del avisos[:-5]
+            trabajo["updated_at"] = time.time()
+
+
+def _publicar_checkpoint_trabajo(job_id: str, checkpoint: CheckpointPipeline) -> None:
+    """Codifica fuera del lock y publica bytes + metadata en una sola sección crítica."""
+    imagen = _jpeg_checkpoint(checkpoint.image)
+    image_url = f"/api/jobs/{job_id}/checkpoints/{checkpoint.id}.jpg"
+    metadata = checkpoint.metadata(image_url)
+    with _JOBS_LOCK:
+        trabajo = _JOBS.get(job_id)
+        if trabajo is None or trabajo.get("state") not in ("running", "queued"):
+            return
+        imagenes = trabajo.setdefault("checkpoint_images", {})
+        capturas = trabajo.setdefault("checkpoints", [])
+        if checkpoint.id in imagenes:
+            return
+        imagenes[checkpoint.id] = imagen
+        capturas.append(metadata)
+        trabajo["checkpoint_bytes"] = int(trabajo.get("checkpoint_bytes", 0)) + len(imagen)
+        while (
+            len(capturas) > _MAX_CHECKPOINTS_PER_JOB
+            or trabajo["checkpoint_bytes"] > _MAX_CHECKPOINT_BYTES_PER_JOB
+        ):
+            primera_id = capturas[0]["id"] if capturas else None
+            candidatos = [
+                item for item in capturas
+                if item["id"] != primera_id and item["id"] != checkpoint.id
+            ]
+            if not candidatos:
+                break
+            obsoleta = candidatos[0]
+            capturas.remove(obsoleta)
+            trabajo["checkpoint_bytes"] -= len(imagenes.pop(obsoleta["id"], b""))
+        trabajo.update(
+            stage=checkpoint.label,
+            progress=max(int(trabajo.get("progress", 0)), checkpoint.progress),
+            updated_at=time.time(),
+        )
+
+
 def _validar_ajustes(datos: dict[str, Any]) -> dict[str, Any]:
-    metodo = str(datos.get("method", "kmeans"))
+    metodo = str(datos.get("method", "contextual_hibrida"))
     detector = obtener_detector_superficie(metodo)
 
     def entero(clave: str, minimo: int, maximo: int, defecto: int) -> int:
@@ -514,11 +593,20 @@ def _iniciar_analisis(
             )
 
             def progreso(etapa: str, porcentaje: int) -> None:
-                _actualizar_trabajo(
-                    job_id,
-                    stage=str(etapa),
-                    progress=max(0, min(100, int(porcentaje))),
-                )
+                with _JOBS_LOCK:
+                    trabajo = _JOBS.get(job_id)
+                    if trabajo is not None:
+                        trabajo.update(
+                            stage=str(etapa),
+                            progress=max(
+                                int(trabajo.get("progress", 0)),
+                                max(0, min(99, int(porcentaje))),
+                            ),
+                            updated_at=time.time(),
+                        )
+
+            def checkpoint_error(error: Exception) -> None:
+                _registrar_aviso_checkpoint(job_id, error)
 
             tc, swir, resultado = procesar_pareja(
                 pareja.true_color,
@@ -533,6 +621,8 @@ def _iniciar_analisis(
                 ajustes["keep_separate"],
                 progreso,
                 ajustes["advanced"],
+                on_checkpoint=lambda captura: _publicar_checkpoint_trabajo(job_id, captura),
+                on_checkpoint_error=checkpoint_error,
             )
 
             sistema = resultado.sistema_coordenadas
@@ -695,6 +785,24 @@ class LumbreHandler(BaseHTTPRequestHandler):
                 self._json(200, resumen)
             return
 
+        captura = re.fullmatch(
+            r"/api/jobs/([a-f0-9-]{36})/checkpoints/([a-z0-9][a-z0-9-]{0,63})\.jpg",
+            ruta,
+        )
+        if captura:
+            job_id, checkpoint_id = captura.groups()
+            with _JOBS_LOCK:
+                trabajo = _JOBS.get(job_id)
+                datos = (
+                    trabajo.get("checkpoint_images", {}).get(checkpoint_id)
+                    if trabajo else None
+                )
+            if datos is None:
+                self._json(404, {"error": "La captura todavía no está disponible."})
+            else:
+                self._bytes(200, datos, "image/jpeg")
+            return
+
         imagen = re.fullmatch(r"/api/jobs/([a-f0-9-]{36})/layers/([a-z-]+)\.png", ruta)
         if imagen:
             job_id, nombre = imagen.groups()
@@ -822,6 +930,10 @@ class LumbreHandler(BaseHTTPRequestHandler):
                     "stage": "Preparando análisis",
                     "progress": 0,
                     "updated_at": now,
+                    "checkpoints": [],
+                    "checkpoint_images": {},
+                    "checkpoint_bytes": 0,
+                    "checkpoint_warnings": [],
                 }
             worker = threading.Thread(
                 target=_iniciar_analisis,

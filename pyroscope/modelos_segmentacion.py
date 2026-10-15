@@ -25,6 +25,10 @@ class ResultadoClasificacionSemantica:
     clases_seleccionadas: tuple[int, ...]
     puntuaciones_clase: np.ndarray
     caracteristicas_comunes: np.ndarray | None = None
+    # La ruta contextual conserva la propuesta V2 y las fuentes nuevas por
+    # separado; los detectores previos pueden dejar estos campos vacíos.
+    mascara_candidata_v2: np.ndarray | None = None
+    diagnosticos_evidencia: dict[str, np.ndarray] | None = None
 
 
 @dataclass(frozen=True)

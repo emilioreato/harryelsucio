@@ -102,7 +102,7 @@ def segmentar_regiones_espaciales(
         cv2.CHAIN_APPROX_SIMPLE
     )
     contornos_ordenados = tuple(sorted(contornos, key=cv2.contourArea, reverse=True))
-    _informar_progreso(on_progress, "Preparando el resultado visual", 98)
+    _informar_progreso(on_progress, "Preparando el resultado visual", 94)
     resultado = limpia > 0
     return ResultadoRegionesEspaciales(
         mascara=resultado,

@@ -78,10 +78,11 @@ def estimar_bajo_humo(
     hipótesis nunca se reutiliza como semilla. No se rellenan nubes completas.
 
     La ruta espectral requiere puntuación suficiente y crecimiento limitado
-    desde observaciones fiables, atravesando solo evidencia espectral y sin
-    cruzar agua/contradicciones. ``compatibilidad_swir``, cuando se suministra,
-    veta también los puentes geométricos incompatibles. Un valor bajo debe
-    indicar contradicción fiable, no simplemente ausencia de información.
+    desde observaciones fiables. La evidencia moderada puede crecer de forma
+    geodésica hasta el mismo radio y sin reutilizar hipótesis como semillas.
+    ``compatibilidad_swir``, cuando se suministra, veta también los puentes
+    geométricos incompatibles. Un valor bajo debe indicar contradicción fiable,
+    no simplemente ausencia de información.
     """
     visible = _mascara(visible, "visible")
     humo = _mascara(humo, "humo", visible.shape)
@@ -108,16 +109,19 @@ def estimar_bajo_humo(
     anclas = visible & ~humo & compatible
     oculta = humo & ~visible & compatible
     espectral = np.zeros_like(visible)
+    continuidad_geodesica = np.zeros_like(visible)
     if evidencia_espectral is not None:
         evidencia = _evidencia(evidencia_espectral, "evidencia_espectral", visible.shape)
-        admisible = oculta & (evidencia >= umbral_espectral)
         if np.any(anclas):
-            espectral = ndi.binary_dilation(
-                anclas, iterations=int(distancia_espectral_px),
-                mask=anclas | admisible,
-            ) & admisible
+            distancia_ancla = ndi.distance_transform_edt(~anclas)
+            admisible = oculta & (evidencia >= umbral_compatibilidad)
+            dentro_radio = admisible & (distancia_ancla <= distancia_espectral_px)
+            alcanzable = ndi.binary_propagation(anclas, mask=anclas | dentro_radio)
+            conectada = dentro_radio & alcanzable
+            espectral = conectada & (evidencia >= umbral_espectral)
+            continuidad_geodesica = conectada & (evidencia < umbral_espectral)
 
-    continuidad = np.zeros_like(visible)
+    continuidad = continuidad_geodesica.copy()
     if np.any(anclas):
         alto, ancho = visible.shape
         for fila in range(alto):
