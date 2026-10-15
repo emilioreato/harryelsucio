@@ -1,0 +1,177 @@
+{
+  "head": "90dd412",
+  "max_side_px": 1800,
+  "sensitivity": 5,
+  "area_minima_pct": 0.15,
+  "distancia_maxima_pct": 10,
+  "methods": {
+    "00_PRUEBA 02 - La Vall d'Uixo Castellon": {
+      "kmeans": {
+        "fire_px": 187703,
+        "classified_candidate_px": 189723,
+        "water_px": 36239,
+        "water_excluded_px": 3,
+        "smoke_px": 64680,
+        "under_smoke_px": 22,
+        "components_dropped": 1,
+        "alerts": []
+      },
+      "swir_histeresis": {
+        "fire_px": 180315,
+        "classified_candidate_px": 208753,
+        "water_px": 36239,
+        "water_excluded_px": 0,
+        "smoke_px": 64680,
+        "under_smoke_px": 122,
+        "components_dropped": 2,
+        "alerts": []
+      },
+      "contextual_hibrida": {
+        "fire_px": 183814,
+        "classified_candidate_px": 199115,
+        "water_px": 36239,
+        "water_excluded_px": 0,
+        "smoke_px": 165085,
+        "under_smoke_px": 26832,
+        "components_dropped": 1,
+        "alerts": []
+      },
+      "fusion_ponderada": {
+        "fire_px": 177606,
+        "classified_candidate_px": 183415,
+        "water_px": 36239,
+        "water_excluded_px": 0,
+        "smoke_px": 64680,
+        "under_smoke_px": 22,
+        "components_dropped": 1,
+        "alerts": []
+      }
+    },
+    "La Mierla (Guadalajara)": {
+      "kmeans": {
+        "fire_px": 180184,
+        "classified_candidate_px": 165753,
+        "water_px": 13094,
+        "water_excluded_px": 359,
+        "smoke_px": 75379,
+        "under_smoke_px": 267,
+        "components_dropped": 0,
+        "alerts": []
+      },
+      "swir_histeresis": {
+        "fire_px": 192346,
+        "classified_candidate_px": 210128,
+        "water_px": 13094,
+        "water_excluded_px": 323,
+        "smoke_px": 75379,
+        "under_smoke_px": 610,
+        "components_dropped": 0,
+        "alerts": []
+      },
+      "contextual_hibrida": {
+        "fire_px": 181177,
+        "classified_candidate_px": 193837,
+        "water_px": 13093,
+        "water_excluded_px": 0,
+        "smoke_px": 159966,
+        "under_smoke_px": 22362,
+        "components_dropped": 0,
+        "alerts": []
+      },
+      "fusion_ponderada": {
+        "fire_px": 177981,
+        "classified_candidate_px": 164657,
+        "water_px": 13094,
+        "water_excluded_px": 288,
+        "smoke_px": 75379,
+        "under_smoke_px": 267,
+        "components_dropped": 0,
+        "alerts": []
+      }
+    },
+    "Madrid-Avila": {
+      "kmeans": {
+        "fire_px": 68316,
+        "classified_candidate_px": 75570,
+        "water_px": 62336,
+        "water_excluded_px": 1214,
+        "smoke_px": 162361,
+        "under_smoke_px": 85,
+        "components_dropped": 0,
+        "alerts": []
+      },
+      "swir_histeresis": {
+        "fire_px": 91117,
+        "classified_candidate_px": 248591,
+        "water_px": 62336,
+        "water_excluded_px": 1955,
+        "smoke_px": 162361,
+        "under_smoke_px": 1318,
+        "components_dropped": 5,
+        "alerts": []
+      },
+      "contextual_hibrida": {
+        "fire_px": 86908,
+        "classified_candidate_px": 243934,
+        "water_px": 62336,
+        "water_excluded_px": 0,
+        "smoke_px": 213036,
+        "under_smoke_px": 35190,
+        "components_dropped": 7,
+        "alerts": []
+      },
+      "fusion_ponderada": {
+        "fire_px": 67646,
+        "classified_candidate_px": 75180,
+        "water_px": 62336,
+        "water_excluded_px": 1182,
+        "smoke_px": 162361,
+        "under_smoke_px": 85,
+        "components_dropped": 0,
+        "alerts": []
+      }
+    },
+    "Niebla (Huelva)": {
+      "kmeans": {
+        "fire_px": 88195,
+        "classified_candidate_px": 130496,
+        "water_px": 36093,
+        "water_excluded_px": 465,
+        "smoke_px": 197600,
+        "under_smoke_px": 3691,
+        "components_dropped": 2,
+        "alerts": []
+      },
+      "swir_histeresis": {
+        "fire_px": 95388,
+        "classified_candidate_px": 197168,
+        "water_px": 36093,
+        "water_excluded_px": 169,
+        "smoke_px": 197600,
+        "under_smoke_px": 16856,
+        "components_dropped": 5,
+        "alerts": []
+      },
+      "contextual_hibrida": {
+        "fire_px": 83759,
+        "classified_candidate_px": 181464,
+        "water_px": 36070,
+        "water_excluded_px": 0,
+        "smoke_px": 308370,
+        "under_smoke_px": 42795,
+        "components_dropped": 5,
+        "alerts": []
+      },
+      "fusion_ponderada": {
+        "fire_px": 81098,
+        "classified_candidate_px": 98724,
+        "water_px": 36093,
+        "water_excluded_px": 154,
+        "smoke_px": 197600,
+        "under_smoke_px": 3624,
+        "components_dropped": 0,
+        "alerts": []
+      }
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "00_PRUEBA 02 - La Vall d'Uixo Castellon": {
+    "old_px": 36239,
+    "new_px": 36191,
+    "removed_px": 48,
+    "added_px": 0,
+    "components": 518,
+    "largest_component_px": 34143
+  },
+  "La Mierla (Guadalajara)": {
+    "old_px": 13094,
+    "new_px": 9579,
+    "removed_px": 4123,
+    "added_px": 608,
+    "components": 1038,
+    "largest_component_px": 819
+  },
+  "Madrid-Avila": {
+    "old_px": 62336,
+    "new_px": 3766,
+    "removed_px": 58570,
+    "added_px": 0,
+    "components": 617,
+    "largest_component_px": 782
+  },
+  "Niebla (Huelva)": {
+    "old_px": 36093,
+    "new_px": 11614,
+    "removed_px": 24479,
+    "added_px": 0,
+    "components": 1135,
+    "largest_component_px": 4312
+  }
+}

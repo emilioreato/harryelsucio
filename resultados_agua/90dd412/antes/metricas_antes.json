@@ -1,0 +1,689 @@
+{
+  "head": "90dd412",
+  "max_side_px": 1800,
+  "note": "Máscaras del código HEAD antes de la nueva modificación; sin etiquetas independientes.",
+  "00_PRUEBA 02 - La Vall d'Uixo Castellon": {
+    "scene": "00_PRUEBA 02 - La Vall d'Uixo Castellon",
+    "date": "28/07/2026",
+    "source_wh": [
+      2500,
+      1546
+    ],
+    "work_wh": [
+      1800,
+      1113
+    ],
+    "current_global_quantiles": {
+      "swir_red_dominance_q55": 0.007417640183120966,
+      "swir_red_minus_green_q85": 0.02806229703128338,
+      "swir_red_minus_green_median": -0.10863541811704636,
+      "swir_red_minus_green_negative_fraction_pct": 78.4784865728262
+    },
+    "masks": {
+      "agua_sin_humo": {
+        "pixels": 37128,
+        "fraction_pct": 1.85325,
+        "components": 521,
+        "largest_component_px": 34892,
+        "top5_component_px": [
+          34892,
+          101,
+          74,
+          65,
+          54
+        ]
+      },
+      "agua_kmeans": {
+        "pixels": 36239,
+        "fraction_pct": 1.80887,
+        "components": 524,
+        "largest_component_px": 34143,
+        "top5_component_px": [
+          34143,
+          82,
+          66,
+          50,
+          50
+        ]
+      },
+      "agua_swir": {
+        "pixels": 36239,
+        "fraction_pct": 1.80887,
+        "components": 524,
+        "largest_component_px": 34143,
+        "top5_component_px": [
+          34143,
+          82,
+          66,
+          50,
+          50
+        ]
+      },
+      "agua_contextual": {
+        "pixels": 36239,
+        "fraction_pct": 1.80887,
+        "components": 524,
+        "largest_component_px": 34143,
+        "top5_component_px": [
+          34143,
+          82,
+          66,
+          50,
+          50
+        ]
+      },
+      "candidata_kmeans": {
+        "pixels": 189723,
+        "fraction_pct": 9.47005,
+        "components": 1124,
+        "largest_component_px": 159489,
+        "top5_component_px": [
+          159489,
+          7848,
+          3795,
+          1512,
+          1236
+        ]
+      },
+      "candidata_swir": {
+        "pixels": 208753,
+        "fraction_pct": 10.41994,
+        "components": 190,
+        "largest_component_px": 183810,
+        "top5_component_px": [
+          183810,
+          8226,
+          4454,
+          1321,
+          1015
+        ]
+      },
+      "candidata_contextual": {
+        "pixels": 199089,
+        "fraction_pct": 9.93756,
+        "components": 184,
+        "largest_component_px": 183810,
+        "top5_component_px": [
+          183810,
+          8226,
+          682,
+          572,
+          497
+        ]
+      }
+    },
+    "candidate_features_median": {
+      "agua_sin_humo": {
+        "swir_red_dominance": -0.026691574603319168,
+        "swir_chromaticity": 0.04283801466226578,
+        "true_color_green_dominance": 0.01806303858757019,
+        "true_color_luma": 0.6498996615409851,
+        "swir_luma": 0.3398078382015228,
+        "swir_chromaticity_tc": 0.05767843872308731,
+        "swir_red_minus_green": -0.022439761087298393,
+        "true_color_blue_dominance": 0.022300835698843002
+      },
+      "agua_kmeans": {
+        "swir_red_dominance": -0.026691574603319168,
+        "swir_chromaticity": 0.04283801466226578,
+        "true_color_green_dominance": 0.01806303858757019,
+        "true_color_luma": 0.6490815877914429,
+        "swir_luma": 0.3397921621799469,
+        "swir_chromaticity_tc": 0.05734766647219658,
+        "swir_red_minus_green": -0.022439761087298393,
+        "true_color_blue_dominance": 0.02243730053305626
+      },
+      "agua_swir": {
+        "swir_red_dominance": -0.026691574603319168,
+        "swir_chromaticity": 0.04283801466226578,
+        "true_color_green_dominance": 0.01806303858757019,
+        "true_color_luma": 0.6490815877914429,
+        "swir_luma": 0.3397921621799469,
+        "swir_chromaticity_tc": 0.05734766647219658,
+        "swir_red_minus_green": -0.022439761087298393,
+        "true_color_blue_dominance": 0.02243730053305626
+      },
+      "agua_contextual": {
+        "swir_red_dominance": -0.026691574603319168,
+        "swir_chromaticity": 0.04283801466226578,
+        "true_color_green_dominance": 0.01806303858757019,
+        "true_color_luma": 0.6490815877914429,
+        "swir_luma": 0.3397921621799469,
+        "swir_chromaticity_tc": 0.05734766647219658,
+        "swir_red_minus_green": -0.022439761087298393,
+        "true_color_blue_dominance": 0.02243730053305626
+      }
+    },
+    "local_swir_luma_std_7x7": {
+      "agua_sin_humo": {
+        "median": 0.004428309854120016,
+        "p90": 0.009397035464644432
+      },
+      "agua_kmeans": {
+        "median": 0.00443587452173233,
+        "p90": 0.009387040510773659
+      },
+      "agua_swir": {
+        "median": 0.00443587452173233,
+        "p90": 0.009387040510773659
+      },
+      "agua_contextual": {
+        "median": 0.00443587452173233,
+        "p90": 0.009387040510773659
+      }
+    }
+  },
+  "La Mierla (Guadalajara)": {
+    "scene": "La Mierla (Guadalajara)",
+    "date": "21/07/2026",
+    "source_wh": [
+      2500,
+      1546
+    ],
+    "work_wh": [
+      1800,
+      1113
+    ],
+    "current_global_quantiles": {
+      "swir_red_dominance_q55": -0.008470915257930756,
+      "swir_red_minus_green_q85": -0.01368667557835579,
+      "swir_red_minus_green_median": -0.1705801635980606,
+      "swir_red_minus_green_negative_fraction_pct": 86.49575721273834
+    },
+    "masks": {
+      "agua_sin_humo": {
+        "pixels": 13687,
+        "fraction_pct": 0.68319,
+        "components": 1181,
+        "largest_component_px": 1079,
+        "top5_component_px": [
+          1079,
+          995,
+          807,
+          703,
+          656
+        ]
+      },
+      "agua_kmeans": {
+        "pixels": 13094,
+        "fraction_pct": 0.65359,
+        "components": 1162,
+        "largest_component_px": 982,
+        "top5_component_px": [
+          982,
+          794,
+          702,
+          687,
+          642
+        ]
+      },
+      "agua_swir": {
+        "pixels": 13094,
+        "fraction_pct": 0.65359,
+        "components": 1162,
+        "largest_component_px": 982,
+        "top5_component_px": [
+          982,
+          794,
+          702,
+          687,
+          642
+        ]
+      },
+      "agua_contextual": {
+        "pixels": 13094,
+        "fraction_pct": 0.65359,
+        "components": 1162,
+        "largest_component_px": 982,
+        "top5_component_px": [
+          982,
+          794,
+          702,
+          687,
+          642
+        ]
+      },
+      "candidata_kmeans": {
+        "pixels": 165753,
+        "fraction_pct": 8.27358,
+        "components": 903,
+        "largest_component_px": 129319,
+        "top5_component_px": [
+          129319,
+          13804,
+          4359,
+          1446,
+          1196
+        ]
+      },
+      "candidata_swir": {
+        "pixels": 210128,
+        "fraction_pct": 10.48857,
+        "components": 148,
+        "largest_component_px": 181998,
+        "top5_component_px": [
+          181998,
+          17139,
+          2557,
+          983,
+          733
+        ]
+      },
+      "candidata_contextual": {
+        "pixels": 193793,
+        "fraction_pct": 9.67321,
+        "components": 199,
+        "largest_component_px": 164019,
+        "top5_component_px": [
+          164019,
+          17151,
+          2557,
+          983,
+          733
+        ]
+      }
+    },
+    "candidate_features_median": {
+      "agua_sin_humo": {
+        "swir_red_dominance": -0.1120990663766861,
+        "swir_chromaticity": 0.5757249593734741,
+        "true_color_green_dominance": 0.12050299346446991,
+        "true_color_luma": 0.3709968626499176,
+        "swir_luma": 0.3459976315498352,
+        "swir_chromaticity_tc": 0.34399116039276123,
+        "swir_red_minus_green": -0.24962112307548523,
+        "true_color_blue_dominance": -0.25370436906814575
+      },
+      "agua_kmeans": {
+        "swir_red_dominance": -0.1120990663766861,
+        "swir_chromaticity": 0.5759999752044678,
+        "true_color_green_dominance": 0.1218249499797821,
+        "true_color_luma": 0.36959725618362427,
+        "swir_luma": 0.34461960196495056,
+        "swir_chromaticity_tc": 0.34428083896636963,
+        "swir_red_minus_green": -0.24960219860076904,
+        "true_color_blue_dominance": -0.25501734018325806
+      },
+      "agua_swir": {
+        "swir_red_dominance": -0.1120990663766861,
+        "swir_chromaticity": 0.5759999752044678,
+        "true_color_green_dominance": 0.1218249499797821,
+        "true_color_luma": 0.36959725618362427,
+        "swir_luma": 0.34461960196495056,
+        "swir_chromaticity_tc": 0.34428083896636963,
+        "swir_red_minus_green": -0.24960219860076904,
+        "true_color_blue_dominance": -0.25501734018325806
+      },
+      "agua_contextual": {
+        "swir_red_dominance": -0.1120990663766861,
+        "swir_chromaticity": 0.5759999752044678,
+        "true_color_green_dominance": 0.1218249499797821,
+        "true_color_luma": 0.36959725618362427,
+        "swir_luma": 0.34461960196495056,
+        "swir_chromaticity_tc": 0.34428083896636963,
+        "swir_red_minus_green": -0.24960219860076904,
+        "true_color_blue_dominance": -0.25501734018325806
+      }
+    },
+    "local_swir_luma_std_7x7": {
+      "agua_sin_humo": {
+        "median": 0.03844478353857994,
+        "p90": 0.16046635806560516
+      },
+      "agua_kmeans": {
+        "median": 0.03847035765647888,
+        "p90": 0.16279387474060059
+      },
+      "agua_swir": {
+        "median": 0.03847035765647888,
+        "p90": 0.16279387474060059
+      },
+      "agua_contextual": {
+        "median": 0.03847035765647888,
+        "p90": 0.16279387474060059
+      }
+    }
+  },
+  "Madrid-Avila": {
+    "scene": "Madrid-Avila",
+    "date": "26/07/2026",
+    "source_wh": [
+      9930,
+      6141
+    ],
+    "work_wh": [
+      1800,
+      1113
+    ],
+    "current_global_quantiles": {
+      "swir_red_dominance_q55": 0.02729629911482334,
+      "swir_red_minus_green_q85": 0.0,
+      "swir_red_minus_green_median": -0.11262285709381104,
+      "swir_red_minus_green_negative_fraction_pct": 84.53533992213238
+    },
+    "masks": {
+      "agua_sin_humo": {
+        "pixels": 63031,
+        "fraction_pct": 3.1462,
+        "components": 6662,
+        "largest_component_px": 11854,
+        "top5_component_px": [
+          11854,
+          4991,
+          2222,
+          1947,
+          1172
+        ]
+      },
+      "agua_kmeans": {
+        "pixels": 62336,
+        "fraction_pct": 3.11151,
+        "components": 6623,
+        "largest_component_px": 11655,
+        "top5_component_px": [
+          11655,
+          4852,
+          2189,
+          1976,
+          1195
+        ]
+      },
+      "agua_swir": {
+        "pixels": 62336,
+        "fraction_pct": 3.11151,
+        "components": 6623,
+        "largest_component_px": 11655,
+        "top5_component_px": [
+          11655,
+          4852,
+          2189,
+          1976,
+          1195
+        ]
+      },
+      "agua_contextual": {
+        "pixels": 62336,
+        "fraction_pct": 3.11151,
+        "components": 6623,
+        "largest_component_px": 11655,
+        "top5_component_px": [
+          11655,
+          4852,
+          2189,
+          1976,
+          1195
+        ]
+      },
+      "candidata_kmeans": {
+        "pixels": 75570,
+        "fraction_pct": 3.77209,
+        "components": 4141,
+        "largest_component_px": 34784,
+        "top5_component_px": [
+          34784,
+          14756,
+          1597,
+          1295,
+          891
+        ]
+      },
+      "candidata_swir": {
+        "pixels": 248591,
+        "fraction_pct": 12.40846,
+        "components": 4083,
+        "largest_component_px": 92018,
+        "top5_component_px": [
+          92018,
+          10535,
+          4515,
+          3677,
+          3460
+        ]
+      },
+      "candidata_contextual": {
+        "pixels": 243485,
+        "fraction_pct": 12.15359,
+        "components": 4095,
+        "largest_component_px": 55546,
+        "top5_component_px": [
+          55546,
+          22821,
+          10535,
+          8127,
+          4515
+        ]
+      }
+    },
+    "candidate_features_median": {
+      "agua_sin_humo": {
+        "swir_red_dominance": -0.24963828921318054,
+        "swir_chromaticity": 0.7374891042709351,
+        "true_color_green_dominance": 0.16208727657794952,
+        "true_color_luma": 0.33019688725471497,
+        "swir_luma": 0.43932783603668213,
+        "swir_chromaticity_tc": 0.3572395145893097,
+        "swir_red_minus_green": -0.4029079079627991,
+        "true_color_blue_dominance": -0.26167526841163635
+      },
+      "agua_kmeans": {
+        "swir_red_dominance": -0.2482416182756424,
+        "swir_chromaticity": 0.7374891042709351,
+        "true_color_green_dominance": 0.16309556365013123,
+        "true_color_luma": 0.32948940992355347,
+        "swir_luma": 0.438717246055603,
+        "swir_chromaticity_tc": 0.36328500509262085,
+        "swir_red_minus_green": -0.4024745225906372,
+        "true_color_blue_dominance": -0.2676160931587219
+      },
+      "agua_swir": {
+        "swir_red_dominance": -0.2482416182756424,
+        "swir_chromaticity": 0.7374891042709351,
+        "true_color_green_dominance": 0.16309556365013123,
+        "true_color_luma": 0.32948940992355347,
+        "swir_luma": 0.438717246055603,
+        "swir_chromaticity_tc": 0.36328500509262085,
+        "swir_red_minus_green": -0.4024745225906372,
+        "true_color_blue_dominance": -0.2676160931587219
+      },
+      "agua_contextual": {
+        "swir_red_dominance": -0.2482416182756424,
+        "swir_chromaticity": 0.7374891042709351,
+        "true_color_green_dominance": 0.16309556365013123,
+        "true_color_luma": 0.32948940992355347,
+        "swir_luma": 0.438717246055603,
+        "swir_chromaticity_tc": 0.36328500509262085,
+        "swir_red_minus_green": -0.4024745225906372,
+        "true_color_blue_dominance": -0.2676160931587219
+      }
+    },
+    "local_swir_luma_std_7x7": {
+      "agua_sin_humo": {
+        "median": 0.05044466257095337,
+        "p90": 0.12430522590875626
+      },
+      "agua_kmeans": {
+        "median": 0.05032110959291458,
+        "p90": 0.12332962453365326
+      },
+      "agua_swir": {
+        "median": 0.05032110959291458,
+        "p90": 0.12332962453365326
+      },
+      "agua_contextual": {
+        "median": 0.05032110959291458,
+        "p90": 0.12332962453365326
+      }
+    }
+  },
+  "Niebla (Huelva)": {
+    "scene": "Niebla (Huelva)",
+    "date": "08/08/2026",
+    "source_wh": [
+      2500,
+      1546
+    ],
+    "work_wh": [
+      1800,
+      1113
+    ],
+    "current_global_quantiles": {
+      "swir_red_dominance_q55": 0.04553164914250374,
+      "swir_red_minus_green_q85": 0.0063659800216555595,
+      "swir_red_minus_green_median": -0.10162170231342316,
+      "swir_red_minus_green_negative_fraction_pct": 82.99830288509534
+    },
+    "masks": {
+      "agua_sin_humo": {
+        "pixels": 27114,
+        "fraction_pct": 1.3534,
+        "components": 1990,
+        "largest_component_px": 4894,
+        "top5_component_px": [
+          4894,
+          1402,
+          700,
+          688,
+          387
+        ]
+      },
+      "agua_kmeans": {
+        "pixels": 36093,
+        "fraction_pct": 1.80159,
+        "components": 2734,
+        "largest_component_px": 4878,
+        "top5_component_px": [
+          4878,
+          1331,
+          1248,
+          658,
+          631
+        ]
+      },
+      "agua_swir": {
+        "pixels": 36093,
+        "fraction_pct": 1.80159,
+        "components": 2734,
+        "largest_component_px": 4878,
+        "top5_component_px": [
+          4878,
+          1331,
+          1248,
+          658,
+          631
+        ]
+      },
+      "agua_contextual": {
+        "pixels": 36093,
+        "fraction_pct": 1.80159,
+        "components": 2734,
+        "largest_component_px": 4878,
+        "top5_component_px": [
+          4878,
+          1331,
+          1248,
+          658,
+          631
+        ]
+      },
+      "candidata_kmeans": {
+        "pixels": 130496,
+        "fraction_pct": 6.51373,
+        "components": 3285,
+        "largest_component_px": 64017,
+        "top5_component_px": [
+          64017,
+          14100,
+          2973,
+          1434,
+          1129
+        ]
+      },
+      "candidata_swir": {
+        "pixels": 197168,
+        "fraction_pct": 9.84167,
+        "components": 1256,
+        "largest_component_px": 96162,
+        "top5_component_px": [
+          96162,
+          7048,
+          5109,
+          4630,
+          3948
+        ]
+      },
+      "candidata_contextual": {
+        "pixels": 181396,
+        "fraction_pct": 9.05441,
+        "components": 1228,
+        "largest_component_px": 83730,
+        "top5_component_px": [
+          83730,
+          7048,
+          5109,
+          4630,
+          3948
+        ]
+      }
+    },
+    "candidate_features_median": {
+      "agua_sin_humo": {
+        "swir_red_dominance": -0.09402360022068024,
+        "swir_chromaticity": 0.5256038308143616,
+        "true_color_green_dominance": 0.038432538509368896,
+        "true_color_luma": 0.4626823663711548,
+        "swir_luma": 0.4196588397026062,
+        "swir_chromaticity_tc": 0.15400201082229614,
+        "swir_red_minus_green": -0.2128181904554367,
+        "true_color_blue_dominance": -0.09002114832401276
+      },
+      "agua_kmeans": {
+        "swir_red_dominance": -0.09115604311227798,
+        "swir_chromaticity": 0.5459509491920471,
+        "true_color_green_dominance": 0.0380946546792984,
+        "true_color_luma": 0.4629749059677124,
+        "swir_luma": 0.4420188367366791,
+        "swir_chromaticity_tc": 0.1661720871925354,
+        "swir_red_minus_green": -0.21754714846611023,
+        "true_color_blue_dominance": -0.10503753274679184
+      },
+      "agua_swir": {
+        "swir_red_dominance": -0.09115604311227798,
+        "swir_chromaticity": 0.5459509491920471,
+        "true_color_green_dominance": 0.0380946546792984,
+        "true_color_luma": 0.4629749059677124,
+        "swir_luma": 0.4420188367366791,
+        "swir_chromaticity_tc": 0.1661720871925354,
+        "swir_red_minus_green": -0.21754714846611023,
+        "true_color_blue_dominance": -0.10503753274679184
+      },
+      "agua_contextual": {
+        "swir_red_dominance": -0.09115604311227798,
+        "swir_chromaticity": 0.5459509491920471,
+        "true_color_green_dominance": 0.0380946546792984,
+        "true_color_luma": 0.4629749059677124,
+        "swir_luma": 0.4420188367366791,
+        "swir_chromaticity_tc": 0.1661720871925354,
+        "swir_red_minus_green": -0.21754714846611023,
+        "true_color_blue_dominance": -0.10503753274679184
+      }
+    },
+    "local_swir_luma_std_7x7": {
+      "agua_sin_humo": {
+        "median": 0.02572166547179222,
+        "p90": 0.1543378382921219
+      },
+      "agua_kmeans": {
+        "median": 0.025053277611732483,
+        "p90": 0.1376279890537262
+      },
+      "agua_swir": {
+        "median": 0.025053277611732483,
+        "p90": 0.1376279890537262
+      },
+      "agua_contextual": {
+        "median": 0.025053277611732483,
+        "p90": 0.1376279890537262
+      }
+    }
+  }
+}

@@ -530,15 +530,15 @@ def _validar_ajustes(datos: dict[str, Any]) -> dict[str, Any]:
     semilla_roja = umbrales_swir["seed_red"]
     crecimiento_rojo = umbrales_swir["grow_red"]
     if crecimiento_rojo is None:
-        crecimiento_rojo = 0.94 - (entero("sensitivity", 1, 10, 5) - 1) * 0.010
+        crecimiento_rojo = 0.94 - (entero("sensitivity", 1, 10, 6) - 1) * 0.010
     if semilla_roja is None:
-        semilla_roja = 0.958 - (entero("sensitivity", 1, 10, 5) - 1) * 0.009
+        semilla_roja = 0.958 - (entero("sensitivity", 1, 10, 6) - 1) * 0.009
     if crecimiento_rojo > semilla_roja:
         raise ValueError("El percentil SWIR de crecimiento debe ser menor o igual al de semilla.")
 
     semilla_rg = umbrales_swir["seed_red_green"]
     crecimiento_rg = umbrales_swir["grow_red_green"]
-    sensibilidad = entero("sensitivity", 1, 10, 5)
+    sensibilidad = entero("sensitivity", 1, 10, 6)
     if crecimiento_rg is None:
         crecimiento_rg = 0.68 - (sensibilidad - 1) * 0.012
     if semilla_rg is None:
@@ -564,7 +564,7 @@ def _validar_ajustes(datos: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "detector": detector,
-        "sensitivity": entero("sensitivity", 1, 10, 5),
+        "sensitivity": entero("sensitivity", 1, 10, 6),
         "num_classes": entero("num_classes", 4, 10, 7),
         "minimum_area_pct": decimal("minimum_area_pct", 0.01, 1.0, 0.15),
         "max_distance_pct": entero("max_distance_pct", 3, 20, 10),

@@ -37,7 +37,7 @@ const DEFAULT_WATER_THRESHOLDS = {
 // en localStorage y la página vuelve a estos valores al recargar la aplicación.
 const DEFAULT_SEGMENTATION_PROFILE = Object.freeze({
   method: "contextual_hibrida",
-  sensitivity: 5,
+  sensitivity: 6,
   numClasses: 7,
   minimumArea: "0.15",
   maxDistance: "10",
@@ -98,7 +98,6 @@ function App() {
   const [keepSeparate, setKeepSeparate] = useState(DEFAULT_SEGMENTATION_PROFILE.keepSeparate);
   const [advanced, setAdvanced] = useState(defaultAdvancedSettings);
   const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState({ label: "Listo para analizar", value: 0 });
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
   const [jobId, setJobId] = useState(null);
@@ -354,7 +353,6 @@ function App() {
       setInspectedPixel(null);
       setRunning(true);
       setConnection({ ready: true, label: "Analizando…" });
-      setProgress({ label: "Preparando análisis", value: 0 });
 
       const started = await api.analyze(request);
       if (runToken !== analysisRunRef.current) return;
@@ -374,7 +372,6 @@ function App() {
               : availableCheckpoints[0].id;
           });
         }
-        setProgress({ label: job.stage || "Procesando", value: job.progress ?? 0 });
         if (job.state === "complete") {
           if (followingLiveRef.current && availableCheckpoints.length) {
             setSelectedCheckpointId(availableCheckpoints.at(-1).id);
@@ -388,7 +385,6 @@ function App() {
           const message = job.error || "El análisis quedó incompleto.";
           setResult({ state: "error", error: message });
           setError(message);
-          setProgress({ label: "Análisis incompleto", value: job.progress ?? 0 });
           setRunning(false);
           setConnection({ ready: true, label: "Conectado" });
           return;
@@ -400,7 +396,6 @@ function App() {
       const message = cause?.message || "No se pudo iniciar el análisis.";
       setError(message);
       setResult({ state: "error", error: message });
-      setProgress({ label: "No se pudo completar", value: 0 });
       setRunning(false);
       if (cause instanceof TypeError) {
         setConnection({ ready: false, label: "Sin conexión" });
@@ -435,20 +430,18 @@ function App() {
       <main className="workspace">
         <aside className="control-panel" id="mobile-setup" aria-label="Configuración del análisis">
           <div className="panel-heading">
-            <h1><SlidersHorizontal size={15} aria-hidden="true" />Análisis</h1>
+            <h1 className="panel-brand-heading">
+              <span className="brand-mark-wrap" aria-hidden="true"><span className="brand-pixel-flame" /></span>
+              <span className="brand-heading-copy"><strong>LUMBRE</strong><small><SlidersHorizontal size={10} aria-hidden="true" />Análisis</small></span>
+            </h1>
             <span className={`connection-pill${connection.ready ? " is-ready" : error ? " is-error" : ""}`}>
               <span className="status-dot" />{connection.label}
             </span>
           </div>
 
-          <section className="sidebar-progress" aria-label="Progreso del análisis">
-            <div className="progress-summary" aria-live="polite"><span>{progress.label}</span><strong>{progress.value}%</strong></div>
-            <div className="progress-track" role="progressbar" aria-label="Progreso del análisis" aria-valuemin="0" aria-valuemax="100" aria-valuenow={progress.value}>
-              <span style={{ width: `${progress.value}%` }} />
-            </div>
+          <section className="sidebar-timeline" aria-label="Etapas de la segmentación">
             <PipelineTimeline
               checkpoints={checkpoints}
-              progress={progress.value}
               running={running}
               jobId={jobId}
               selectedCheckpointId={selectedCheckpointId}

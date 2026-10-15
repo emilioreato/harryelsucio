@@ -84,13 +84,14 @@ def test_sensibilidad_moderada_conserva_la_cicatriz_sintetica(sensibilidad):
     assert falsos_positivos <= 50
 
 
-def test_default_filtra_artefacto_naranja_remoto_y_conserva_cicatriz():
+@pytest.mark.parametrize("sensibilidad", [5, 6])
+def test_perfil_filtra_artefacto_naranja_remoto_y_conserva_cicatriz(sensibilidad):
     tc, swir, quemado, artefacto = _escena("artefacto_remoto")
     resultado = segmentar_superficie_afectada(
         tc,
         swir,
         metodo="contextual_hibrida",
-        sensibilidad=5,
+        sensibilidad=sensibilidad,
         area_minima_pct=0.15,
         distancia_maxima_pct=10,
     )
@@ -142,7 +143,7 @@ def test_una_sensibilidad_mayor_no_reduce_la_candidata_en_caso_controlado(sensib
 def test_perfil_inicial_del_servidor_usa_valores_recomendados():
     perfil = _validar_ajustes({})
     assert perfil["detector"].id == "contextual_hibrida"
-    assert perfil["sensitivity"] == 5
+    assert perfil["sensitivity"] == 6
     assert perfil["minimum_area_pct"] == 0.15
     assert perfil["max_distance_pct"] == 10
     assert perfil["keep_separate"] is False

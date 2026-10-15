@@ -19,6 +19,7 @@ class ResultadoHumoPorNiveles:
     candidatos_debiles: np.ndarray
     descartados_por_distancia: np.ndarray
     descartados_por_conectividad: np.ndarray
+    candidatos_perdidos_por_swir: np.ndarray
 
 
 def detectar_humo_por_niveles(
@@ -28,10 +29,12 @@ def detectar_humo_por_niveles(
     """Amplía el humo por histéresis sin convertir terreno claro en semilla.
 
     Conserva la máscara previa como referencia. Los píxeles añadidos exigen
-    señales claras en True Color, textura a dos escalas y compatibilidad
-    cromática o tonal con SWIR; además deben conectar con un núcleo fiable y
-    quedar dentro de una distancia medida desde ese núcleo original. La
-    puntuación es ordinal y no está calibrada como probabilidad.
+    señales claras de velo en True Color y textura atenuada a dos escalas;
+    además deben conectar con un núcleo fiable y quedar dentro de una
+    distancia medida desde ese núcleo original. SWIR se conserva para
+    diagnosticar contradicciones, pero no veta el humo: bajo el velo puede
+    revelar la firma del terreno y no la del aerosol. La puntuación es ordinal,
+    no una probabilidad calibrada.
     """
     validar_par_alineado(true_color, swir)
     humo_inicial = np.asarray(humo_inicial)
@@ -56,7 +59,7 @@ def detectar_humo_por_niveles(
         vacia = np.zeros(forma, dtype=bool)
         return ResultadoHumoPorNiveles(
             vacia, vacia.copy(), vacia.copy(), confianza.copy(),
-            vacia.copy(), vacia.copy(), vacia.copy(),
+            vacia.copy(), vacia.copy(), vacia.copy(), vacia.copy(),
         )
 
     tc = true_color.astype(np.float32) / 255
@@ -111,12 +114,15 @@ def detectar_humo_por_niveles(
         & (luma_swir >= max(.18, float(brillo_swir_q[0])))
         & (textura_swir <= max(.10, float(textura_swir_q[1])))
     )
+    # El SWIR ve la superficie que hay debajo del velo; exigir que también
+    # parezca humo excluía precisamente penachos sobre suelo rojizo. En la
+    # expansión moderada se puntúan solo rasgos atmosféricos observables en
+    # True Color. El núcleo inicial conserva la corroboración SWIR existente.
     puntuacion = (
-        .22 * evidencia_luminosa
-        + .20 * evidencia_neutra
-        + .24 * evidencia_textura_corta
-        + .14 * evidencia_textura_media
-        + .20 * np.maximum(evidencia_cian, evidencia_swir_neutra)
+        .275 * evidencia_luminosa
+        + .25 * evidencia_neutra
+        + .30 * evidencia_textura_corta
+        + .175 * evidencia_textura_media
     ).astype(np.float32)
 
     if not mascara_nucleo.any():
@@ -124,6 +130,7 @@ def detectar_humo_por_niveles(
         return ResultadoHumoPorNiveles(
             np.zeros(forma, bool), moderada, humo_inicial.copy(), confianza.copy(),
             np.zeros(forma, bool), np.zeros(forma, bool), np.zeros(forma, bool),
+            np.zeros(forma, bool),
         )
     confianza_semilla = max(.68, float(np.quantile(confianza[mascara_nucleo], .60)))
     cian_semilla = max(.10, float(np.quantile(cian[mascara_nucleo], .65)))
@@ -137,6 +144,7 @@ def detectar_humo_por_niveles(
         return ResultadoHumoPorNiveles(
             mascara_fuerte, moderada, humo_inicial.copy(), confianza.copy(),
             np.zeros(forma, bool), np.zeros(forma, bool), np.zeros(forma, bool),
+            np.zeros(forma, bool),
         )
 
     luminosa = luma_suave >= max(.22, float(lum_q[0]))
@@ -146,9 +154,9 @@ def detectar_humo_por_niveles(
         & (textura_media <= max(.16, float(media_q[1])))
         & (gradiente <= max(.055, float(np.quantile(gradiente, .92))))
     )
-    candidatos_debiles = (
-        luminosa & neutra & baja_textura & compatible_swir & (puntuacion >= .58)
-    )
+    candidatos_por_true_color = luminosa & neutra & baja_textura & (puntuacion >= .50)
+    candidatos_perdidos_por_swir = candidatos_por_true_color & ~compatible_swir
+    candidatos_debiles = candidatos_por_true_color
     distancia = ndi.distance_transform_edt(~mascara_fuerte)
     radio_maximo = max(8, round(min(forma) * fraccion_distancia_nucleo))
     candidata_debil = candidatos_debiles & (distancia <= radio_maximo)
@@ -170,7 +178,7 @@ def detectar_humo_por_niveles(
     return ResultadoHumoPorNiveles(
         mascara_fuerte, mascara_moderada, mascara_probable, puntuacion,
         candidatos_debiles, descartados_por_distancia,
-        descartados_por_conectividad,
+        descartados_por_conectividad, candidatos_perdidos_por_swir,
     )
 
 

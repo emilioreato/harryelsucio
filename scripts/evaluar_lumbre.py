@@ -213,6 +213,9 @@ def procesar_escena(nombre: str, fecha: str, destino: Path) -> dict:
         "humo_candidatos_debiles": fuentes.get("humo_candidatos_debiles", np.zeros_like(humo_despues)),
         "humo_descartado_distancia": fuentes.get("humo_descartado_distancia", np.zeros_like(humo_despues)),
         "humo_descartado_conectividad": fuentes.get("humo_descartado_conectividad", np.zeros_like(humo_despues)),
+        "humo_candidatos_perdidos_por_swir": fuentes.get(
+            "humo_candidatos_perdidos_por_swir", np.zeros_like(humo_despues)
+        ),
         "evidencia_swir_v2": evidence_v2,
         "evidencia_frente": evidence_front,
         "frente_candidato_fuerte": frente_fuerte,
@@ -232,6 +235,18 @@ def procesar_escena(nombre: str, fecha: str, destino: Path) -> dict:
         "bajo_humo_espectral": bajo.mascara_espectral,
         "bajo_humo_continuidad": bajo.mascara_continuidad,
         "bajo_humo_indeterminado": bajo.mascara_indeterminada,
+        "hipotesis_bajo_humo_v2_anterior": fuentes.get(
+            "hipotesis_bajo_humo_v2_anterior", np.zeros_like(humo_despues)
+        ),
+        "evidencia_bajo_humo_swir": fuentes.get(
+            "evidencia_bajo_humo_swir", np.zeros(humo_despues.shape, np.float32)
+        ),
+        "superficie_bajo_humo_swir_fuerte": fuentes.get(
+            "superficie_bajo_humo_swir_fuerte", np.zeros_like(humo_despues)
+        ),
+        "superficie_bajo_humo_swir_moderada": fuentes.get(
+            "superficie_bajo_humo_swir_moderada", np.zeros_like(humo_despues)
+        ),
     }
     np.savez_compressed(escena_dir / "capas_comparacion.npz", **arrays)
 
@@ -244,6 +259,7 @@ def procesar_escena(nombre: str, fecha: str, destino: Path) -> dict:
         ("Candidatos débiles antes del radio", tinte(tc, arrays["humo_candidatos_debiles"], (255, 180, 0))),
         ("Descartados por distancia", tinte(tc, arrays["humo_descartado_distancia"], (255, 0, 220))),
         ("Descartados por conectividad", tinte(tc, arrays["humo_descartado_conectividad"], (180, 60, 220))),
+        ("Candidatos perdidos antes por veto SWIR", tinte(tc, arrays["humo_candidatos_perdidos_por_swir"], (235, 20, 210))),
         ("Candidatos semánticos antes de SLIC", tinte(tc, cls.mascara_candidata, (255, 80, 20))),
         ("Evidencia SWIR V2", calor(tc, evidence_v2)),
         ("Evidencia visual del frente", calor(tc, evidence_front, (235, 15, 190))),
@@ -256,6 +272,10 @@ def procesar_escena(nombre: str, fecha: str, destino: Path) -> dict:
         ("Hipótesis espectral bajo humo", tinte(tinte(tc, humo_despues, (0, 140, 255)), bajo.mascara_espectral, (235, 20, 180))),
         ("Continuidad geodésica bajo humo", tinte(tinte(tc, humo_despues, (0, 140, 255)), bajo.mascara_continuidad, (255, 220, 40))),
         ("Terreno indeterminado", tinte(tinte(tc, humo_despues, (0, 140, 255)), bajo.mascara_indeterminada, (145, 145, 145))),
+        ("SWIR con evidencia roja bajo humo", tinte(swir, arrays["evidencia_bajo_humo_swir"] > 0, (245, 20, 40), .58)),
+        ("SWIR: semillas fuertes ocultas", tinte(swir, arrays["superficie_bajo_humo_swir_fuerte"], (255, 25, 35), .64)),
+        ("SWIR: candidatos moderados ocultos", tinte(swir, arrays["superficie_bajo_humo_swir_moderada"], (255, 190, 20), .64)),
+        ("Hipótesis V2 bajo humo anterior", tinte(tc, arrays["hipotesis_bajo_humo_v2_anterior"], (245, 0, 210))),
         ("Descartado por geometría", tinte(tc, arrays["descartado_por_geometria"], (255, 0, 220))),
     ]
     guardar_panel(escena_dir / "panel_comparacion.png", paneles)

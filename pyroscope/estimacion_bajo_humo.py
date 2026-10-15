@@ -103,7 +103,21 @@ def estimar_bajo_humo(
             and (not np.isfinite(umbral_semilla_bajo_humo)
                  or not 0 <= umbral_semilla_bajo_humo <= 1)):
         raise ValueError("El umbral semilla bajo humo debe estar entre 0 y 1.")
-    obstaculos = agua.copy()
+    diagnosticos = getattr(evidencia_espectral, "diagnosticos", {}) or {}
+    evidencia_swir_bajo_humo = diagnosticos.get("evidencia_bajo_humo_swir")
+    semillas_swir_fuertes = diagnosticos.get("superficie_bajo_humo_swir_fuerte")
+    ruta_swir_unica = (
+        evidencia_swir_bajo_humo is not None
+        and semillas_swir_fuertes is not None
+    )
+    # En el interior del humo no se heredan los vetos generados con True Color.
+    # El flujo SWIR conserva esos vetos fuera del humo y usa dentro solo una
+    # contradicción SWIR si una fuente explícita la aporta.
+    obstaculos = agua & ~humo if ruta_swir_unica else agua.copy()
+    if ruta_swir_unica:
+        agua_swir = diagnosticos.get("agua_bajo_humo_swir")
+        if agua_swir is not None:
+            obstaculos |= _mascara(agua_swir, "agua_bajo_humo_swir", visible.shape) & humo
     if distancia_espectral_px is None:
         distancia_espectral_px = distancia_maxima_px
     if (isinstance(distancia_espectral_px, bool)
@@ -111,10 +125,12 @@ def estimar_bajo_humo(
             or distancia_espectral_px < 1):
         raise ValueError("La distancia espectral debe ser un entero positivo.")
     if contradiccion is not None:
-        obstaculos |= _mascara(contradiccion, "contradiccion", visible.shape)
+        mascara_contradiccion = _mascara(contradiccion, "contradiccion", visible.shape)
+        obstaculos |= mascara_contradiccion & (~humo if ruta_swir_unica else True)
     compatible = ~obstaculos
     if compatibilidad_swir is not None:
-        compatible &= _evidencia(compatibilidad_swir, "compatibilidad_swir", visible.shape) >= umbral_compatibilidad
+        compatibilidad = _evidencia(compatibilidad_swir, "compatibilidad_swir", visible.shape)
+        compatible &= (compatibilidad >= umbral_compatibilidad) | (humo & ruta_swir_unica)
     anclas = visible & ~humo & compatible
     oculta = humo & ~visible & compatible
     espectral = np.zeros_like(visible)
@@ -124,9 +140,13 @@ def estimar_bajo_humo(
         # Solo una fuente que identifique explícitamente evidencia fuerte, o un
         # umbral optativo, puede aportar semillas ocultas. Un score genérico no
         # cambia el comportamiento de otros detectores.
-        diagnosticos = getattr(evidencia_espectral, "diagnosticos", {}) or {}
         frente_fuerte = diagnosticos.get("frente_candidato_fuerte")
-        if frente_fuerte is not None:
+        if ruta_swir_unica:
+            frente_fuerte = _mascara(
+                semillas_swir_fuertes, "superficie_bajo_humo_swir_fuerte", visible.shape
+            )
+            semillas_ocultas = oculta & frente_fuerte
+        elif frente_fuerte is not None:
             frente_fuerte = _mascara(frente_fuerte, "frente_fuerte", visible.shape)
             semillas_ocultas = oculta & frente_fuerte
         elif umbral_semilla_bajo_humo is not None:
@@ -140,11 +160,12 @@ def estimar_bajo_humo(
             dentro_radio = admisible & (distancia_ancla <= distancia_espectral_px)
             alcanzable = ndi.binary_propagation(semillas, mask=semillas | dentro_radio)
             conectada = dentro_radio & alcanzable
-            espectral = semillas_ocultas | (conectada & (evidencia >= umbral_espectral))
-            continuidad_geodesica = conectada & (evidencia < umbral_espectral)
+            umbral_separacion = max(umbral_espectral, .82) if ruta_swir_unica else umbral_espectral
+            espectral = semillas_ocultas | (conectada & (evidencia >= umbral_separacion))
+            continuidad_geodesica = conectada & (evidencia < umbral_separacion)
 
     continuidad = continuidad_geodesica.copy()
-    if np.any(anclas):
+    if np.any(anclas) and not ruta_swir_unica:
         alto, ancho = visible.shape
         for fila in range(alto):
             continuidad[fila] |= _puentes_linea(oculta[fila], anclas[fila], distancia_maxima_px)

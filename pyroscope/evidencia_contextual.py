@@ -36,8 +36,8 @@ def evidencia_desde_v2(clasificacion, caracteristicas):
         fuerte = (roja >= max(float(alto), .1)) & (f[..., 6] >= .1)
         score_v2[moderada & despejado], score_v2[fuerte & despejado] = .5, .85
     score_v2[mascara_v2] = 1
-    score_v2[clasificacion.mascara_candidata_bajo_humo] = np.maximum(
-        score_v2[clasificacion.mascara_candidata_bajo_humo], .5
+    score_v2[clasificacion.mascara_candidata_bajo_humo & despejado] = np.maximum(
+        score_v2[clasificacion.mascara_candidata_bajo_humo & despejado], .5
     )
 
     diagnosticos = dict(getattr(clasificacion, "diagnosticos_evidencia", None) or {})
@@ -57,7 +57,20 @@ def evidencia_desde_v2(clasificacion, caracteristicas):
         if frente_fuerte is not None:
             frente_fuerte = np.asarray(frente_fuerte, dtype=bool)
             score[frente_fuerte] = np.maximum(score[frente_fuerte], .85)
-    score[clasificacion.mascara_agua] = 0
+    # Una vez que el píxel está bajo humo, se sustituye toda evidencia previa
+    # por la evaluación que leyó exclusivamente el RGB SWIR. En particular,
+    # True Color, la evidencia visual del frente y el veto de agua conjunto no
+    # deciden la clasificación del suelo ocluido.
+    mascara_humo = np.asarray(clasificacion.mascara_humo, dtype=bool)
+    evidencia_oculta = diagnosticos.get("evidencia_bajo_humo_swir")
+    if evidencia_oculta is not None:
+        evidencia_oculta = np.asarray(evidencia_oculta, dtype=np.float32)
+        if (evidencia_oculta.shape != score.shape
+                or not np.isfinite(evidencia_oculta).all()
+                or np.any((evidencia_oculta < 0) | (evidencia_oculta > 1))):
+            raise ValueError("La evidencia SWIR bajo humo debe estar alineada y normalizada.")
+        score[mascara_humo] = evidencia_oculta[mascara_humo]
+    score[clasificacion.mascara_agua & ~mascara_humo] = 0
     diagnosticos["evidencia_swir_v2"] = score_v2
     diagnosticos["evidencia_combinada"] = score.copy()
     return EvidenciaContextual(score, diagnosticos)

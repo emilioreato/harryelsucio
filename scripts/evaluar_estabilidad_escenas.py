@@ -1,7 +1,7 @@
 """Compara la estabilidad del perfil en las escenas disponibles, sin ground truth.
 
 Ejemplo:
-    python scripts/evaluar_estabilidad_escenas.py --max-lado 900 --sensibilidades 4,5,6
+    python scripts/evaluar_estabilidad_escenas.py --max-lado 900 --sensibilidades 5,6,7
 
 Los píxeles, componentes y tiempos son diagnósticos de salida. No son métricas
 de precisión ni superficie terrestre: las escenas actuales no tienen máscaras
@@ -90,7 +90,7 @@ def evaluar(escena, max_lado: int, sensibilidades: tuple[int, ...]) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--max-lado", type=int, default=900)
-    parser.add_argument("--sensibilidades", type=_sensibilidades, default=(4, 5, 6))
+    parser.add_argument("--sensibilidades", type=_sensibilidades, default=(5, 6, 7))
     parser.add_argument("--escena", help="Filtra por parte del nombre de escena.")
     args = parser.parse_args()
     if args.max_lado < 64 or args.max_lado > 2500:

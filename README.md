@@ -123,13 +123,13 @@ Ver [evaluación, parámetros y límites](DOCUMENTACION/Ideas/segmentacion_conte
 
 #### Perfil inicial de la aplicación
 
-Cada carga de la página empieza con el mismo perfil de trabajo; los cambios manuales no se guardan entre recargas: método contextual híbrido, sensibilidad 5/10, área mínima 0,15 %, radio 10 %, focos separados desactivados y Random Forest desactivado. Los umbrales SWIR se derivan de la sensibilidad (semilla roja en el percentil 0,922 y crecimiento en el 0,900 con sensibilidad 5); el crecimiento exige además una señal roja mínima para que el ruido de una escena sin incendio no genere una máscara extensa. El veto auxiliar de agua usa el percentil 0,85 para la relación rojo/verde SWIR, que admite agua azul oscura aunque la vegetación verde domine el histograma. Estos valores superaron los casos sintéticos descritos en la evaluación, pero no se han calibrado con etiquetas independientes de las imágenes reales.
+Cada carga de la página empieza con el mismo perfil de trabajo; los cambios manuales no se guardan entre recargas: método contextual híbrido, sensibilidad 6/10, área mínima 0,15 %, radio 10 %, focos separados desactivados y Random Forest desactivado. Los umbrales SWIR se derivan de la sensibilidad (semilla roja en el percentil 0,913 y crecimiento en el 0,890 con sensibilidad 6); el crecimiento exige además una señal roja mínima para que el ruido de una escena sin incendio no genere una máscara extensa. El veto auxiliar de agua usa el percentil 0,85 para la relación rojo/verde SWIR, que admite agua azul oscura aunque la vegetación verde domine el histograma. Es un perfil más permisivo que el inicial y pasó los casos sintéticos disponibles, pero no se ha calibrado con etiquetas independientes de las imágenes reales.
 
 Comprobaciones y artefactos reproducibles (sin dependencias nuevas):
 
 ```powershell
 python -m pytest -q
-python scripts/evaluar_estabilidad_escenas.py --max-lado 900 --sensibilidades 4,5,6
+python scripts/evaluar_estabilidad_escenas.py --max-lado 900 --sensibilidades 5,6,7
 python scripts/comparar_contextual.py --fase baseline
 python scripts/comparar_contextual.py --fase contextual_roi
 python scripts/evaluar_humo_sintetico.py

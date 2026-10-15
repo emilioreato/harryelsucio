@@ -1,13 +1,11 @@
 import { useRef } from "react";
 
-function checkpointPosition(checkpoint) {
-  const value = Number(checkpoint.progress);
-  return Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
+function checkpointPosition(index, count) {
+  return count < 2 ? 50 : (index / (count - 1)) * 100;
 }
 
 export default function PipelineTimeline({
   checkpoints = [],
-  progress = 0,
   running = false,
   jobId,
   selectedCheckpointId,
@@ -25,11 +23,8 @@ export default function PipelineTimeline({
     if (!checkpoints.length) return;
     const bounds = event.currentTarget.getBoundingClientRect();
     const target = Math.max(0, Math.min(100, ((event.clientX - bounds.left) / bounds.width) * 100));
-    const closest = checkpoints.reduce((best, item, index) => {
-      const distance = Math.abs(checkpointPosition(item) - target);
-      return distance < best.distance ? { index, distance } : best;
-    }, { index: 0, distance: Infinity });
-    onSelectCheckpoint(checkpoints[closest.index].id);
+    const index = Math.round((target / 100) * (checkpoints.length - 1));
+    onSelectCheckpoint(checkpoints[index].id);
   };
 
   const handlePointerDown = (event) => {
@@ -57,9 +52,7 @@ export default function PipelineTimeline({
         {checkpoints.length > 0 && <span className="timeline-count">← → · {checkpoints.length} {checkpoints.length === 1 ? "etapa" : "etapas"}</span>}
       </div>
       <div className="timeline-rail" aria-label="Navegación de checkpoints">
-        <div className="progress-track timeline-progress" aria-hidden="true">
-          <span style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} />
-        </div>
+        <div className="timeline-track" aria-hidden="true" />
         <div
           className="timeline-scrubber"
           role="slider"
@@ -80,7 +73,7 @@ export default function PipelineTimeline({
             <button
               key={checkpoint.id}
               className={`timeline-marker${checkpoint.id === selectedCheckpointId ? " is-selected" : ""}${checkpoint.final ? " is-final" : ""}`}
-              style={{ left: `${checkpointPosition(checkpoint)}%` }}
+              style={{ left: `${checkpointPosition(index, checkpoints.length)}%` }}
               type="button"
               disabled={!jobId}
               aria-label={`Mostrar checkpoint ${index + 1}: ${checkpoint.label}. ${checkpoint.description}`}

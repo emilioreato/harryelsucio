@@ -30,9 +30,20 @@ def clasificar_base_contextual(true_color, swir, **opciones):
         caracteristicas, candidata_v2, humo, resultado.mascara_agua
     )
     nuevas_semillas_frente = evidencia_frente.candidatos_fuertes & ~candidata_v2 & ~humo
-    candidata = candidata_v2 | (evidencia_frente.candidatos_fuertes & ~humo)
-    subyacente = (resultado.mascara_candidata_bajo_humo
-                  | (resultado.mascara_candidata & humo)) & ~resultado.mascara_agua
+    # En el reto básico la observación visible se conserva tal cual la propone
+    # V2. Bajo humo se evalúa otra capa a partir del RGB SWIR únicamente; no se
+    # copia la máscara combinada ni la evidencia basada en True Color.
+    from ..evidencia_bajo_humo_swir import evaluar_evidencia_bajo_humo_swir
+    evidencia_swir_oculta = evaluar_evidencia_bajo_humo_swir(
+        swir, humo, candidata_v2,
+    )
+    candidata = candidata_v2
+    subyacente_v2 = (resultado.mascara_candidata_bajo_humo
+                     | (resultado.mascara_candidata & humo)) & ~resultado.mascara_agua
+    subyacente = (
+        evidencia_swir_oculta.candidatos_fuertes
+        | evidencia_swir_oculta.candidatos_moderados
+    )
     clases = resultado.clase_por_pixel.copy()
     clases[humo] = ClaseSemantica.HUMO_PROBABLE
     resultado = replace(resultado, mascara_humo=humo, confianza_humo=confianza,
@@ -48,11 +59,16 @@ def clasificar_base_contextual(true_color, swir, **opciones):
                             "humo_candidatos_debiles": humo_niveles.candidatos_debiles,
                             "humo_descartado_distancia": humo_niveles.descartados_por_distancia,
                             "humo_descartado_conectividad": humo_niveles.descartados_por_conectividad,
+                            "humo_candidatos_perdidos_por_swir": humo_niveles.candidatos_perdidos_por_swir,
                             "evidencia_frente": evidencia_frente.puntuacion,
                             "frente_candidato_fuerte": evidencia_frente.candidatos_fuertes,
                             "frente_candidato_moderado": evidencia_frente.candidatos_moderados,
                             "frente_candidato_moderado_vecinal": evidencia_frente.candidatos_moderados_vecinales,
                             "frente_semillas_nuevas": nuevas_semillas_frente,
+                            "hipotesis_bajo_humo_v2_anterior": subyacente_v2,
+                            "evidencia_bajo_humo_swir": evidencia_swir_oculta.evidencia,
+                            "superficie_bajo_humo_swir_fuerte": evidencia_swir_oculta.candidatos_fuertes,
+                            "superficie_bajo_humo_swir_moderada": evidencia_swir_oculta.candidatos_moderados,
                         })
     f = caracteristicas
     # Percentiles iguales en una escena plana no constituyen semillas de fuego.

@@ -69,7 +69,7 @@ Pendiente principal: anotar ejemplos independientes de suelo y fronteras (inclui
 
 ## Perfil inicial y matriz de regresión — 15/10/2026
 
-La aplicación arranca en cada carga con el mismo perfil: contextual híbrido, sensibilidad 5, área mínima 0,15 %, radio máximo 10 %, focos separados desactivados y Random Forest desactivado. No se persiste el estado manual del usuario en el navegador. En sensibilidad 5, la semilla SWIR usa percentil rojo 0,922 y el crecimiento 0,900; además, se exige dominancia roja mínima 0,05 para semillas y -0,02 para crecer. El umbral alto anterior elegía solo el extremo cromático más fuerte y, en una escena sintética con un incendio y una mancha naranja remota, podía sembrar la mancha y omitir el incendio. El nuevo cuantil y el filtro espacial conservaron el incendio y eliminaron esa mancha en el caso construido.
+El perfil inicial arrancaba con sensibilidad 5, área mínima 0,15 %, radio máximo 10 %, focos separados desactivados y Random Forest desactivado. No se persiste el estado manual del usuario en el navegador. En sensibilidad 5, la semilla SWIR usa percentil rojo 0,922 y el crecimiento 0,900; además, se exige dominancia roja mínima 0,05 para semillas y -0,02 para crecer. El umbral alto anterior elegía solo el extremo cromático más fuerte y, en una escena sintética con un incendio y una mancha naranja remota, podía sembrar la mancha y omitir el incendio. El nuevo cuantil y el filtro espacial conservaron el incendio y eliminaron esa mancha en el caso construido. El perfil vigente se reajustó a sensibilidad 6 en la sección de recalibración inferior.
 
 La ruta de agua se hizo conservadora ante rejillas uniformes o con muy poco contraste para no clasificar todo como agua. Su percentil de relación rojo/verde SWIR por defecto es 0,85: la prueba de lago azul oscuro se detecta en ambas vistas, donde 0,55 no lo hacía porque la vegetación verde dominaba el histograma. El filtro de distancia vuelve a aplicarse en el método contextual; activar «Conservar focos separados» permite mantener componentes remotos.
 
@@ -86,14 +86,33 @@ La pasada de estabilidad sobre las ocho parejas disponibles, reducidas todas a 9
 | Madrid–Ávila | 25 111 px | 26 481 px | 28 238 px |
 | Niebla | 21 703 px | 23 041 px | 24 352 px |
 
-En las ocho rejillas el área candidata creció de forma monotónica al subir la sensibilidad de 4 a 6; el número de componentes varió entre escenas. Esto apoya dejar 5 como punto intermedio de arranque, pero no permite afirmar que tenga mejor IoU ni que los conteos sean áreas reales. Cada ejecución a 900 píxeles tardó aproximadamente 2,9–4,8 s en esta máquina. El barrido se puede repetir con `python scripts/evaluar_estabilidad_escenas.py --max-lado 900 --sensibilidades 4,5,6`.
+En las ocho rejillas el área candidata creció al subir la sensibilidad de 4 a 6; el número de componentes varió entre escenas. En ese primer ajuste se eligió 5 como punto de partida, sin afirmar mejor IoU ni que los conteos fueran áreas reales. La siguiente sección documenta el ajuste posterior a 6. Cada ejecución a 900 píxeles tardó aproximadamente 2,9–4,8 s en esta máquina.
 
 Pruebas focales nuevas:
 
 ```powershell
 python -m pytest tests/test_agua.py tests/test_calibracion_segmentacion.py -q
 python -m pytest tests/test_lumbre_evidencias.py tests/test_geometria_contextual.py tests/test_regiones_contextuales.py tests/test_estimacion_bajo_humo.py -q
-python scripts/evaluar_estabilidad_escenas.py --max-lado 900 --sensibilidades 4,5,6
+python scripts/evaluar_estabilidad_escenas.py --max-lado 900 --sensibilidades 5,6,7
 ```
 
 Estas pruebas puntúan escenarios sintéticos con etiquetas conocidas. No equivalen a validación con ground truth de La Mierla, Madrid–Ávila o Niebla y no justifican afirmar que el perfil sea óptimo para esas imágenes.
+
+## Recalibración del perfil por omisiones visibles — 15/10/2026
+
+La revisión visual del resultado mostró parches de SWIR rojizos que quedaban fuera del contorno. No son etiquetas de referencia verificadas, pero motivaron probar sensibilidades 5, 6 y 7 en las mismas ocho parejas, en rejillas de 900 píxeles, manteniendo el área mínima en 0,15 % y el radio máximo en 10 %.
+
+| Escena | Sens. 5 | Sens. 6 | Sens. 7 |
+|---|---:|---:|---:|
+| Cinco Villas | 57 626 px | 60 267 px | 62 962 px |
+| La Vall d'Uixó | 49 490 px | 52 969 px | 55 335 px |
+| Fermoselle | 15 759 px | 18 355 px | 19 558 px |
+| Pinzio | 54 700 px | 55 570 px | 57 005 px |
+| Valpaços | 11 162 px | 12 220 px | 26 308 px |
+| La Mierla | 49 382 px | 51 908 px | 55 147 px |
+| Madrid–Ávila | 26 481 px | 28 238 px | 30 368 px |
+| Niebla | 23 041 px | 24 352 px | 27 167 px |
+
+Se establece **sensibilidad 6/10** como nuevo perfil de arranque. Frente a 5, añade entre 1,6 % y 16,5 % de píxeles candidatos en estas escenas. La sensibilidad 7 se descarta como valor inicial porque en Valpaços más que duplica la máscara respecto a 6 (12 220 → 26 308 píxeles), señal de que el umbral relativo puede incorporar mucho fondo en algunas composiciones. Permanecen los vetos de agua y humo, el filtro espacial de 10 % y el área mínima de 0,15 %.
+
+Con sensibilidad 6, la semilla SWIR queda en percentil rojo 0,913 y el crecimiento en 0,890. La prueba sintética de ruido sin incendio sigue vacía incluso a sensibilidad 10; el caso sintético con artefacto remoto conserva la cicatriz y descarta ese componente tanto a sensibilidad 5 como a 6. Esto valida regresiones controladas, no precisión en las escenas reales. Falta comparar contra máscaras manuales o cartografía independiente correctamente alineada antes de medir IoU, precisión o recall reales.
