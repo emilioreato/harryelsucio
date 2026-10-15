@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import AdvancedSettings from "./components/AdvancedSettings.jsx";
 import ImageViewer from "./components/ImageViewer.jsx";
 import { api, fileToBase64 } from "./services/api.js";
-import { distanceBetween, formatArea, formatLength, formatNumber, polygonArea, polylineLength } from "./domain/measurements.js";
+import { distanceBetween, formatArea, formatNumber, polygonArea } from "./domain/measurements.js";
 
 const DEFAULT_KMEANS_WEIGHTS = {
   swir_red: 1.25,
@@ -59,15 +59,6 @@ function saveBlob(blob, filename) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function loadNotes() {
-  try {
-    const notes = JSON.parse(localStorage.getItem("pyroscope-notes") || "[]");
-    return Array.isArray(notes) ? notes.slice(0, 12) : [];
-  } catch {
-    return [];
-  }
-}
-
 function App() {
   const [scenes, setScenes] = useState([]);
   const [detectors, setDetectors] = useState([]);
@@ -96,8 +87,6 @@ function App() {
   const [marks, setMarks] = useState([]);
   const [polygonClosed, setPolygonClosed] = useState(false);
   const [inspectedPixel, setInspectedPixel] = useState(null);
-  const [notes, setNotes] = useState(loadNotes);
-  const [noteText, setNoteText] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -130,7 +119,6 @@ function App() {
   const grid = result?.grid || null;
   const metrics = result?.metrics || null;
   const marksUnit = grid?.gsd_x_m ? "m" : "px";
-  const notesAsText = useMemo(() => notes.map((note) => `${note.time} · ${note.text}`), [notes]);
 
   const collectSettings = () => {
     const minimum = numberFromInput(minimumArea, "El área mínima");
@@ -208,11 +196,21 @@ function App() {
       setProgress({ label: "Preparando análisis", value: 0 });
 
       const started = await api.analyze(request);
-      const nextJobId = started.job_id;
+      const nextJobId = started?.job_id;
+      if (typeof nextJobId !== "string" || !nextJobId) {
+        throw new Error("El motor no devolvió un identificador de análisis válido.");
+      }
       setJobId(nextJobId);
-      while (true) {
+      const deadline = Date.now() + 10 * 60 * 1000;
+      while (Date.now() < deadline) {
         const job = await api.job(nextJobId);
-        setProgress({ label: job.stage || "Procesando", value: job.progress || 0 });
+        if (!job || !["queued", "running", "complete", "error"].includes(job.state)) {
+          throw new Error("El motor devolvió un estado de análisis desconocido. Vuelve a intentarlo.");
+        }
+        setProgress({
+          label: job.stage || "Procesando",
+          value: Math.max(0, Math.min(100, Number(job.progress) || 0)),
+        });
         if (job.state === "complete") {
           setResult(job);
           setRunning(false);
@@ -222,12 +220,20 @@ function App() {
         if (job.state === "error") throw new Error(job.error || "No se pudo completar el análisis.");
         await new Promise((resolve) => window.setTimeout(resolve, 650));
       }
+      throw new Error("El análisis supera los 10 minutos. Comprueba las imágenes e inténtalo de nuevo.");
     } catch (cause) {
-      setError(cause.message);
-      setResult({ state: "error", error: cause.message });
+      const message = cause instanceof Error ? cause.message : String(cause);
+      setError(message);
+      setResult({ state: "error", error: message });
       setProgress({ label: "No se pudo completar", value: 0 });
       setRunning(false);
-      setConnection((current) => ({ ...current, label: "Motor Python conectado" }));
+      if (cause instanceof TypeError) {
+        setConnection({ ready: false, label: "Conexión interrumpida" });
+      } else {
+        setConnection((current) => current.ready
+          ? { ready: true, label: "Motor Python conectado" }
+          : current);
+      }
     }
   };
 
@@ -250,8 +256,8 @@ function App() {
     if (tool === "distance") {
       for (let index = 0; index + 1 < marks.length; index += 2) {
         elements.push({
-          id: `distancia-${index / 2 + 1}`,
-          tipo: "linea",
+          id: `flecha-${index / 2 + 1}`,
+          tipo: "flecha",
           vertices_px: [[marks[index].x, marks[index].y], [marks[index + 1].x, marks[index + 1].y]],
           distancia: { valor: distanceBetween(marks[index], marks[index + 1], grid), unidad: marksUnit },
         });
@@ -259,30 +265,16 @@ function App() {
     }
     if (tool === "polygon" && polygonClosed && marks.length >= 3) {
       elements.push({
-        id: "poligono-1",
-        tipo: "poligono",
+        id: "area-manual-1",
+        tipo: "area_manual",
         vertices_px: marks.map((point) => [point.x, point.y]),
         area: { valor: polygonArea(marks, grid), unidad: grid.gsd_x_m ? "m²" : "px²" },
-        perimetro: { valor: polylineLength(marks, grid, true), unidad: marksUnit },
       });
     }
     saveBlob(
       new Blob([JSON.stringify({ esquema: "pyroscope-imagen-v1", job_id: jobId, sistema_coordenadas: grid, elementos }, null, 2)], { type: "application/json" }),
       "espejo_ustorio_mediciones.json",
     );
-  };
-
-  const addNote = (event) => {
-    event.preventDefault();
-    const text = noteText.trim();
-    if (!text) return;
-    const next = [
-      { time: new Date().toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }), text },
-      ...notes,
-    ].slice(0, 12);
-    setNotes(next);
-    localStorage.setItem("pyroscope-notes", JSON.stringify(next));
-    setNoteText("");
   };
 
   const detectorDescription = selectedDetector?.description || "";
@@ -391,7 +383,7 @@ function App() {
         <section className="analysis-column" aria-label="Plano y progreso">
           <div className="analysis-heading">
             <div className="analysis-title"><p className="eyebrow">PLANO DE ANÁLISIS</p><h2>{jobId || running ? jobLabel : activeLabel}</h2></div>
-            <div className="progress-summary" aria-live="polite"><span>{progress.label}</span><strong>{progress.value}%</strong></div>
+            <div className="progress-summary" aria-live="polite"><span>{progress.label}</span>{(running || progress.value > 0) && <strong>{progress.value}%</strong>}</div>
           </div>
           <div className="progress-track" role="progressbar" aria-label="Progreso del análisis" aria-valuemin="0" aria-valuemax="100" aria-valuenow={progress.value}>
             <span style={{ width: `${progress.value}%` }} />
@@ -411,11 +403,10 @@ function App() {
               setTool={setTool}
               marks={marks}
               setMarks={setMarks}
-              inspectedPixel={inspectedPixel}
-              setInspectedPixel={setInspectedPixel}
               polygonClosed={polygonClosed}
               setPolygonClosed={setPolygonClosed}
-              errorMessage={running ? "La vista aparecerá al terminar la segmentación." : ""}
+              loading={running}
+              errorMessage={result?.state === "error" ? result.error : (!connection.ready ? connection.label : "")}
               onError={setError}
             />
           </div>
@@ -430,7 +421,6 @@ function App() {
             <div className="metrics-grid">
               <article className="metric-card metric-primary"><span>Superficie candidata</span><strong>{formatNumber(metrics.coverage_pct, 1)} %</strong></article>
               <article className="metric-card"><span>Área</span><strong>{formatArea(metrics.area, metrics.area_unit)}</strong></article>
-              <article className="metric-card"><span>Perímetro</span><strong>{formatLength(metrics.perimeter, metrics.perimeter_unit)}</strong></article>
               <article className="metric-card"><span>Humo probable</span><strong>{formatNumber(metrics.smoke_pct, 1)} %</strong></article>
             </div>
             <p className="result-caveat">Hipótesis automática; requiere revisión humana. Humo y cubiertas oscuras pueden causar zonas indeterminadas o falsos positivos.</p>
@@ -446,15 +436,6 @@ function App() {
             <div className="details-content">{summary}</div>
           </details>
 
-          <details className="details-panel">
-            <summary>Notas de campo</summary>
-            <form className="note-form" onSubmit={addNote}>
-              <label className="sr-only" htmlFor="note-text">Añadir una nota</label>
-              <input className="field-control" id="note-text" type="text" maxLength="240" placeholder="Añadir una nota…" value={noteText} onChange={(event) => setNoteText(event.target.value)} />
-              <button className="icon-button" type="submit" aria-label="Guardar nota">+</button>
-            </form>
-            <ul className="notes-list">{notesAsText.map((note, index) => <li key={`${index}-${note}`}>{note}</li>)}</ul>
-          </details>
         </aside>
       </main>
     </>
