@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import hypot
+from math import hypot, isfinite
 from typing import Any
 
 import numpy as np
-from pyproj import CRS
+from pyproj import CRS, Transformer
 
 
 @dataclass(frozen=True)
@@ -32,12 +32,23 @@ class SistemaCoordenadasImagen:
             raise ValueError("La rejilla debe tener anchura y altura positivas.")
         if (self.gsd_x_m is None) != (self.gsd_y_m is None):
             raise ValueError("Indica el GSD de ambos ejes o deja ambos sin definir.")
-        if self.gsd_x_m is not None and (self.gsd_x_m <= 0 or self.gsd_y_m <= 0):
-            raise ValueError("El GSD debe ser positivo y expresarse en metros por píxel.")
+        if self.gsd_x_m is not None and (
+            not isfinite(self.gsd_x_m)
+            or not isfinite(self.gsd_y_m)
+            or self.gsd_x_m <= 0
+            or self.gsd_y_m <= 0
+        ):
+            raise ValueError("El GSD debe ser positivo y finito, en metros por píxel.")
         if self.gsd_x_m is not None and self.transformacion_affine is not None:
             raise ValueError("Usa GSD local o una transformación geográfica, no ambas.")
         if self.transformacion_affine is not None and len(self.transformacion_affine) != 6:
             raise ValueError("La transformación affine debe tener seis coeficientes.")
+        if self.transformacion_affine is not None:
+            if not all(isfinite(coeficiente) for coeficiente in self.transformacion_affine):
+                raise ValueError("La transformación affine debe contener valores finitos.")
+            a, b, _, d, e, _ = self.transformacion_affine
+            if abs(a * e - b * d) < 1e-15:
+                raise ValueError("La transformación affine no puede ser singular.")
         if self.crs is not None and self.transformacion_affine is None:
             raise ValueError("Un CRS requiere una transformación affine de la imagen.")
         if self.crs is not None:
@@ -80,6 +91,60 @@ class SistemaCoordenadasImagen:
         if self.gsd_x_m is not None and self.gsd_y_m is not None:
             return x_px * self.gsd_x_m, y_px * self.gsd_y_m
         return x_px, y_px
+
+    def coordenadas_a_pixel(self, x_coord: float, y_coord: float) -> tuple[float, float]:
+        """Invierte la conversión local o affine hacia coordenadas de imagen."""
+        if self.transformacion_affine is not None:
+            a, b, c, d, e, f = self.transformacion_affine
+            determinante = a * e - b * d
+            dx = x_coord - c
+            dy = y_coord - f
+            return (
+                (e * dx - b * dy) / determinante,
+                (a * dy - d * dx) / determinante,
+            )
+        if self.gsd_x_m is not None and self.gsd_y_m is not None:
+            return x_coord / self.gsd_x_m, y_coord / self.gsd_y_m
+        return x_coord, y_coord
+
+    def punto_de_vista_a_pixel(
+        self,
+        x_vista: float,
+        y_vista: float,
+        ancho_vista_px: float,
+        alto_vista_px: float,
+    ) -> tuple[float, float]:
+        """Lleva un clic de una vista redimensionada a la rejilla de análisis."""
+        valores = (x_vista, y_vista, ancho_vista_px, alto_vista_px)
+        if not all(isfinite(valor) for valor in valores):
+            raise ValueError("Las coordenadas del clic y de la vista deben ser finitas.")
+        if ancho_vista_px <= 0 or alto_vista_px <= 0:
+            raise ValueError("La vista debe tener anchura y altura positivas.")
+        x_px = x_vista * self.ancho_px / ancho_vista_px
+        y_px = y_vista * self.alto_px / alto_vista_px
+        return (
+            min(max(x_px, 0.0), self.ancho_px - 1.0),
+            min(max(y_px, 0.0), self.alto_px - 1.0),
+        )
+
+    def coordenadas_crs_a_pixel(
+        self, x: float, y: float, *, crs_origen: str
+    ) -> tuple[float, float]:
+        """Proyecta un punto al CRS de la imagen y lo convierte a fila/columna.
+
+        Requiere una imagen georreferenciada con CRS y transformación affine.
+        ``x``/``y`` deben estar expresados en ``crs_origen`` (longitud/latitud
+        para coordenadas geográficas); siempre se respeta el orden x, y.
+        """
+        if self.crs is None or self.transformacion_affine is None:
+            raise ValueError("Para convertir datos geográficos hacen falta CRS y transformación affine.")
+        transformer = Transformer.from_crs(
+            CRS.from_user_input(crs_origen),
+            CRS.from_user_input(self.crs),
+            always_xy=True,
+        )
+        x_imagen, y_imagen = transformer.transform(x, y)
+        return self.coordenadas_a_pixel(x_imagen, y_imagen)
 
     def distancia_entre_puntos(
         self, punto_a: tuple[float, float], punto_b: tuple[float, float]

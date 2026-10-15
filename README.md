@@ -59,7 +59,21 @@ La primera versión de la aplicación, centrada en el reto básico, se ejecuta d
 python -m streamlit run app.py
 ```
 
-Permite elegir una escena de ejemplo o cargar una pareja alineada True Color/SWIR. El diseño de módulos, algoritmo y sus supuestos se explican en [`DOCUMENTACION/Ideas/segmentacion_basica.md`](DOCUMENTACION/Ideas/segmentacion_basica.md).
+En Windows también puedes iniciarla con doble clic en [`encender_aplicacion.bat`](encender_aplicacion.bat), situado en la raíz del repositorio. El script selecciona Python 3.12 o 3.11 si están disponibles, abre la página local en el navegador y mantiene una ventana de consola con los mensajes de Streamlit. Deja esa ventana abierta mientras uses la aplicación; para detenerla, pulsa `Ctrl+C`.
+
+Se abre en el navegador. Permite elegir una escena de ejemplo o cargar una pareja alineada True Color/SWIR. El panel **Plano de análisis** alterna las composiciones, la superposición y la capa de candidatos/humo; también permite medir distancias y polígonos e inspeccionar píxeles. El panel lateral resume área, perímetro, oclusión por humo y otros datos calculados, y ofrece descargas y notas temporales de campo. El progreso avanza al terminar etapas del algoritmo, no estima el tiempo restante. Sin escala, las medidas quedan en píxeles; cuando se conozca el GSD real de la pareja, se introduce en metros por píxel. No hay que suponer que un JPEG conserva la resolución nominal del satélite.
+
+### Detectores y tratamiento del humo
+
+En **Detector de superficie** se puede comparar el K-Means conjunto (True Color + SWIR) con **Contraste SWIR + histéresis (V2)**. V2 busca semillas con contraste SWIR alto y crece por píxeles contiguos con evidencia menor; True Color contribuye a vetar agua probable y vegetación muy verde. Los dos detectores clasifican candidatos, no confirman por sí solos terreno quemado. El control **Grupos de color por escena** solo aplica a K-Means.
+
+Antes de clasificar el suelo, la aplicación estima humo probable con ambas composiciones alineadas. Los píxeles marcados en cian quedan como superficie indeterminada y no se usan como terreno despejado. Esta separación evita aplicar a ciegas los umbrales de SWIR del suelo visible a píxeles ocluidos. No reconstruye lo que hay debajo del humo: el perímetro puede tener huecos y la máscara puede confundir nubes o veladuras. Compara siempre las dos vistas y revisa el resultado.
+
+El filtro espacial prioriza por defecto el componente candidato más grande y puede descartar candidatos alejados. Si la escena puede contener focos independientes, activa **Conservar regiones desconectadas**; así se mantienen los componentes que superan el tamaño mínimo. Las coberturas mostradas son fracciones de píxeles candidatos, no una medida de precisión ni una estimación de fuego activo.
+
+La interfaz web se sirve con Streamlit y ejecuta el motor Python en el servidor. Los estilos están separados en `assets/pyroscope.css`; el algoritmo y las coordenadas siguen en `pyroscope/`. Aún no hay una API REST independiente: si más adelante se cambia a otro frontend, el motor puede exponerse sin rehacer los cálculos.
+
+La aplicación y sus resultados usan una rejilla común de píxeles con origen arriba a la izquierda. Máscaras, marcas manuales y capas auxiliares deben compartir esa rejilla; para combinar en el futuro capas meteorológicas o geográficas será necesario transformarlas/alinearlas a la imagen y conservar su CRS y transformación geográfica. El GSD basta para mediciones métricas locales, pero no para obtener latitud/longitud. Los pasos del algoritmo y sus límites se explican en [`DOCUMENTACION/Ideas/segmentacion_basica.md`](DOCUMENTACION/Ideas/segmentacion_basica.md).
 
 ### Servicios de datos externos
 
