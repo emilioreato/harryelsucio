@@ -58,7 +58,7 @@ Desde la raíz del repositorio, con las dependencias instaladas:
 python -m pyroscope.entrenar_random_forest
 ~~~
 
-Se informa precision/recall/F1 y matriz de confusión en grupos reservados y se guarda random_forest.joblib. Después, reinicia Lumbre: **Random Forest supervisado** aparecerá como método en el selector. Puedes cambiar rutas con --dataset y --model, y limitar muestras por clase/escena con --samples-per-class. Si guardas el modelo fuera de la ruta predeterminada, define LUMBRE_RF_MODEL a esa ruta antes de iniciar Lumbre.
+Se informa precision/recall/F1 y matriz de confusión en grupos reservados y se guarda random_forest.joblib. Después, reinicia Lumbre: **Random Forest supervisado** aparecerá como método en el selector y podrás activar **Apoyo supervisado · Random Forest** en los ajustes avanzados del método contextual habitual. El apoyo solo agrega píxeles corroborados por evidencia SWIR/contextual; si el modelo falla, Lumbre conserva el resultado base. Puedes apagarlo desde ese mismo control. Puedes cambiar rutas con --dataset y --model, y limitar muestras por clase/escena con --samples-per-class. Si guardas el modelo fuera de la ruta predeterminada, define LUMBRE_RF_MODEL a esa ruta antes de iniciar Lumbre.
 
 El modelo usa RGB de ambas composiciones, cromaticidad y textura local. Los JPEG y PNG renderizados no son mediciones de reflectancia; no se calculan NBR/dNBR. Las clases predichas de área quemada, humo, agua, fuego activo posible, nube o bruma y vegetación se muestran por separado; solo el área quemada entra en el área y perímetro candidatos. Las puntuaciones del bosque no están calibradas como probabilidades. Hasta disponer de etiquetas y una evaluación independiente representativa, trátalo como experimental.
 

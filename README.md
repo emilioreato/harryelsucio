@@ -95,6 +95,8 @@ El filtro espacial prioriza por defecto el componente candidato más grande y pu
 
 El detector Random Forest aparece tras entrenar un modelo con máscaras revisadas por escena. Las instrucciones, IDs de clase y estructura del conjunto están en la [guía de entrenamiento](<training Random Forest/README.md>). El entrenamiento reserva escenas completas para evaluación, usa RGB renderizado y textura local, y mantiene separados fuego activo, área quemada, humo, agua, nube o bruma, suelo y vegetación. Las capturas de referencia no sustituyen máscaras alineadas; no se trata como validado hasta evaluar escenas independientes.
 
+En el método contextual habitual se puede activar **Apoyo supervisado · Random Forest** dentro de **Ajustes avanzados**. Solo aporta candidatos cuando coinciden con evidencia SWIR/contextual; no borra la propuesta base. Si el modelo no puede cargarse, la segmentación continúa sin ese apoyo y muestra un aviso. El control permite desactivarlo. Esta copia no incluye un modelo entrenado; sigue la guía anterior y reinicia la aplicación para que lo detecte.
+
 La interfaz React se desarrolla en `frontend/` y Vite compila el sitio estático en `web/`. El servidor Python local sirve la interfaz y la API de análisis; ejecuta los algoritmos, informa del progreso y entrega capas y exportaciones. Para usar la aplicación no hace falta abrir Vite ni desplegar nada: el lanzador inicia un único servidor local y una sola pestaña.
 
 La aplicación y sus resultados usan una rejilla común de píxeles con origen arriba a la izquierda. Máscaras, marcas manuales y capas auxiliares deben compartir esa rejilla; para combinar en el futuro capas meteorológicas o geográficas será necesario transformarlas/alinearlas a la imagen y conservar su CRS y transformación geográfica. El GSD basta para mediciones métricas locales, pero no para obtener latitud/longitud. Los pasos del algoritmo y sus límites se explican en [`DOCUMENTACION/Ideas/segmentacion_basica.md`](DOCUMENTACION/Ideas/segmentacion_basica.md).
@@ -111,18 +113,23 @@ Para cada fuente se deben guardar fecha, resolución, licencia y procedencia de 
 
 ### Segmentación contextual híbrida (experimental)
 
-El nuevo modo conserva V2 como fuente semántica y añade SLIC conjunto, estadísticas regionales, un grafo de adyacencia (RAG), crecimiento limitado y Watershed local con marcadores y fallback. Sigue disponible K-Means, V2 y fusión; K-Means continúa como predeterminado. No modifica entrenamiento, etiquetas ni modelos Random Forest.
+El método contextual conserva V2 como fuente semántica y añade SLIC conjunto, estadísticas regionales, un grafo de adyacencia (RAG), crecimiento limitado y Watershed local con marcadores y fallback. Es el método seleccionado inicialmente en la interfaz; K-Means, V2 y fusión siguen disponibles. El apoyo Random Forest es opcional y se activa por separado, como se describe arriba.
 
-El híbrido analiza hasta 2500 píxeles de lado (La Mierla y Niebla conservan su resolución original), frente a 1800 en los modos anteriores. El esfuerzo espacial se concentra en recortes alrededor de **todos** los candidatos con margen de 24 píxeles, conservando cicatrices independientes. No se descarta una cicatriz por estar lejos de la principal. El motor semántico sigue examinando la escena completa: el recorte no recupera regiones que el clasificador omita.
+El híbrido analiza hasta 2500 píxeles de lado (La Mierla y Niebla conservan su resolución original), frente a 1800 en los modos anteriores. El esfuerzo espacial se concentra en recortes alrededor de **todos** los candidatos con margen de 24 píxeles. Después se aplica el radio máximo: por defecto descarta componentes grandes pero aislados a más del 10 % de la dimensión mayor respecto a la región principal. Activa **Conservar focos separados** si la escena puede contener incendios independientes lejos entre sí. El motor semántico sigue examinando la escena completa: el recorte no recupera regiones que el clasificador omita.
 
 La máscara visible conserva huecos y veta agua/humo. El humo es independiente de la hipótesis fucsia; la trama gris indica suelo desconocido bajo humo. Las hipótesis espectrales y de continuidad corta se exportan separadas en **Capas de humo y diagnóstico** y nunca se suman al área observada. Una columna extensa puede quedar sin inferencia; la menor superficie fucsia es una política de abstención, no prueba de mejor detección. Las distancias son píxeles de trabajo y el área solo es métrica con GSD fiable.
 
 Ver [evaluación, parámetros y límites](DOCUMENTACION/Ideas/segmentacion_contextual_evaluacion.md). No se ha demostrado una mejora de exactitud con máscaras de referencia reales; el modo permanece experimental.
 
+#### Perfil inicial de la aplicación
+
+Cada carga de la página empieza con el mismo perfil de trabajo; los cambios manuales no se guardan entre recargas: método contextual híbrido, sensibilidad 5/10, área mínima 0,15 %, radio 10 %, focos separados desactivados y Random Forest desactivado. Los umbrales SWIR se derivan de la sensibilidad (semilla roja en el percentil 0,922 y crecimiento en el 0,900 con sensibilidad 5); el crecimiento exige además una señal roja mínima para que el ruido de una escena sin incendio no genere una máscara extensa. El veto auxiliar de agua usa el percentil 0,85 para la relación rojo/verde SWIR, que admite agua azul oscura aunque la vegetación verde domine el histograma. Estos valores superaron los casos sintéticos descritos en la evaluación, pero no se han calibrado con etiquetas independientes de las imágenes reales.
+
 Comprobaciones y artefactos reproducibles (sin dependencias nuevas):
 
 ```powershell
-python -m pytest tests -q
+python -m pytest -q
+python scripts/evaluar_estabilidad_escenas.py --max-lado 900 --sensibilidades 4,5,6
 python scripts/comparar_contextual.py --fase baseline
 python scripts/comparar_contextual.py --fase contextual_roi
 python scripts/evaluar_humo_sintetico.py

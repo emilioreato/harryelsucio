@@ -205,15 +205,26 @@ def procesar_escena(nombre: str, fecha: str, destino: Path) -> dict:
         "candidata_v2": cls.mascara_candidata_v2,
         "humo_antes": humo_antes,
         "humo_despues": humo_despues,
+        "humo_referencia": fuentes.get("humo_referencia", np.zeros_like(humo_despues)),
+        "humo_nucleo": fuentes.get("humo_nucleo", np.zeros_like(humo_despues)),
         "humo_fuerte": fuentes.get("humo_fuerte", np.zeros_like(humo_despues)),
         "humo_moderado": fuentes.get("humo_moderado", np.zeros_like(humo_despues)),
         "evidencia_humo": fuentes.get("evidencia_humo", cls.confianza_humo),
+        "humo_candidatos_debiles": fuentes.get("humo_candidatos_debiles", np.zeros_like(humo_despues)),
+        "humo_descartado_distancia": fuentes.get("humo_descartado_distancia", np.zeros_like(humo_despues)),
+        "humo_descartado_conectividad": fuentes.get("humo_descartado_conectividad", np.zeros_like(humo_despues)),
         "evidencia_swir_v2": evidence_v2,
         "evidencia_frente": evidence_front,
         "frente_candidato_fuerte": frente_fuerte,
         "frente_candidato_moderado": frente_moderado,
         "frente_semillas_nuevas": semillas_nuevas,
         "visible_nuevo_atribuible_frente": atribuible_frente,
+        "agua": cls.mascara_agua,
+        "frente_fuerte_bajo_humo": frente_fuerte & humo_despues,
+        "frente_moderado_bajo_humo": frente_moderado & humo_despues,
+        "frente_moderado_vecinal": fuentes.get(
+            "frente_candidato_moderado_vecinal", np.zeros_like(humo_despues)
+        ),
         "tras_slic_rag": experimental["contexto"].mascara,
         "growth": diagnosticos.get("growth", np.zeros_like(despues)),
         "descartado_por_motor": cls.mascara_candidata & ~experimental["contexto"].mascara,
@@ -224,23 +235,20 @@ def procesar_escena(nombre: str, fecha: str, destino: Path) -> dict:
     }
     np.savez_compressed(escena_dir / "capas_comparacion.npz", **arrays)
 
-    wild_path = next((carpeta / "referencias").glob("*Wildfires*"), None) \
-        if (carpeta / "referencias").is_dir() else None
     paneles = [("True Color", tc), ("SWIR", swir)]
-    if wild_path:
-        wild, _ = abrir_rgb(wild_path.read_bytes(), 2500)
-        if wild.shape[:2] != tc.shape[:2]:
-            wild = np.asarray(Image.fromarray(wild).resize(
-                (tc.shape[1], tc.shape[0]), Image.Resampling.LANCZOS
-            ))
-        paneles.append(("Wildfires (no es verdad terreno)", wild))
     paneles += [
         ("Humo contextual anterior", tinte(tc, humo_antes, (0, 165, 255))),
+        ("Humo referencia (ampliación anterior)", tinte(tc, arrays["humo_referencia"], (0, 165, 255))),
         ("Humo fuerte", tinte(tc, arrays["humo_fuerte"], (0, 115, 240))),
-        ("Humo moderado añadido", tinte(tc, arrays["humo_moderado"], (40, 210, 255))),
+        ("Humo moderado (heredado o añadido)", tinte(tc, arrays["humo_moderado"], (40, 210, 255))),
+        ("Candidatos débiles antes del radio", tinte(tc, arrays["humo_candidatos_debiles"], (255, 180, 0))),
+        ("Descartados por distancia", tinte(tc, arrays["humo_descartado_distancia"], (255, 0, 220))),
+        ("Descartados por conectividad", tinte(tc, arrays["humo_descartado_conectividad"], (180, 60, 220))),
         ("Candidatos semánticos antes de SLIC", tinte(tc, cls.mascara_candidata, (255, 80, 20))),
         ("Evidencia SWIR V2", calor(tc, evidence_v2)),
         ("Evidencia visual del frente", calor(tc, evidence_front, (235, 15, 190))),
+        ("Frente fuerte bajo humo", tinte(tinte(tc, humo_despues, (0, 140, 255)), arrays["frente_fuerte_bajo_humo"], (245, 0, 210))),
+        ("Apoyo rojizo vecinal bajo humo", tinte(tinte(tc, humo_despues, (0, 140, 255)), arrays["frente_moderado_vecinal"] & humo_despues, (255, 210, 0))),
         ("Máscara tras SLIC/RAG", tinte(tc, arrays["tras_slic_rag"], (255, 80, 20))),
         ("Superficie visible anterior", tinte(tc, antes, (255, 50, 20))),
         ("Superficie visible experimental", tinte(tc, despues, (255, 50, 20))),
@@ -257,7 +265,6 @@ def procesar_escena(nombre: str, fecha: str, destino: Path) -> dict:
         "trabajo_wh": [tc.shape[1], tc.shape[0]],
         "true_color_sha256": hash_archivo(tc_path),
         "swir_sha256": hash_archivo(swir_path),
-        "wildfires_sha256": hash_archivo(wild_path) if wild_path else None,
         "tiempo_control_s": round(control["segundos"], 3),
         "tiempo_experimental_s": round(experimental["segundos"], 3),
         "control": {name: geometria(mask) for name, mask in (
@@ -273,9 +280,14 @@ def procesar_escena(nombre: str, fecha: str, destino: Path) -> dict:
         )},
         "diferencias_px": {
             "humo_nuevo": int(np.count_nonzero(humo_despues & ~humo_antes)),
+            "humo_candidatos_debiles_px": int(arrays["humo_candidatos_debiles"].sum()),
+            "humo_descartado_distancia_px": int(arrays["humo_descartado_distancia"].sum()),
+            "humo_descartado_conectividad_px": int(arrays["humo_descartado_conectividad"].sum()),
             "visible_anadido": int(added.sum()),
             "visible_retirado": int(removed.sum()),
             "semillas_fuertes_frente": int(semillas_nuevas.sum()),
+            "frente_fuerte_bajo_humo": int(arrays["frente_fuerte_bajo_humo"].sum()),
+            "frente_vecinal_bajo_humo": int((arrays["frente_moderado_vecinal"] & humo_despues).sum()),
             "nuevos_visibles_atribuibles_frente": int(atribuible_frente.sum()),
             "descartado_motor_px": int(arrays["descartado_por_motor"].sum()),
             "descartado_geometria_px": int(arrays["descartado_por_geometria"].sum()),

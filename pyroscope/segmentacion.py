@@ -9,6 +9,7 @@ import numpy as np
 from .coordenadas import SistemaCoordenadasImagen
 from .detectores.kmeans import clasificar_pixeles_area_afectada
 from .detectores.registro import obtener_detector_superficie
+from .detectores.random_forest import clasificar_random_forest
 from .detectores.swir_histeresis import clasificar_pixeles_area_afectada_swir
 from .geometria_segmentacion import segmentar_regiones_espaciales
 from .imagenes import validar_par_alineado
@@ -25,6 +26,100 @@ from .visualizacion_etapas import (
     previsualizar_mascara,
     previsualizar_resultado,
 )
+
+
+def _fusionar_evidencia_random_forest(
+    clasificacion: ResultadoClasificacionSemantica,
+    random_forest: ResultadoClasificacionSemantica,
+    evidencia_base: np.ndarray,
+) -> tuple[ResultadoClasificacionSemantica, np.ndarray]:
+    """Añade RF solo donde coincide con evidencia previa de SWIR/contexto.
+
+    Los valores son niveles ordinales de evidencia, no probabilidades. RF no
+    elimina candidatos del detector habitual ni puede incorporar píxeles que
+    contradigan el filtro existente de agua o humo.
+    """
+    from .evidencia_contextual import EvidenciaContextual
+    from .ontologia import ClaseSemantica
+
+    forma = clasificacion.mascara_candidata.shape
+    evidencia = np.asarray(evidencia_base, dtype=np.float32).copy()
+    mascara_rf = np.asarray(random_forest.mascara_candidata, dtype=bool)
+    if evidencia.shape != forma or mascara_rf.shape != forma:
+        raise ValueError("Las máscaras Random Forest deben coincidir con la rejilla contextual.")
+
+    protegida = np.asarray(clasificacion.mascara_agua, dtype=bool) | np.asarray(
+        clasificacion.mascara_humo, dtype=bool
+    )
+    # 0,38 es el nivel de evidencia contextual moderada que ya habilita el
+    # crecimiento regional. RF solo aporta en esas zonas; no siembra incendios
+    # independientes basándose únicamente en su propia predicción.
+    apoyo = mascara_rf & (evidencia >= 0.38) & ~protegida
+    agregada = apoyo & ~np.asarray(clasificacion.mascara_candidata, dtype=bool)
+    candidata = np.asarray(clasificacion.mascara_candidata, dtype=bool) | apoyo
+    clases = np.asarray(clasificacion.clase_por_pixel).copy()
+    clases[agregada] = ClaseSemantica.SUPERFICIE_AFECTADA_CANDIDATA
+
+    # Dos fuentes coincidentes constituyen una semilla fuerte para el motor
+    # regional; no se interpreta el score del clasificador como probabilidad.
+    evidencia[apoyo] = np.maximum(evidencia[apoyo], 0.82)
+    diagnosticos = dict(getattr(evidencia_base, "diagnosticos", {}) or {})
+    diagnosticos.update(
+        random_forest_candidates=mascara_rf,
+        random_forest_support=apoyo,
+        random_forest_unconfirmed=mascara_rf & ~apoyo,
+    )
+    evidencia_fusionada = EvidenciaContextual(evidencia, diagnosticos)
+
+    diagnosticos_clasificacion = dict(clasificacion.diagnosticos_evidencia or {})
+    diagnosticos_clasificacion.update(
+        random_forest_candidates=mascara_rf,
+        random_forest_support=apoyo,
+        random_forest_unconfirmed=mascara_rf & ~apoyo,
+    )
+    return (
+        replace(
+            clasificacion,
+            mascara_candidata=candidata,
+            clase_por_pixel=clases,
+            diagnosticos_evidencia=diagnosticos_clasificacion,
+        ),
+        evidencia_fusionada,
+    )
+
+
+def _aplicar_random_forest_contextual(
+    clasificacion: ResultadoClasificacionSemantica,
+    true_color: np.ndarray,
+    swir: np.ndarray,
+    caracteristicas: np.ndarray,
+    on_progress: ProgresoSegmentacion | None,
+) -> tuple[ResultadoClasificacionSemantica, np.ndarray | None, str | None]:
+    """Ejecuta el apoyo RF de forma aislada; cualquier error conserva V2."""
+    from .evidencia_contextual import evidencia_desde_v2
+
+    try:
+        evidencia_base = evidencia_desde_v2(clasificacion, caracteristicas)
+
+        def progreso_random_forest(etapa: str, porcentaje: int) -> None:
+            # El clasificador contextual ya llegó al hito 68. Mantener una
+            # escala monotónica y dejar 73 para publicar la evidencia inicial.
+            informar_progreso(on_progress, f"Random Forest · {etapa}", 68 + round(porcentaje * 0.05))
+
+        random_forest = clasificar_random_forest(
+            true_color, swir, on_progress=progreso_random_forest
+        )
+        fusionada, evidencia = _fusionar_evidencia_random_forest(
+            clasificacion, random_forest, evidencia_base
+        )
+        return fusionada, evidencia, None
+    except Exception as exc:
+        detalle = str(exc).strip() or type(exc).__name__
+        aviso = (
+            f"Random Forest no se pudo aplicar ({detalle}). "
+            "Se conservó la segmentación contextual habitual."
+        )
+        return clasificacion, None, aviso
 
 
 def segmentar_superficie_afectada(
@@ -90,13 +185,36 @@ def segmentar_superficie_afectada(
         )
 
     clasificacion = detector.clasificar(true_color, swir, **opciones_detector)
+    avisos: list[str] = []
+    diagnosticos = None
+    estimacion = None
+    es_contextual = detector.id == "contextual_hibrida"
+    caracteristicas = None
+    evidencia_contextual = None
+    if es_contextual:
+        from .caracteristicas import extraer_caracteristicas_pareja
+        from .evidencia_contextual import evidencia_desde_v2
+
+        caracteristicas = clasificacion.caracteristicas_comunes
+        if caracteristicas is None:
+            caracteristicas = extraer_caracteristicas_pareja(true_color, swir)
+        if avanzado.get("use_random_forest", False):
+            informar_progreso(on_progress, "Combinando evidencia contextual y Random Forest", 68)
+            clasificacion, evidencia_contextual, aviso_rf = _aplicar_random_forest_contextual(
+                clasificacion, true_color, swir, caracteristicas, on_progress
+            )
+            if aviso_rf:
+                avisos.append(aviso_rf)
+        if evidencia_contextual is None:
+            evidencia_contextual = evidencia_desde_v2(clasificacion, caracteristicas)
+
     progreso_clasificacion = {
         "fusion_ponderada": 83,
         "random_forest": 81,
     }.get(detector.id, 73)
     publicador.publicar(
         "clasificacion", "Evidencia inicial",
-        "Candidatos del detector sobre la imagen; todavía no es la geometría final.",
+        "Candidatos del detector habitual y, si está activo, apoyo RF corroborado por evidencia contextual.",
         kind="diagnostic", progress=progreso_clasificacion,
         image=lambda: previsualizar_clasificacion(
             true_color, clasificacion.mascara_candidata,
@@ -105,33 +223,35 @@ def segmentar_superficie_afectada(
         ),
         applied=bool(clasificacion.mascara_candidata.any()),
     )
-    diagnosticos = None
-    estimacion = None
-    es_contextual = detector.id == "contextual_hibrida"
     if es_contextual:
-        from .caracteristicas import extraer_caracteristicas_pareja
-        from .evidencia_contextual import evidencia_desde_v2
         from .regiones_contextuales import segmentar_contextual
-        caracteristicas = clasificacion.caracteristicas_comunes
-        if caracteristicas is None:
-            caracteristicas = extraer_caracteristicas_pareja(true_color, swir)
-        score = evidencia_desde_v2(clasificacion, caracteristicas)
         informar_progreso(on_progress, "Organizando evidencia con SLIC y RAG", 75)
         contexto = segmentar_contextual(
             true_color, swir, clasificacion.mascara_candidata,
             clasificacion.mascara_agua, clasificacion.mascara_humo,
-            evidencia=score, caracteristicas=caracteristicas,
+            evidencia=evidencia_contextual, caracteristicas=caracteristicas,
             on_progress=on_progress,
             on_checkpoint=publicador,
         )
-        diagnosticos = contexto.diagnosticos
+        diagnosticos = dict(contexto.diagnosticos)
+        evidencia_rf = getattr(evidencia_contextual, "diagnosticos", {}) or {}
+        for nombre in (
+            "random_forest_candidates",
+            "random_forest_support",
+            "random_forest_unconfirmed",
+        ):
+            if nombre in evidencia_rf:
+                diagnosticos[nombre] = evidencia_rf[nombre]
         clasificacion = replace(clasificacion, mascara_candidata=contexto.mascara)
     regiones = segmentar_regiones_espaciales(
         clasificacion,
         area_minima_pct=area_minima_pct,
         distancia_maxima_pct=distancia_maxima_pct,
         on_progress=on_progress,
-        conservar_regiones_separadas=conservar_regiones_separadas or es_contextual,
+        # El modo contextual ya mantiene agujeros y contornos internos, pero
+        # también debe respetar el radio de proximidad elegido en la interfaz.
+        # La casilla de focos separados desactiva ese filtro explícitamente.
+        conservar_regiones_separadas=conservar_regiones_separadas,
         preservar_geometria=es_contextual,
     )
     publicador.publicar(
@@ -150,7 +270,7 @@ def segmentar_superficie_afectada(
                          & (clasificacion.confianza_humo < .7))
         estimacion = estimar_bajo_humo(
             regiones.mascara, clasificacion.mascara_humo, clasificacion.mascara_agua,
-            score, contradiccion=contradiccion,
+            evidencia_contextual, contradiccion=contradiccion,
             distancia_maxima_px=max(3, min(24, round(min(alto, ancho) * .015))),
             # La firma SWIR moderada superviviente se distingue de puentes
             # puramente geométricos: puede sostener un recorrido algo mayor.
@@ -191,6 +311,7 @@ def segmentar_superficie_afectada(
         mascara_bajo_humo_espectral=(estimacion.mascara_espectral if estimacion is not None else None),
         mascara_bajo_humo_continuidad=(estimacion.mascara_continuidad if estimacion is not None else None),
         diagnosticos_contextuales=diagnosticos,
+        avisos=tuple(avisos),
     )
     publicador.publicar(
         "resultado-final", "Resultado final",

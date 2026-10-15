@@ -7,8 +7,10 @@ import { formatNumber } from "../domain/measurements.js";
 const LAYERS = [
   ["true-color", "True Color", ImageIcon],
   ["swir", "SWIR", ScanLine],
-  ["candidates", "Clases + humo", Layers3],
+  ["candidates", "Clases", Layers3],
 ];
+
+const CLASSIFICATION_DESCRIPTION = "Vista de clasificación estimada: superficie afectada candidata, humo probable y otras clases contextuales. Es orientativa, no verdad terreno.";
 
 function visibleLayer(layer, showSegmentation) {
   if (layer === "candidates") return "candidates";
@@ -332,12 +334,13 @@ export default function ImageViewer({
             <Button
               className={`layer-choice${layer === id ? " is-active" : ""}`}
               key={id}
-              variant={layer === id ? "soft" : "ghost"}
+              variant="ghost"
               size="1"
               type="button"
               aria-pressed={layer === id}
               disabled={!hasResult}
-              title={id === "reference-wildfires" ? "Referencia visual; no es verdad terreno ni se usa para segmentar." : undefined}
+              title={id === "reference-wildfires" ? "Referencia visual; no es verdad terreno ni se usa para segmentar." : id === "candidates" ? CLASSIFICATION_DESCRIPTION : undefined}
+              aria-label={id === "candidates" ? CLASSIFICATION_DESCRIPTION : label}
               onClick={() => {
                 setLayer(id);
                 if (id === "candidates") setShowSegmentation(true);
@@ -346,16 +349,23 @@ export default function ImageViewer({
             ><Icon size={14} aria-hidden="true" /><span>{label}</span></Button>
           ))}
         </div>
-        <div className="overlay-control" role="group" aria-label="Original o segmentación">
-          <Button className={`overlay-choice${!showSegmentation ? " is-active" : ""}`} variant={!showSegmentation ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult} aria-pressed={!showSegmentation} onClick={() => {
-            if (layer === "candidates" || layer === "reference-wildfires") setLayer("true-color");
-            setShowSegmentation(false);
-          }}><Eye size={13} aria-hidden="true" />Original</Button>
-          <Button className={`overlay-choice${showSegmentation ? " is-active" : ""}`} variant={showSegmentation ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult || layer === "candidates" || layer === "reference-wildfires"} aria-pressed={showSegmentation} onClick={() => setShowSegmentation(true)}><Flame size={13} aria-hidden="true" />Contorno</Button>
-        </div>
-        <Button className={`mark-toggle${showMarks ? " is-active" : ""}`} variant="outline" size="1" type="button" disabled={!hasResult} aria-pressed={showMarks} onClick={() => setShowMarks((visible) => !visible)}>
+        <Button
+          className={`overlay-toggle${showSegmentation ? " is-active" : ""}`}
+          variant="ghost"
+          size="1"
+          type="button"
+          disabled={!hasResult || layer === "candidates" || layer === "reference-wildfires"}
+          aria-pressed={showSegmentation}
+          aria-label={`Vista ${showSegmentation ? "con contorno" : "original"}. Cambiar a ${showSegmentation ? "original" : "contorno"}.`}
+          title="Alternar entre la imagen original y el contorno de la segmentación"
+          onClick={() => setShowSegmentation((visible) => !visible)}
+        >
+          {showSegmentation ? <Flame size={13} aria-hidden="true" /> : <Eye size={13} aria-hidden="true" />}
+          <span>{showSegmentation ? "Contorno" : "Original"}</span>
+        </Button>
+        <Button className={`mark-toggle${showMarks ? " is-active" : ""}`} variant="ghost" size="1" type="button" disabled={!hasResult} aria-pressed={showMarks} aria-label={`${showMarks ? "Ocultar" : "Mostrar"} marcas`} title={`${showMarks ? "Ocultar" : "Mostrar"} marcas`} onClick={() => setShowMarks((visible) => !visible)}>
           {showMarks ? <EyeOff size={13} aria-hidden="true" /> : <Eye size={13} aria-hidden="true" />}
-          {showMarks ? "Marcas" : "Ver marcas"}
+          <span>Marcas</span>
         </Button>
       </div>
 
@@ -379,7 +389,7 @@ export default function ImageViewer({
             <img
               ref={imageRef}
               src={source}
-              alt={layer === "candidates" ? "Clases de superficie y humo probable" : layer === "reference-wildfires" ? "Composición Wildfires de referencia; no es verdad terreno" : `${layer === "swir" ? "SWIR" : "True Color"}${showSegmentation ? " con segmentación" : " original"}`}
+              alt={layer === "candidates" ? CLASSIFICATION_DESCRIPTION : layer === "reference-wildfires" ? "Composición Wildfires de referencia; no es verdad terreno" : `${layer === "swir" ? "SWIR" : "True Color"}${showSegmentation ? " con segmentación" : " original"}`}
               draggable="false"
               onError={() => onError("No se pudo cargar la imagen resultante.")}
             />

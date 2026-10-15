@@ -69,6 +69,9 @@ class ResultadoAreaAfectada:
     mascara_bajo_humo_espectral: np.ndarray | None = None
     mascara_bajo_humo_continuidad: np.ndarray | None = None
     diagnosticos_contextuales: dict[str, np.ndarray] | None = None
+    # Avisos no bloqueantes, por ejemplo un detector opcional que no pudo
+    # cargarse y cuya ausencia no debe impedir obtener el resultado base.
+    avisos: tuple[str, ...] = ()
 
     @property
     def mascara_superficie_visible(self) -> np.ndarray:

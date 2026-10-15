@@ -50,23 +50,11 @@ export default function PipelineTimeline({
     }
   };
 
-  const handleKeyDown = (event) => {
-    if (!checkpoints.length) return;
-    let index = selectedIndex < 0 ? checkpoints.length - 1 : selectedIndex;
-    if (event.key === "ArrowRight" || event.key === "ArrowUp") index = Math.min(checkpoints.length - 1, index + 1);
-    else if (event.key === "ArrowLeft" || event.key === "ArrowDown") index = Math.max(0, index - 1);
-    else if (event.key === "Home") index = 0;
-    else if (event.key === "End") index = checkpoints.length - 1;
-    else return;
-    event.preventDefault();
-    onSelectCheckpoint(checkpoints[index].id);
-  };
-
   return (
     <section className="pipeline-timeline" aria-label="Evolución de la segmentación">
       <div className="timeline-heading">
         <span>{running ? "Etapas del análisis" : "Historial del análisis"}</span>
-        {checkpoints.length > 0 && <span className="timeline-count">{checkpoints.length} {checkpoints.length === 1 ? "etapa" : "etapas"}</span>}
+        {checkpoints.length > 0 && <span className="timeline-count">← → · {checkpoints.length} {checkpoints.length === 1 ? "etapa" : "etapas"}</span>}
       </div>
       <div className="timeline-rail" aria-label="Navegación de checkpoints">
         <div className="progress-track timeline-progress" aria-hidden="true">
@@ -81,11 +69,11 @@ export default function PipelineTimeline({
           aria-valuemax={checkpoints.length || 0}
           aria-valuenow={checkpoints.length ? Math.max(1, selectedIndex + 1) : 0}
           aria-valuetext={selected ? `${selected.label}, etapa ${selectedIndex + 1} de ${checkpoints.length}` : "Sin capturas disponibles"}
+          aria-keyshortcuts="ArrowLeft ArrowRight Home End"
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
-          onKeyDown={handleKeyDown}
         />
         <div className="timeline-markers">
           {checkpoints.map((checkpoint, index) => (

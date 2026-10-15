@@ -5,7 +5,7 @@ import ImageViewer from "./components/ImageViewer.jsx";
 import PipelineTimeline from "./components/PipelineTimeline.jsx";
 import CheckpointViewer from "./components/CheckpointViewer.jsx";
 import { api, fileToBase64 } from "./services/api.js";
-import { Button, Card } from "@radix-ui/themes";
+import { Button } from "@radix-ui/themes";
 import { Activity, Copy, Crosshair, MousePointer2, Play, Ruler, ScanLine, SlidersHorizontal } from "lucide-react";
 import { distanceBetween, formatArea, formatLength, formatNumber } from "./domain/measurements.js";
 
@@ -30,8 +30,19 @@ const DEFAULT_WATER_THRESHOLDS = {
   true_color_darkness: 0.2,
   swir_darkness: 0.1,
   swir_red_max: 0.55,
-  swir_red_green_max: 0.55,
+  swir_red_green_max: 0.85,
 };
+
+// Perfil de arranque intencional: los controles de esta sesión no se guardan
+// en localStorage y la página vuelve a estos valores al recargar la aplicación.
+const DEFAULT_SEGMENTATION_PROFILE = Object.freeze({
+  method: "contextual_hibrida",
+  sensitivity: 5,
+  numClasses: 7,
+  minimumArea: "0.15",
+  maxDistance: "10",
+  keepSeparate: false,
+});
 
 const TOOL_OPTIONS = [
   { id: "view", label: "Ver", Icon: MousePointer2 },
@@ -39,15 +50,6 @@ const TOOL_OPTIONS = [
   { id: "area", label: "Área", Icon: Crosshair },
   { id: "pixel", label: "Píxel", Icon: ScanLine },
 ];
-
-const OCCLUSION_LAYERS = {
-  "visible-surface": "Superficie observable",
-  smoke: "Humo probable",
-  "smoke-candidates": "Hipótesis bajo humo",
-  "smoke-unknown": "Terreno indeterminado",
-  "smoke-spectral": "Bajo humo: evidencia SWIR",
-  "smoke-continuity": "Bajo humo: continuidad espacial",
-};
 
 function defaultAdvancedSettings() {
   return {
@@ -59,6 +61,7 @@ function defaultAdvancedSettings() {
     fusion_kmeans_weight: 0.5,
     fusion_swir_weight: 0.5,
     fusion_threshold: 0.55,
+    use_random_forest: false,
   };
 }
 
@@ -86,13 +89,13 @@ function App() {
   const [connection, setConnection] = useState({ ready: false, label: "Conectando…" });
   const [source, setSource] = useState("preloaded");
   const [sceneId, setSceneId] = useState("");
-  const [method, setMethod] = useState("contextual_hibrida");
-  const [sensitivity, setSensitivity] = useState(5);
-  const [numClasses, setNumClasses] = useState(7);
-  const [minimumArea, setMinimumArea] = useState("0.15");
-  const [maxDistance, setMaxDistance] = useState("10");
+  const [method, setMethod] = useState(DEFAULT_SEGMENTATION_PROFILE.method);
+  const [sensitivity, setSensitivity] = useState(DEFAULT_SEGMENTATION_PROFILE.sensitivity);
+  const [numClasses, setNumClasses] = useState(DEFAULT_SEGMENTATION_PROFILE.numClasses);
+  const [minimumArea, setMinimumArea] = useState(DEFAULT_SEGMENTATION_PROFILE.minimumArea);
+  const [maxDistance, setMaxDistance] = useState(DEFAULT_SEGMENTATION_PROFILE.maxDistance);
   const [gsd, setGsd] = useState("");
-  const [keepSeparate, setKeepSeparate] = useState(false);
+  const [keepSeparate, setKeepSeparate] = useState(DEFAULT_SEGMENTATION_PROFILE.keepSeparate);
   const [advanced, setAdvanced] = useState(defaultAdvancedSettings);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState({ label: "Listo para analizar", value: 0 });
@@ -106,7 +109,6 @@ function App() {
   const followingLiveRef = useRef(true);
   const analysisRunRef = useRef(0);
   const [jobLabel, setJobLabel] = useState("Selecciona una escena");
-  const [settingsUsed, setSettingsUsed] = useState(null);
   const [layer, setLayer] = useState("swir");
   const [showSegmentation, setShowSegmentation] = useState(true);
   const [showMarks, setShowMarks] = useState(true);
@@ -212,7 +214,6 @@ function App() {
   const canMeasure = hasResult && !showingHistory;
   const grid = result?.grid || null;
   const metrics = result?.metrics || null;
-  const diagnosticLayers = (metrics?.available_layers || []).filter((name) => name.startsWith("diagnostic-"));
   const handleRegionsReady = useCallback((regions) => setRegionCount(regions.length), []);
   const hasMetricScale = Number.isFinite(grid?.gsd_x_m) && grid.gsd_x_m > 0
     && Number.isFinite(grid?.gsd_y_m) && grid.gsd_y_m > 0;
@@ -231,7 +232,7 @@ function App() {
     setInspectedPixel(null);
   };
 
-  const selectCheckpoint = (checkpointId) => {
+  const selectCheckpoint = useCallback((checkpointId) => {
     followingLiveRef.current = false;
     setFollowingLive(false);
     setSelectedCheckpointId(checkpointId);
@@ -239,7 +240,29 @@ function App() {
     setDistancePreview(null);
     setSelectedRegion(null);
     setInspectedPixel(null);
-  };
+  }, []);
+
+  useEffect(() => {
+    const handleHistoryKeys = (event) => {
+      if (!checkpoints.length || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+
+      const currentIndex = checkpoints.findIndex((item) => item.id === selectedCheckpointId);
+      const startIndex = currentIndex < 0 ? checkpoints.length - 1 : currentIndex;
+      const nextIndex = event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? checkpoints.length - 1
+          : Math.max(0, Math.min(checkpoints.length - 1, startIndex + (event.key === "ArrowRight" ? 1 : -1)));
+      if (nextIndex === currentIndex) return;
+      event.preventDefault();
+      selectCheckpoint(checkpoints[nextIndex].id);
+    };
+
+    window.addEventListener("keydown", handleHistoryKeys);
+    return () => window.removeEventListener("keydown", handleHistoryKeys);
+  }, [checkpoints, selectedCheckpointId, selectCheckpoint]);
 
   const followLatestCheckpoint = () => {
     followingLiveRef.current = true;
@@ -265,7 +288,7 @@ function App() {
       if (!Number.isFinite(value) || value < -3 || value > 3) throw new Error(`El peso K-Means ${name} debe estar entre -3 y 3.`);
     }
     const sensitivityNumber = Number(sensitivity);
-    const seedRed = advanced.swir_thresholds.seed_red ?? (0.994 - (sensitivityNumber - 1) * 0.006);
+    const seedRed = advanced.swir_thresholds.seed_red ?? (0.958 - (sensitivityNumber - 1) * 0.009);
     const growRed = advanced.swir_thresholds.grow_red ?? (0.94 - (sensitivityNumber - 1) * 0.01);
     const seedRG = advanced.swir_thresholds.seed_red_green ?? (0.82 - (sensitivityNumber - 1) * 0.005);
     const growRG = advanced.swir_thresholds.grow_red_green ?? (0.68 - (sensitivityNumber - 1) * 0.012);
@@ -300,7 +323,6 @@ function App() {
     let request;
     try {
       const settings = collectSettings();
-      setSettingsUsed(settings);
       if (source === "preloaded") {
         if (!sceneId) throw new Error("Selecciona una escena precargada.");
         request = { source: "preloaded", scene: sceneId, settings };
@@ -397,42 +419,6 @@ function App() {
     }
   };
 
-  const downloadMeasurements = () => {
-    if (!jobId || !grid) return;
-    const elements = marks.map((point, index) => ({
-      id: `punto-${index + 1}`,
-      tipo: "punto",
-      coordenadas_px: [point.x, point.y],
-    }));
-    if (tool === "distance") {
-      for (let index = 0; index + 1 < marks.length; index += 2) {
-        elements.push({
-          id: `distancia-${index / 2 + 1}`,
-          tipo: "linea",
-          vertices_px: [[marks[index].x, marks[index].y], [marks[index + 1].x, marks[index + 1].y]],
-          distancia: { valor: distanceBetween(marks[index], marks[index + 1], grid), unidad: marksUnit },
-        });
-      }
-    }
-    if (selectedRegion) {
-      elements.push({
-        id: `region-segmentada-${selectedRegion.id}`,
-        tipo: "region_segmentada",
-        region_id: selectedRegion.id,
-        pixel_count: selectedRegion.pixel_count,
-        area: { valor: selectedRegion.area, unidad: selectedRegion.area_unit },
-        perimetro: { valor: selectedRegion.perimeter, unidad: selectedRegion.perimeter_unit },
-      });
-    }
-    saveBlob(
-      new Blob([JSON.stringify({ esquema: "lumbre-imagen-v1", job_id: jobId, sistema_coordenadas: grid, elementos }, null, 2)], { type: "application/json" }),
-      "lumbre_mediciones.json",
-    );
-  };
-
-  const summary = metrics && settingsUsed
-    ? `${metrics.detector}. Rejilla ${metrics.grid_width} × ${metrics.grid_height} px. Píxeles excluidos como agua: ${formatNumber(metrics.water_excluded)}. Regiones remotas descartadas: ${metrics.remote_regions_discarded}. ${metrics.gsd_x_m ? `GSD efectivo ${formatNumber(metrics.gsd_x_m, 3)} × ${formatNumber(metrics.gsd_y_m, 3)} m/píxel.` : "Sin GSD; las medidas se expresan en píxeles."}`
-    : "Al terminar, aquí se muestran el detector y la rejilla usada.";
   return (
     <>
       <header className="mobile-appbar">
@@ -497,10 +483,33 @@ function App() {
 
             {source === "preloaded" ? (
               <section className="source-content">
-                <label className="field-label" htmlFor="scene-select">Escena</label>
-                <select className="field-control" id="scene-select" value={sceneId} onChange={(event) => setSceneId(event.target.value)}>
-                  {scenes.length ? scenes.map((scene) => <option value={scene.id} key={scene.id}>{scene.label}</option>) : <option value="">{connection.ready ? "No hay escenas precargadas" : "Buscando imágenes…"}</option>}
-                </select>
+                <span className="field-label">Escena</span>
+                {scenes.length ? <div className="scene-gallery" role="group" aria-label="Elegir escena">
+                  {scenes.map((scene) => (
+                    <button
+                      key={scene.id}
+                      className={`scene-card${scene.id === sceneId ? " is-selected" : ""}`}
+                      type="button"
+                      aria-pressed={scene.id === sceneId}
+                      aria-label={`Elegir ${scene.label}, True Color y SWIR`}
+                      onClick={() => setSceneId(scene.id)}
+                    >
+                      <span className="scene-card-previews">
+                        <span className="scene-preview">
+                          <img src={api.scenePreviewUrl(scene.id, "true-color")} alt="" loading="lazy" />
+                          <span>True Color</span>
+                        </span>
+                        <span className="scene-preview">
+                          <img src={api.scenePreviewUrl(scene.id, "swir")} alt="" loading="lazy" />
+                          <span>SWIR</span>
+                        </span>
+                      </span>
+                      <span className="scene-card-label">
+                        <strong>{scene.label}</strong>
+                      </span>
+                    </button>
+                  ))}
+                </div> : <p className="field-help">{connection.ready ? "No hay escenas precargadas." : "Cargando escenas…"}</p>}
               </section>
             ) : (
               <section className="source-content">
@@ -513,6 +522,12 @@ function App() {
                   : "True Color y SWIR de la misma fecha."}</p>
               </section>
             )}
+
+            <Button className="run-button" id="run-analysis" type="submit" disabled={!canRun} size="3">
+              {running ? <Activity size={16} aria-hidden="true" /> : <Play size={15} aria-hidden="true" fill="currentColor" />}
+              <span>{running ? "Analizando…" : "Iniciar segmentación"}</span>
+            </Button>
+            {error && <p className="form-error" role="alert">{error}</p>}
 
             <div className="section-rule"><span>DETECTOR</span></div>
             <label className="field-label" htmlFor="detector-select">Método</label>
@@ -536,7 +551,7 @@ function App() {
               <input className="range-control" id="num-classes" type="range" min="4" max="10" value={numClasses} onChange={(event) => setNumClasses(Number(event.target.value))} />
             </>}
 
-            <details className="details-panel parameter-settings">
+            <details className="details-panel parameter-settings" open>
               <summary>Parámetros y escala</summary>
               <div className="parameter-content">
                 <div className="compact-fields">
@@ -553,16 +568,20 @@ function App() {
                   <input id="keep-separate" type="checkbox" checked={keepSeparate} onChange={(event) => setKeepSeparate(event.target.checked)} />
                   <span>Conservar focos separados</span>
                 </label>
+                <label className="scale-input" htmlFor="gsd"><span>GSD <small>metros por píxel</small></span>
+                  <input className="field-control" id="gsd" type="number" min="0.000001" step="any" inputMode="decimal" placeholder="Opcional" value={gsd} onChange={(event) => setGsd(event.target.value)} disabled={running} />
+                </label>
               </div>
             </details>
 
-            <AdvancedSettings value={advanced} onChange={setAdvanced} onReset={() => setAdvanced(defaultAdvancedSettings())} method={method} />
+            <AdvancedSettings
+              value={advanced}
+              onChange={setAdvanced}
+              onReset={() => setAdvanced(defaultAdvancedSettings())}
+              method={method}
+              randomForestAvailable={detectors.some((item) => item.id === "random_forest")}
+            />
 
-            <Button className="run-button" id="run-analysis" type="button" onClick={runAnalysis} disabled={!canRun} size="3">
-              {running ? <Activity size={16} aria-hidden="true" /> : <Play size={15} aria-hidden="true" fill="currentColor" />}
-              <span>{running ? "Analizando…" : "Iniciar segmentación"}</span>
-            </Button>
-            {error && <p className="form-error" role="alert">{error}</p>}
           </form>
         </aside>
 
@@ -604,19 +623,19 @@ function App() {
         </section>
 
         <aside className="results-column interaction-panel" id="mobile-results" aria-label="Herramientas y resultados">
-          <div className="results-heading"><h2>Medir y analizar</h2></div>
+          <div className="results-heading"><h2>Medir</h2></div>
           <section className="measurement-panel" aria-label="Herramientas de medición">
             <p className="panel-kicker">HERRAMIENTAS</p>
             <div className="tool-grid" role="group" aria-label="Seleccionar herramienta">
               {TOOL_OPTIONS.map(({ id, label, Icon }) => (
-                <Button key={id} className={`tool-button${tool === id ? " is-active" : ""}`} variant={tool === id ? "soft" : "ghost"} size="1" type="button" disabled={!canMeasure || (id === "distance" && !hasMetricScale) || (id === "area" && !regionCount)} title={showingHistory ? "Las mediciones corresponden al resultado final." : id === "distance" && hasResult && !hasMetricScale ? "Introduce un GSD y vuelve a analizar para medir en metros." : undefined} aria-pressed={tool === id} onClick={() => selectTool(id)}>
+                <Button key={id} className={`tool-button${tool === id ? " is-active" : ""}`} variant={tool === id ? "soft" : "ghost"} size="1" type="button" disabled={!canMeasure || (id === "area" && !regionCount)} aria-pressed={tool === id} onClick={() => selectTool(id)}>
                   <Icon size={14} aria-hidden="true" /><span>{label}</span>
                 </Button>
               ))}
             </div>
-            <p className="measurement-hint" aria-live="polite">
-              {showingHistory ? "Esta captura histórica no tiene mediciones propias; las herramientas se habilitan al seleccionar el resultado final." : tool === "distance" && hasResult && !hasMetricScale ? "Introduce el GSD y vuelve a analizar para habilitar la regla en metros." : tool === "distance" ? "Arrastra sobre la imagen para medir una distancia en metros." : tool === "area" && hasResult && !regionCount ? "La máscara no contiene regiones segmentadas para medir." : tool === "area" ? "Haz clic dentro del contorno segmentado para medir esa región." : tool === "pixel" ? "Selecciona un píxel para ver su coordenada." : "Elige una herramienta o compara las capas en el visor."}
-            </p>
+            {!showingHistory && <p className="measurement-hint" aria-live="polite">
+              {tool === "distance" ? `Arrastra sobre la imagen para medir una distancia en ${marksUnit}.` : tool === "area" && !regionCount ? "La máscara no contiene regiones para medir." : tool === "area" ? "Haz clic dentro de la máscara para medir el área." : tool === "pixel" ? "Selecciona un píxel para ver su coordenada." : "Elige una herramienta o compara las capas."}
+            </p>}
             {(currentDistance !== null || selectedRegion || (tool === "pixel" && inspectedPixel)) && <div className="measurement-readout" aria-live="polite">
               {currentDistance !== null && <div><span>{distancePreview ? "Midiendo" : "Distancia"}</span><strong>{formatLength(currentDistance, marksUnit)}</strong></div>}
               {selectedRegion && <>
@@ -637,75 +656,13 @@ function App() {
                 setMarks([]); setInspectedPixel(null); setDistancePreview(null); setSelectedRegion(null);
               }}>Borrar marcas</button>
             </div>
-            <hr className="measurement-separator" />
-            <label className="scale-input" htmlFor="gsd"><span>GSD <small>metros por píxel</small></span>
-              <input className="field-control" id="gsd" type="number" min="0.000001" step="any" inputMode="decimal" placeholder="Opcional" value={gsd} onChange={(event) => setGsd(event.target.value)} disabled={running} />
-            </label>
-            <p className="field-help">Se aplica en el siguiente análisis. La regla solo se habilita si el análisis incluye GSD y mide en metros.</p>
-            <details className="resolution-reference">
-              <summary>Área por píxel y referencia</summary>
-              <p className="resolution-formula">Para píxeles cuadrados: superficie/píxel = tamaño de píxel²</p>
-              <table className="resolution-table">
-                <tbody>
-                  <tr><th scope="row">Resolución</th><td>10 m</td><td>20 m</td><td>60 m</td></tr>
-                  <tr><th scope="row">Superficie</th><td>100 m²</td><td>400 m²</td><td>3.600 m²</td></tr>
-                </tbody>
-              </table>
-              <p className="resolution-warning">Valores nominales. 60 m corresponde a bandas atmosféricas, no a True Color ni SWIR. JPG puede estar reescalado; el área queda en píxeles hasta verificar escala y georreferenciación.</p>
-              <details className="resolution-details">
-                <summary>Referencia técnica y límites</summary>
-              <div className="resolution-longform">
-                <p>Como referencia inicial, True Color basado en bandas visibles de Sentinel‑2 suele asociarse a bandas de 10 m y SWIR B11/B12 a 20 m. Solo se pueden aplicar 100 m²/píxel a True Color o 400 m²/píxel a SWIR si la exportación conserva esa escala. El nombre del JPG no demuestra su resolución efectiva; no se ha confirmado la composición espectral exacta de los productos <code>Wildfires</code>.</p>
-                <p>Ejemplo: 5.000 píxeles clasificados como quemados equivaldrían nominalmente a 500.000 m² (50 ha) a 10 m/píxel, o 2.000.000 m² (200 ha) a 20 m/píxel. Es solo ilustrativo; no mide las imágenes del repositorio.</p>
-                <p>El artículo “Ground Resolved Distance Estimation of Sentinel‑2 Imagery Using Edge‑based Scene‑Driven Approach” (PFG Journal, 2025) distingue GSD —distancia entre centros de píxeles— de GRD —capacidad efectiva de resolución—. En las escenas estudiadas estima una GRD media de aproximadamente 12,4–12,7 m para las bandas visibles y NIR con GSD nominal de 10 m. El tamaño nominal del píxel no indica el detalle mínimo que se puede resolver.</p>
-                <p>Para afirmar una superficie real hay que verificar dimensiones de los ocho JPG, bandas, remuestreo, CRS, geotransformación y tamaño de celda. Sin referencia geográfica, la máscara se puede contar en píxeles, pero no atribuirle una superficie terrestre exacta. Un cálculo defendible requiere un raster georreferenciado y sumar las celdas quemadas; área quemada y fuego activo son fenómenos distintos.</p>
-                <p><strong>Siguiente paso:</strong> confirmar la composición de cada producto y documentar cualquier remuestreo antes de calcular hectáreas.</p>
-              </div>
-              </details>
-            </details>
           </section>
 
           <div className="results-heading results-subheading"><h2>Resultado</h2></div>
-          <div className={`result-state${result?.state === "error" ? " is-error" : ""}`}>
-            {running ? "Analizando…" : showingHistory ? "Vista histórica · resultado final disponible al avanzar" : metrics ? `Detector: ${metrics.detector}` : result?.error || "Pendiente"}
+          <div className="export-actions">
+            <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("overlay-true-color", "lumbre_mapa_segmentado.png")}><span>Mapa</span><span>PNG ↓</span></button>
+            <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("mask", "lumbre_mascara_candidata.png")}><span>Máscara</span><span>PNG ↓</span></button>
           </div>
-          {showingHistory && <p className="field-help">Las métricas y descargas de esta sección pertenecen al resultado final, no a la captura histórica visible.</p>}
-          {metrics && !showingHistory && <>
-            <div className="metrics-grid">
-              <Card className="metric-card metric-primary" size="1"><span>Superficie candidata</span><strong>{formatNumber(metrics.coverage_pct, 1)} %</strong></Card>
-              <Card className="metric-card" size="1"><span>Área total segmentada</span><strong>{formatArea(metrics.area, metrics.area_unit)}</strong></Card>
-              <Card className="metric-card" size="1"><span>Perímetro</span><strong>{formatLength(metrics.perimeter, metrics.perimeter_unit)}</strong></Card>
-              <Card className="metric-card" size="1"><span>Humo probable</span><strong>{formatNumber(metrics.smoke_pct, 1)} %</strong></Card>
-              {metrics.active_fire_px > 0 && <Card className="metric-card" size="1"><span>Fuego activo posible</span><strong>{formatNumber(metrics.active_fire_px)} px</strong></Card>}
-            </div>
-            <p className="result-caveat">Resultado orientativo; revisa la máscara. Rojo y borde amarillo: superficie candidata. Fucsia: {formatNumber(metrics.smoke_covered_candidates_px)} px con hipótesis de superficie afectada bajo humo; no se suman al área observada. Azul: humo probable. Terreno indeterminado bajo humo{metrics.smoke_unknown_px != null ? `: ${formatNumber(metrics.smoke_unknown_px)} px` : ""}; consulta las capas independientes. El fuego activo se informa aparte cuando el detector lo clasifica.</p>
-          </>}
-
-          <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("overlay-true-color", "lumbre_mapa_segmentado.png")}><span>Resultado final · mapa</span><span>PNG ↓</span></button>
-          <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("mask", "lumbre_mascara_candidata.png")}><span>Resultado final · máscara</span><span>PNG ↓</span></button>
-          <button className="export-button" type="button" disabled={!canMeasure} onClick={downloadMeasurements}><span>Puntos y medidas finales</span><span>JSON ↓</span></button>
-
-          {hasResult && !showingHistory && <details className="details-panel">
-            <summary>Capas de humo y diagnóstico</summary>
-            <div className="details-content">
-              <p>Máscaras PNG independientes. La hipótesis y el humo pueden coincidir; negro significa ausencia en esa capa.</p>
-              {(metrics?.available_layers || []).filter((name) => OCCLUSION_LAYERS[name]).map((name) => (
-                <button key={name} className="export-button" type="button" onClick={() => downloadLayer(name, `lumbre_${name}.png`)}><span>{OCCLUSION_LAYERS[name]}</span><span>PNG ↓</span></button>
-              ))}
-              {diagnosticLayers.map((name) => (
-                <details key={name}>
-                  <summary>{name.replace("diagnostic-", "").replaceAll("-", " ")}</summary>
-                  <img loading="lazy" src={api.layerUrl(jobId, name)} alt={`Diagnóstico ${name}`} style={{ width: "100%", height: "auto" }} />
-                  <button className="text-button" type="button" onClick={() => downloadLayer(name, `lumbre_${name}.png`)}>Descargar PNG</button>
-                </details>
-              ))}
-            </div>
-          </details>}
-
-          {metrics && !showingHistory && <details className="details-panel">
-            <summary>Detalles</summary>
-            <div className="details-content">{summary}</div>
-          </details>}
         </aside>
       </main>
       <nav className="mobile-dock" aria-label="Secciones">

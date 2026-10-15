@@ -19,7 +19,7 @@ import socket
 import threading
 import time
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 from urllib.request import Request, urlopen
 import uuid
 import webbrowser
@@ -360,6 +360,16 @@ def _jpeg_checkpoint(imagen: np.ndarray) -> bytes:
     return contenido
 
 
+def _jpeg_scene_preview(ruta: Path) -> bytes:
+    """Crea una miniatura JPEG para el selector sin exponer la ruta del archivo."""
+    with Image.open(ruta) as original:
+        original.thumbnail((480, 300), Image.Resampling.LANCZOS)
+        vista = original.convert("RGB")
+    salida = BytesIO()
+    vista.save(salida, format="JPEG", quality=76, optimize=True)
+    return salida.getvalue()
+
+
 def _registrar_aviso_checkpoint(job_id: str, error: Exception) -> None:
     mensaje = str(error).strip() or error.__class__.__name__
     logging.getLogger(__name__).warning("No se pudo guardar una captura de %s: %s", job_id, mensaje)
@@ -445,6 +455,9 @@ def _validar_ajustes(datos: dict[str, Any]) -> dict[str, Any]:
     avanzado_entrada = datos.get("advanced", {})
     if not isinstance(avanzado_entrada, dict):
         raise ValueError("Los ajustes avanzados deben ser un objeto.")
+    usar_random_forest = avanzado_entrada.get("use_random_forest", False)
+    if not isinstance(usar_random_forest, bool):
+        raise ValueError("La opción Random Forest debe ser booleana.")
 
     pesos_entrada = avanzado_entrada.get("kmeans_weights", {})
     if not isinstance(pesos_entrada, dict):
@@ -519,7 +532,7 @@ def _validar_ajustes(datos: dict[str, Any]) -> dict[str, Any]:
     if crecimiento_rojo is None:
         crecimiento_rojo = 0.94 - (entero("sensitivity", 1, 10, 5) - 1) * 0.010
     if semilla_roja is None:
-        semilla_roja = 0.994 - (entero("sensitivity", 1, 10, 5) - 1) * 0.006
+        semilla_roja = 0.958 - (entero("sensitivity", 1, 10, 5) - 1) * 0.009
     if crecimiento_rojo > semilla_roja:
         raise ValueError("El percentil SWIR de crecimiento debe ser menor o igual al de semilla.")
 
@@ -566,6 +579,7 @@ def _validar_ajustes(datos: dict[str, Any]) -> dict[str, Any]:
             "fusion_kmeans_weight": peso_fusion_kmeans,
             "fusion_swir_weight": peso_fusion_swir,
             "fusion_threshold": umbral_fusion,
+            "use_random_forest": usar_random_forest,
         },
     }
 
@@ -665,6 +679,7 @@ def _iniciar_analisis(
             metrics = {
                 "available_layers": list(outputs),
                 "detector": ajustes["detector"].nombre,
+                "warnings": list(resultado.avisos),
                 "coverage_pct": float(resultado.proporcion * 100),
                 "area": float(area),
                 "area_unit": unidad_area,
@@ -741,6 +756,31 @@ class LumbreHandler(BaseHTTPRequestHandler):
                     "url": f"http://{ip_lan}:{puerto}/" if ip_lan else None,
                 },
             )
+            return
+        vista_escena = re.fullmatch(r"/api/scenes/([^/]+)/preview/(true-color|swir)", ruta)
+        if vista_escena:
+            escena_id, canal = vista_escena.groups()
+            escena_id = unquote(escena_id)
+            escena = next(
+                (item for item in listar_escenas_disponibles() if item.nombre == escena_id),
+                None,
+            )
+            if escena is None:
+                self._json(404, {"error": "No se encontró esa escena."})
+                return
+            ruta_imagen = escena.true_color if canal == "true-color" else escena.swir
+            try:
+                miniatura = _jpeg_scene_preview(ruta_imagen)
+            except (OSError, ValueError) as exc:
+                logging.getLogger(__name__).warning(
+                    "No se pudo crear la vista previa de %s (%s): %s",
+                    escena_id,
+                    canal,
+                    exc,
+                )
+                self._json(422, {"error": "No se pudo leer la imagen de esta escena."})
+                return
+            self._bytes(200, miniatura, "image/jpeg")
             return
         if ruta == "/api/scenes":
             escenas = [

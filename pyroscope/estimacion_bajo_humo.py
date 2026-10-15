@@ -68,6 +68,7 @@ def estimar_bajo_humo(
     distancia_maxima_px: int = 24,
     umbral_espectral: float = 0.65,
     umbral_compatibilidad: float = 0.35,
+    umbral_semilla_bajo_humo: float | None = None,
     distancia_espectral_px: int | None = None,
 ) -> ResultadoEstimacionBajoHumo:
     """Separa evidencia bajo humo, puentes geométricos cortos e incertidumbre.
@@ -78,8 +79,9 @@ def estimar_bajo_humo(
     hipótesis nunca se reutiliza como semilla. No se rellenan nubes completas.
 
     La ruta espectral requiere puntuación suficiente y crecimiento limitado
-    desde observaciones fiables. La evidencia moderada puede crecer de forma
-    geodésica hasta el mismo radio y sin reutilizar hipótesis como semillas.
+    desde observaciones visibles o señales ocultas fuertes. La evidencia
+    moderada puede crecer de forma geodésica desde esas semillas originales,
+    sin reutilizar hipótesis intermedias como nuevas observaciones.
     ``compatibilidad_swir``, cuando se suministra, veta también los puentes
     geométricos incompatibles. Un valor bajo debe indicar contradicción fiable,
     no simplemente ausencia de información.
@@ -91,9 +93,16 @@ def estimar_bajo_humo(
         raise ValueError("La rejilla no puede estar vacía.")
     if isinstance(distancia_maxima_px, bool) or not isinstance(distancia_maxima_px, (int, np.integer)) or distancia_maxima_px < 1:
         raise ValueError("La distancia máxima debe ser un entero positivo en píxeles.")
-    for nombre, umbral in (("espectral", umbral_espectral), ("compatibilidad", umbral_compatibilidad)):
+    for nombre, umbral in (
+        ("espectral", umbral_espectral),
+        ("compatibilidad", umbral_compatibilidad),
+    ):
         if not np.isfinite(umbral) or not 0 <= umbral <= 1:
             raise ValueError(f"El umbral {nombre} debe estar entre 0 y 1.")
+    if (umbral_semilla_bajo_humo is not None
+            and (not np.isfinite(umbral_semilla_bajo_humo)
+                 or not 0 <= umbral_semilla_bajo_humo <= 1)):
+        raise ValueError("El umbral semilla bajo humo debe estar entre 0 y 1.")
     obstaculos = agua.copy()
     if distancia_espectral_px is None:
         distancia_espectral_px = distancia_maxima_px
@@ -112,13 +121,26 @@ def estimar_bajo_humo(
     continuidad_geodesica = np.zeros_like(visible)
     if evidencia_espectral is not None:
         evidencia = _evidencia(evidencia_espectral, "evidencia_espectral", visible.shape)
-        if np.any(anclas):
-            distancia_ancla = ndi.distance_transform_edt(~anclas)
+        # Solo una fuente que identifique explícitamente evidencia fuerte, o un
+        # umbral optativo, puede aportar semillas ocultas. Un score genérico no
+        # cambia el comportamiento de otros detectores.
+        diagnosticos = getattr(evidencia_espectral, "diagnosticos", {}) or {}
+        frente_fuerte = diagnosticos.get("frente_candidato_fuerte")
+        if frente_fuerte is not None:
+            frente_fuerte = _mascara(frente_fuerte, "frente_fuerte", visible.shape)
+            semillas_ocultas = oculta & frente_fuerte
+        elif umbral_semilla_bajo_humo is not None:
+            semillas_ocultas = oculta & (evidencia >= umbral_semilla_bajo_humo)
+        else:
+            semillas_ocultas = np.zeros_like(visible)
+        semillas = anclas | semillas_ocultas
+        if np.any(semillas):
+            distancia_ancla = ndi.distance_transform_edt(~semillas)
             admisible = oculta & (evidencia >= umbral_compatibilidad)
             dentro_radio = admisible & (distancia_ancla <= distancia_espectral_px)
-            alcanzable = ndi.binary_propagation(anclas, mask=anclas | dentro_radio)
+            alcanzable = ndi.binary_propagation(semillas, mask=semillas | dentro_radio)
             conectada = dentro_radio & alcanzable
-            espectral = conectada & (evidencia >= umbral_espectral)
+            espectral = semillas_ocultas | (conectada & (evidencia >= umbral_espectral))
             continuidad_geodesica = conectada & (evidencia < umbral_espectral)
 
     continuidad = continuidad_geodesica.copy()

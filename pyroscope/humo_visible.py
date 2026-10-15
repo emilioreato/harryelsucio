@@ -16,9 +16,15 @@ class ResultadoHumoPorNiveles:
     mascara_moderada: np.ndarray
     mascara_probable: np.ndarray
     puntuacion: np.ndarray
+    candidatos_debiles: np.ndarray
+    descartados_por_distancia: np.ndarray
+    descartados_por_conectividad: np.ndarray
 
 
-def detectar_humo_por_niveles(true_color, swir, humo_inicial, confianza):
+def detectar_humo_por_niveles(
+    true_color, swir, humo_inicial, confianza, *, mascara_nucleo=None,
+    fraccion_distancia_nucleo: float = .08,
+):
     """Amplía el humo por histéresis sin convertir terreno claro en semilla.
 
     Conserva la máscara previa como referencia. Los píxeles añadidos exigen
@@ -35,10 +41,23 @@ def detectar_humo_por_niveles(true_color, swir, humo_inicial, confianza):
         raise ValueError("Humo y confianza deben compartir la rejilla de las imágenes.")
     if not np.isfinite(confianza).all() or np.any((confianza < 0) | (confianza > 1)):
         raise ValueError("La confianza del humo debe ser finita y estar entre 0 y 1.")
+    if (not np.isfinite(fraccion_distancia_nucleo)
+            or not 0 < fraccion_distancia_nucleo <= .5):
+        raise ValueError("La fracción de distancia debe estar en el intervalo (0, 0.5].")
     humo_inicial = humo_inicial.astype(bool)
+    if mascara_nucleo is None:
+        mascara_nucleo = humo_inicial
+    else:
+        mascara_nucleo = np.asarray(mascara_nucleo)
+        if mascara_nucleo.shape != forma:
+            raise ValueError("El núcleo y las imágenes deben compartir la rejilla.")
+        mascara_nucleo = mascara_nucleo.astype(bool)
     if not humo_inicial.any():
         vacia = np.zeros(forma, dtype=bool)
-        return ResultadoHumoPorNiveles(vacia, vacia.copy(), vacia.copy(), confianza.copy())
+        return ResultadoHumoPorNiveles(
+            vacia, vacia.copy(), vacia.copy(), confianza.copy(),
+            vacia.copy(), vacia.copy(), vacia.copy(),
+        )
 
     tc = true_color.astype(np.float32) / 255
     sw = swir.astype(np.float32) / 255
@@ -100,16 +119,24 @@ def detectar_humo_por_niveles(true_color, swir, humo_inicial, confianza):
         + .20 * np.maximum(evidencia_cian, evidencia_swir_neutra)
     ).astype(np.float32)
 
-    confianza_semilla = max(.68, float(np.quantile(confianza[humo_inicial], .60)))
-    cian_semilla = max(.10, float(np.quantile(cian[humo_inicial], .65)))
-    mascara_fuerte = humo_inicial & (
+    if not mascara_nucleo.any():
+        moderada = humo_inicial.copy()
+        return ResultadoHumoPorNiveles(
+            np.zeros(forma, bool), moderada, humo_inicial.copy(), confianza.copy(),
+            np.zeros(forma, bool), np.zeros(forma, bool), np.zeros(forma, bool),
+        )
+    confianza_semilla = max(.68, float(np.quantile(confianza[mascara_nucleo], .60)))
+    cian_semilla = max(.10, float(np.quantile(cian[mascara_nucleo], .65)))
+    mascara_fuerte = mascara_nucleo & (
         (confianza >= confianza_semilla)
         | ((cian >= cian_semilla) & (neutralidad >= .45))
     )
     # Sin una semilla atmosférica fiable no se expande desde píxeles claros.
     if not mascara_fuerte.any():
+        moderada = humo_inicial.copy()
         return ResultadoHumoPorNiveles(
-            mascara_fuerte, np.zeros(forma, bool), humo_inicial.copy(), confianza.copy()
+            mascara_fuerte, moderada, humo_inicial.copy(), confianza.copy(),
+            np.zeros(forma, bool), np.zeros(forma, bool), np.zeros(forma, bool),
         )
 
     luminosa = luma_suave >= max(.22, float(lum_q[0]))
@@ -119,22 +146,31 @@ def detectar_humo_por_niveles(true_color, swir, humo_inicial, confianza):
         & (textura_media <= max(.16, float(media_q[1])))
         & (gradiente <= max(.055, float(np.quantile(gradiente, .92))))
     )
-    candidata_debil = (
+    candidatos_debiles = (
         luminosa & neutra & baja_textura & compatible_swir & (puntuacion >= .58)
     )
     distancia = ndi.distance_transform_edt(~mascara_fuerte)
-    radio_maximo = max(8, round(min(forma) * .08))
-    candidata_debil &= distancia <= radio_maximo
+    radio_maximo = max(8, round(min(forma) * fraccion_distancia_nucleo))
+    candidata_debil = candidatos_debiles & (distancia <= radio_maximo)
     permitida = humo_inicial | candidata_debil | mascara_fuerte
     conectada = ndi.binary_propagation(mascara_fuerte, mask=permitida)
-    mascara_moderada = conectada & candidata_debil & ~humo_inicial
-    mascara_probable = humo_inicial | mascara_moderada
+    # La máscara de referencia se conserva. Los píxeles heredados que no son
+    # núcleo y la nueva extensión débil quedan explícitamente en el nivel
+    # moderado, sin convertirlos en nuevas semillas.
+    mascara_moderada = (humo_inicial & ~mascara_fuerte) | (
+        conectada & candidata_debil & ~humo_inicial
+    )
+    mascara_probable = humo_inicial | mascara_moderada | mascara_fuerte
+    descartados_por_distancia = candidatos_debiles & (distancia > radio_maximo)
+    descartados_por_conectividad = candidata_debil & ~conectada
 
     puntuacion[humo_inicial] = np.maximum(puntuacion[humo_inicial], .55)
     puntuacion[mascara_fuerte] = np.maximum(puntuacion[mascara_fuerte], .75)
     puntuacion[mascara_moderada] = np.clip(puntuacion[mascara_moderada], .50, .74)
     return ResultadoHumoPorNiveles(
-        mascara_fuerte, mascara_moderada, mascara_probable, puntuacion
+        mascara_fuerte, mascara_moderada, mascara_probable, puntuacion,
+        candidatos_debiles, descartados_por_distancia,
+        descartados_por_conectividad,
     )
 
 

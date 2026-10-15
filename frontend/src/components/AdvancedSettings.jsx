@@ -21,7 +21,7 @@ const WATER_FIELDS = [
   ["true_color_darkness", "Oscuridad True Color · percentil", 0.2],
   ["swir_darkness", "Oscuridad SWIR · percentil", 0.1],
   ["swir_red_max", "Máximo rojo SWIR · percentil", 0.55],
-  ["swir_red_green_max", "Máximo rojo/verde SWIR · percentil", 0.55],
+  ["swir_red_green_max", "Máximo rojo/verde SWIR · percentil", 0.85],
 ];
 
 function Slider({ label, value, onChange }) {
@@ -61,7 +61,7 @@ function NumericField({ label, value, min, max, step = 0.01, onChange, placehold
   );
 }
 
-export default function AdvancedSettings({ value, onChange, onReset, method }) {
+export default function AdvancedSettings({ value, onChange, onReset, method, randomForestAvailable = false }) {
   const updateGroup = (group, key, nextValue) => {
     onChange({
       ...value,
@@ -77,6 +77,29 @@ export default function AdvancedSettings({ value, onChange, onReset, method }) {
     <details className="details-panel developer-settings">
       <summary>Ajustes avanzados</summary>
       <div className="developer-content">
+        {method === "contextual_hibrida" && (
+          <details className="tuning-group">
+            <summary>Apoyo supervisado · Random Forest</summary>
+            <div className="tuning-content">
+              <label className="check-row" htmlFor="use-random-forest">
+                <input
+                  id="use-random-forest"
+                  type="checkbox"
+                  checked={Boolean(value.use_random_forest)}
+                  disabled={!randomForestAvailable}
+                  onChange={(event) => updateTop("use_random_forest", event.target.checked)}
+                />
+                <span>Combinarlo con la segmentación contextual</span>
+              </label>
+              <p className="field-help">
+                {randomForestAvailable
+                  ? "Solo añade candidatos donde también existe evidencia SWIR/contextual. Si el modelo falla, se conserva el resultado habitual y se muestra un aviso. Puedes desactivarlo aquí."
+                  : "Esta copia no contiene un modelo Random Forest entrenado. La segmentación habitual sigue disponible; prepara un modelo con training Random Forest/README.md y reinicia la aplicación para activar este apoyo."}
+              </p>
+            </div>
+          </details>
+        )}
+
         {method === "fusion_ponderada" && (
           <details className="tuning-group">
             <summary>Ponderación entre algoritmos</summary>

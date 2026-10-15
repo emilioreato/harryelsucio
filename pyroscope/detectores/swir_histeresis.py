@@ -98,7 +98,10 @@ def clasificar_pixeles_area_afectada_swir(
     # composición. La sensibilidad baja los dos umbrales sin alterar la firma.
     cuantiles = rojo_swir[despejado]
     percentiles = {
-        "seed_red": 0.994 - (sensibilidad - 1) * 0.006,
+        # El cuantil .994 anterior escogía solo el extremo más rojizo. En una
+        # escena con una mancha naranja ajena al incendio podía sembrar esa
+        # mancha y dejar sin semillas la cicatriz principal, menos intensa.
+        "seed_red": 0.958 - (sensibilidad - 1) * 0.009,
         "grow_red": 0.94 - (sensibilidad - 1) * 0.010,
         "seed_red_green": 0.82 - (sensibilidad - 1) * 0.005,
         "grow_red_green": 0.68 - (sensibilidad - 1) * 0.012,
@@ -121,6 +124,11 @@ def clasificar_pixeles_area_afectada_swir(
         np.quantile(verde_visible[despejado], percentiles["vegetation_max"])
     )
 
+    # Los percentiles relativos solos convierten el ruido del extremo superior
+    # en semillas aunque toda la composición carezca de predominio rojo. Se
+    # exige una señal SWIR mínima para sembrar y una tolerancia pequeña al crecer.
+    umbral_semilla = max(umbral_semilla, 0.05)
+    umbral_crecimiento = max(umbral_crecimiento, -0.02)
     # Evita que los umbrales degeneren si la escena tiene un histograma plano.
     umbral_crecimiento = min(umbral_crecimiento, umbral_semilla)
     evidencia_semilla = (

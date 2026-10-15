@@ -19,6 +19,7 @@ class ResultadoEvidenciaFrente:
     puntuacion: np.ndarray
     candidatos_fuertes: np.ndarray
     candidatos_moderados: np.ndarray
+    candidatos_moderados_vecinales: np.ndarray
 
 
 def _validar_mascara(valor: np.ndarray, nombre: str, forma: tuple[int, int]) -> np.ndarray:
@@ -125,12 +126,40 @@ def evaluar_evidencia_frente(
     # Vegetación muy verde contradice la señal cálida, salvo que el contraste
     # local SWIR sea marcado. El veto solo actúa ante una señal positiva clara.
     verdor_alto = verde_tc > _cuantil(verde_tc[referencia], .96, .48)
-    apoyo_cromatico = (calida_tc >= .18) | (evidencia_local >= .24)
+    # Dentro de humo, la tonalidad cálida de True Color puede quedar azulada.
+    # La relación rojo/verde normalizada del SWIR visualizado conserva una
+    # tercera vía de apoyo, siempre que ambas razones coincidan y el píxel esté
+    # dentro de humo o en el contexto inmediato de una superficie candidata.
+    apoyo_rojo_swir_oculto = humo & senal_swir_moderada
+    apoyo_cromatico = (
+        (calida_tc >= .18) | (evidencia_local >= .24) | apoyo_rojo_swir_oculto
+    )
     contradiccion_verde = verdor_alto & (calida_tc < .12) & (evidencia_local < .58)
     base = valida & contexto & apoyo_cromatico & ~contradiccion_verde
 
     fuertes = base & senal_swir_fuerte
     moderados = base & senal_swir_moderada & ~fuertes
+    # Bajo el velo, una respuesta rojiza puede quedar repartida entre píxeles
+    # moderados. Se integran señales a pocos píxeles, exigiendo que cada píxel
+    # incorporado conserve compatibilidad SWIR propia y que esté junto a
+    # evidencia directa. Así se cierran pequeñas discontinuidades sin rellenar
+    # humo claro ni propagar una hipótesis por todo el penacho.
+    apoyo_directo = fuertes | moderados
+    densidad_vecinal = ndi.gaussian_filter(
+        apoyo_directo.astype(np.float32), sigma=1.2, mode="nearest"
+    )
+    umbral_rojo_vecinal = np.where(humo, rojo_moderado_oculto, rojo_moderado_despejado)
+    umbral_rg_vecinal = np.where(humo, rg_moderado_oculto, rg_moderado_despejado)
+    compatibilidad_roja_debil = (
+        (rojo_swir >= umbral_rojo_vecinal - .04)
+        & (rojo_verde_swir >= umbral_rg_vecinal - .06)
+    )
+    moderados_vecinales = (
+        humo & contexto & compatibilidad_roja_debil
+        & (densidad_vecinal >= .20) & ~contradiccion_verde
+        & ~fuertes & ~moderados
+    )
+    moderados |= moderados_vecinales
     # Señales ya seleccionadas por V2 se conservan como fuente V2; este mapa
     # solo registra dónde también existe evidencia de frente independiente.
     puntuacion = np.clip(
@@ -144,4 +173,6 @@ def evaluar_evidencia_frente(
     puntuacion[~base] = 0
     puntuacion[moderados] = np.maximum(puntuacion[moderados], .45)
     puntuacion[fuertes] = np.maximum(puntuacion[fuertes], .80)
-    return ResultadoEvidenciaFrente(puntuacion, fuertes, moderados)
+    return ResultadoEvidenciaFrente(
+        puntuacion, fuertes, moderados, moderados_vecinales
+    )
