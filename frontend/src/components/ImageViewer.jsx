@@ -97,15 +97,15 @@ export default function ImageViewer({
           const x2 = end.x * scaleX;
           const y2 = end.y * scaleY;
           const angle = Math.atan2(y2 - y1, x2 - x1);
-          const headLength = 11;
+          const headLength = 14;
           context.beginPath();
           context.moveTo(x1, y1);
           context.lineTo(x2, y2);
           context.stroke();
           context.beginPath();
           context.moveTo(x2, y2);
-          context.lineTo(x2 - headLength * Math.cos(angle - Math.PI / 6), y2 - headLength * Math.sin(angle - Math.PI / 6));
-          context.lineTo(x2 - headLength * Math.cos(angle + Math.PI / 6), y2 - headLength * Math.sin(angle + Math.PI / 6));
+          context.lineTo(x2 - headLength * Math.cos(angle - Math.PI / 7), y2 - headLength * Math.sin(angle - Math.PI / 7));
+          context.lineTo(x2 - headLength * Math.cos(angle + Math.PI / 7), y2 - headLength * Math.sin(angle + Math.PI / 7));
           context.closePath();
           context.fill();
         }
