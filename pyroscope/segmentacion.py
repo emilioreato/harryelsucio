@@ -112,6 +112,10 @@ def segmentar_superficie_afectada(
             regiones.mascara, clasificacion.mascara_humo, clasificacion.mascara_agua,
             score, contradiccion=contradiccion,
             distancia_maxima_px=max(3, min(24, round(min(alto, ancho) * .015))),
+            # La firma SWIR moderada superviviente se distingue de puentes
+            # puramente geométricos: puede sostener un recorrido algo mayor.
+            umbral_espectral=.4,
+            distancia_espectral_px=max(4, round(min(alto, ancho) * .04)),
         )
     informar_progreso(on_progress, "Análisis completado", 100)
 

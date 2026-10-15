@@ -500,7 +500,7 @@ function App() {
               <Card className="metric-card" size="1"><span>Perímetro</span><strong>{formatLength(metrics.perimeter, metrics.perimeter_unit)}</strong></Card>
               <Card className="metric-card" size="1"><span>Humo probable</span><strong>{formatNumber(metrics.smoke_pct, 1)} %</strong></Card>
             </div>
-            <p className="result-caveat">Resultado orientativo; revisa la máscara. Rojo: superficie observable. Azul: humo probable. Fucsia: {formatNumber(metrics.smoke_covered_candidates_px)} px de posible superficie afectada bajo humo; es una hipótesis y no se suma al área observada. Trama gris: terreno indeterminado{metrics.smoke_unknown_px != null ? ` (${formatNumber(metrics.smoke_unknown_px)} px)` : ""}. No detecta fuego activo.</p>
+            <p className="result-caveat">Rojo y borde amarillo: zona afectada candidata, incluida la hipótesis bajo humo. Azul transparente encima: humo probable. De la zona roja, {formatNumber(metrics.smoke_covered_candidates_px)} px son inferidos bajo humo y no se suman al área observada. Terreno desconocido bajo humo{metrics.smoke_unknown_px != null ? `: ${formatNumber(metrics.smoke_unknown_px)} px` : ""}; consulta las capas independientes. No detecta fuego activo.</p>
           </>}
 
           <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("overlay-true-color", "lumbre_mapa_segmentado.png")}><span>Mapa con contorno</span><span>PNG ↓</span></button>

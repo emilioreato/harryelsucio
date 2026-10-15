@@ -19,5 +19,7 @@ def evidencia_desde_v2(clasificacion, caracteristicas):
         fuerte = (roja >= max(float(alto), .1)) & (f[..., 6] >= .1)
         score[moderada], score[fuerte] = .5, .85
     score[clasificacion.mascara_candidata] = 1
+    score[clasificacion.mascara_candidata_bajo_humo] = np.maximum(
+        score[clasificacion.mascara_candidata_bajo_humo], .5)
     score[clasificacion.mascara_agua] = 0
     return score

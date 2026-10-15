@@ -68,6 +68,7 @@ def estimar_bajo_humo(
     distancia_maxima_px: int = 24,
     umbral_espectral: float = 0.65,
     umbral_compatibilidad: float = 0.35,
+    distancia_espectral_px: int | None = None,
 ) -> ResultadoEstimacionBajoHumo:
     """Separa evidencia bajo humo, puentes geométricos cortos e incertidumbre.
 
@@ -93,6 +94,12 @@ def estimar_bajo_humo(
         if not np.isfinite(umbral) or not 0 <= umbral <= 1:
             raise ValueError(f"El umbral {nombre} debe estar entre 0 y 1.")
     obstaculos = agua.copy()
+    if distancia_espectral_px is None:
+        distancia_espectral_px = distancia_maxima_px
+    if (isinstance(distancia_espectral_px, bool)
+            or not isinstance(distancia_espectral_px, (int, np.integer))
+            or distancia_espectral_px < 1):
+        raise ValueError("La distancia espectral debe ser un entero positivo.")
     if contradiccion is not None:
         obstaculos |= _mascara(contradiccion, "contradiccion", visible.shape)
     compatible = ~obstaculos
@@ -106,7 +113,7 @@ def estimar_bajo_humo(
         admisible = oculta & (evidencia >= umbral_espectral)
         if np.any(anclas):
             espectral = ndi.binary_dilation(
-                anclas, iterations=int(distancia_maxima_px),
+                anclas, iterations=int(distancia_espectral_px),
                 mask=anclas | admisible,
             ) & admisible
 

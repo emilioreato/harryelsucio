@@ -14,13 +14,13 @@ def crear_superposicion(
     if imagen_base.shape[:2] != resultado.mascara.shape:
         raise ValueError("La imagen y la máscara deben tener las mismas dimensiones.")
 
-    salida = superponer_mascara(imagen_base, resultado.mascara)
-    salida = _superponer_oclusiones(salida, resultado)
-
-    if resultado.contornos:
+    superficie = resultado.mascara | resultado.mascara_candidata_bajo_humo
+    salida = superponer_mascara(imagen_base, superficie)
+    contornos, _ = cv2.findContours(superficie.astype(np.uint8), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    if contornos:
         grosor = max(2, round(max(salida.shape[:2]) / 900))
-        cv2.drawContours(salida, list(resultado.contornos), -1, (255, 238, 60), grosor)
-    return salida
+        cv2.drawContours(salida, list(contornos), -1, (255, 238, 60), grosor)
+    return _superponer_oclusiones(salida, resultado)
 
 
 def crear_vista_clasificacion(
@@ -33,31 +33,20 @@ def crear_vista_clasificacion(
 
     salida = superponer_mascara(
         true_color,
-        resultado.mascara_clasificada,
-        color=(255, 115, 25),
+        resultado.mascara_clasificada | resultado.mascara_candidata_bajo_humo,
+        color=(245, 65, 35),
         opacidad=0.36,
     )
     return _superponer_oclusiones(salida, resultado)
 
 
 def _superponer_oclusiones(imagen: np.ndarray, resultado: ResultadoAreaAfectada) -> np.ndarray:
-    """Humo atmosférico debajo de las hipótesis; desconocido con trama ligera."""
-    salida = superponer_mascara(
+    """Capa atmosférica superior; superficie e incertidumbre se exportan aparte."""
+    return superponer_mascara(
         imagen,
         resultado.mascara_humo,
         color=(0, 165, 255),
-        opacidad=0.42,
-    )
-    desconocida = getattr(resultado, "mascara_indeterminada", None)
-    if desconocida is not None:
-        filas, columnas = np.ogrid[:salida.shape[0], :salida.shape[1]]
-        trama = desconocida.astype(bool) & ((filas + columnas) % 8 < 2)
-        salida = superponer_mascara(salida, trama, color=(220, 220, 220), opacidad=0.55)
-    return superponer_mascara(
-        salida,
-        resultado.mascara_candidata_bajo_humo,
-        color=(220, 55, 175),
-        opacidad=0.62,
+        opacidad=0.28,
     )
 
 
