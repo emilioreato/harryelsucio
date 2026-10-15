@@ -18,6 +18,7 @@ from .modelos_segmentacion import (
     ResultadoClasificacionSemantica,
     ResultadoRegionesEspaciales,
 )
+from .ontologia import ClaseSemantica
 from .progreso import ProgresoSegmentacion, informar_progreso
 from .observabilidad_pipeline import CallbackCheckpoint, PublicadorCheckpoint
 from .visualizacion_etapas import (
@@ -189,6 +190,7 @@ def segmentar_superficie_afectada(
     diagnosticos = None
     estimacion = None
     es_contextual = detector.id == "contextual_hibrida"
+    humo_para_superficie = np.asarray(clasificacion.mascara_humo, dtype=bool)
     caracteristicas = None
     evidencia_contextual = None
     if es_contextual:
@@ -198,6 +200,16 @@ def segmentar_superficie_afectada(
         caracteristicas = clasificacion.caracteristicas_comunes
         if caracteristicas is None:
             caracteristicas = extraer_caracteristicas_pareja(true_color, swir)
+        # El detector conserva la máscara previa de humo para no cambiar qué
+        # píxeles V2 eran visibles. La capa ampliada sigue en `clasificacion`
+        # para representación y para el análisis SWIR bajo humo.
+        humo_referencia = (clasificacion.diagnosticos_evidencia or {}).get(
+            "humo_referencia"
+        )
+        if humo_referencia is not None:
+            humo_para_superficie = np.asarray(humo_referencia, dtype=bool)
+            if humo_para_superficie.shape != (alto, ancho):
+                raise ValueError("La máscara de humo de referencia no está alineada.")
         if avanzado.get("use_random_forest", False):
             informar_progreso(on_progress, "Combinando evidencia contextual y Random Forest", 68)
             clasificacion, evidencia_contextual, aviso_rf = _aplicar_random_forest_contextual(
@@ -225,11 +237,26 @@ def segmentar_superficie_afectada(
     )
     if es_contextual:
         from .regiones_contextuales import segmentar_contextual
+        from .evidencia_contextual import EvidenciaContextual
+
+        # La evidencia bajo el humo no puede sembrar ni hacer crecer la capa
+        # visible. Sí se conserva una semilla V2 previa aunque la máscara nueva
+        # de humo se superponga sobre ella.
+        evidencia_superficie = evidencia_contextual
+        humo_nuevo = clasificacion.mascara_humo & ~humo_para_superficie
+        oculto_sin_semilla_visible = humo_nuevo & ~clasificacion.mascara_candidata
+        if np.any(oculto_sin_semilla_visible):
+            valores_visibles = np.asarray(evidencia_contextual, dtype=np.float32).copy()
+            valores_visibles[oculto_sin_semilla_visible] = 0
+            evidencia_superficie = EvidenciaContextual(
+                valores_visibles,
+                getattr(evidencia_contextual, "diagnosticos", {}) or {},
+            )
         informar_progreso(on_progress, "Organizando evidencia con SLIC y RAG", 75)
         contexto = segmentar_contextual(
             true_color, swir, clasificacion.mascara_candidata,
-            clasificacion.mascara_agua, clasificacion.mascara_humo,
-            evidencia=evidencia_contextual, caracteristicas=caracteristicas,
+            clasificacion.mascara_agua, humo_para_superficie,
+            evidencia=evidencia_superficie, caracteristicas=caracteristicas,
             on_progress=on_progress,
             on_checkpoint=publicador,
         )
@@ -243,8 +270,25 @@ def segmentar_superficie_afectada(
             if nombre in evidencia_rf:
                 diagnosticos[nombre] = evidencia_rf[nombre]
         clasificacion = replace(clasificacion, mascara_candidata=contexto.mascara)
+    clasificacion_geometria = clasificacion
+    if es_contextual:
+        solape_superficie_humo_nuevo = (
+            clasificacion.mascara_candidata
+            & clasificacion.mascara_humo
+            & ~humo_para_superficie
+        )
+        if np.any(solape_superficie_humo_nuevo):
+            clases_geometria = clasificacion.clase_por_pixel.copy()
+            clases_geometria[solape_superficie_humo_nuevo] = (
+                ClaseSemantica.SUPERFICIE_AFECTADA_CANDIDATA
+            )
+            clasificacion_geometria = replace(
+                clasificacion,
+                mascara_humo=humo_para_superficie,
+                clase_por_pixel=clases_geometria,
+            )
     regiones = segmentar_regiones_espaciales(
-        clasificacion,
+        clasificacion_geometria,
         area_minima_pct=area_minima_pct,
         distancia_maxima_pct=distancia_maxima_pct,
         on_progress=on_progress,

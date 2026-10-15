@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import cv2
 import numpy as np
+from scipy import ndimage
 
 from .modelos_segmentacion import ResultadoClasificacionSemantica, ResultadoRegionesEspaciales
 from .ontologia import ClaseSemantica
@@ -72,30 +73,23 @@ def segmentar_regiones_espaciales(
     distancia_maxima_px = round(max(alto, ancho) * distancia_maxima_pct / 100.0)
     componentes_remotos_descartados = 0
 
-    if conservar_regiones_separadas and cantidad > 1:
-        limpia = np.zeros((alto, ancho), dtype=np.uint8)
-        for etiqueta in range(1, cantidad):
-            if stats[etiqueta, cv2.CC_STAT_AREA] >= minimo_pixeles:
-                limpia[etiquetas_cc == etiqueta] = 255
-    elif cantidad > 1:
+    aceptadas = stats[:, cv2.CC_STAT_AREA] >= minimo_pixeles
+    aceptadas[0] = False  # El fondo nunca es un componente candidato.
+    if not conservar_regiones_separadas and cantidad > 1:
         ancla = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
         mascara_ancla = etiquetas_cc == ancla
         distancia_al_ancla = cv2.distanceTransform(
             (~mascara_ancla).astype(np.uint8), cv2.DIST_L2, cv2.DIST_MASK_5
         )
-        limpia = np.zeros((alto, ancho), dtype=np.uint8)
-        for etiqueta in range(1, cantidad):
-            if stats[etiqueta, cv2.CC_STAT_AREA] < minimo_pixeles:
-                continue
-            componente = etiquetas_cc == etiqueta
-            separacion = float(distancia_al_ancla[componente].min())
-            if separacion > distancia_maxima_px:
-                componentes_remotos_descartados += 1
-                continue
-            # La proximidad decide sobre el componente entero; no es un recorte.
-            limpia[componente] = 255
-    else:
-        limpia = np.zeros((alto, ancho), dtype=np.uint8)
+        # Reducir por etiqueta evita recorrer toda la imagen una vez por región.
+        # La proximidad sigue decidiendo sobre componentes completos.
+        separaciones = ndimage.minimum(
+            distancia_al_ancla, labels=etiquetas_cc, index=np.arange(cantidad),
+        )
+        remotas = aceptadas & (separaciones > distancia_maxima_px)
+        componentes_remotos_descartados = int(np.count_nonzero(remotas))
+        aceptadas &= ~remotas
+    limpia = aceptadas[etiquetas_cc].astype(np.uint8) * 255
 
     contornos, _ = cv2.findContours(
         limpia, cv2.RETR_LIST if preservar_geometria else cv2.RETR_EXTERNAL,

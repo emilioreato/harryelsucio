@@ -1,7 +1,41 @@
 import numpy as np
+import cv2
+import pytest
 
 from pyroscope.geometria_segmentacion import segmentar_regiones_espaciales
 from pyroscope.modelos_segmentacion import ResultadoClasificacionSemantica
+
+
+@pytest.mark.parametrize("separadas", [False, True])
+@pytest.mark.parametrize("radio", [0, 5, 50])
+def test_filtro_componentes_coincide_con_referencia(separadas, radio):
+    mascara = np.zeros((160, 200), bool)
+    mascara[10:45, 10:45] = True
+    mascara[12:22, 48:58] = True
+    mascara[110:130, 160:180] = True
+    mascara[70:72, 70:72] = True  # Ruido menor que el mínimo.
+    cantidad, etiquetas, stats, _ = cv2.connectedComponentsWithStats(
+        mascara.astype(np.uint8), connectivity=8,
+    )
+    ancla = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+    distancia = cv2.distanceTransform((etiquetas != ancla).astype(np.uint8),
+                                     cv2.DIST_L2, cv2.DIST_MASK_5)
+    esperada = np.zeros_like(mascara)
+    remotos = 0
+    for etiqueta in range(1, cantidad):
+        componente = etiquetas == etiqueta
+        if stats[etiqueta, cv2.CC_STAT_AREA] < 16:
+            continue
+        if not separadas and distancia[componente].min() > round(200 * radio / 100):
+            remotos += 1
+            continue
+        esperada |= componente
+    resultado = segmentar_regiones_espaciales(
+        clasificacion(mascara), area_minima_pct=0, preservar_geometria=True,
+        conservar_regiones_separadas=separadas, distancia_maxima_pct=radio,
+    )
+    assert np.array_equal(resultado.mascara, esperada)
+    assert resultado.componentes_remotos_descartados == remotos
 
 
 def clasificacion(mascara, agua=None, humo=None):

@@ -8,8 +8,8 @@ const INPUT_LAYERS = [
   ["true-color", "True Color", ImageIcon],
   ["swir", "SWIR", ScanLine],
   ["candidates", "Clases", Layers3],
-  ["vegetation", "Vegetación", Layers3],
-  ["possible-active-fire", "Fuego posible", Flame],
+  ["vegetation", "Verdor aparente", Layers3],
+  ["possible-active-fire", "Clase de fuego posible", Flame],
   ["fire-hotspots", "Candidatos de focos", Flame],
 ];
 
@@ -182,11 +182,11 @@ function AdvancedViewer({
       </div>
       <p className="advanced-viewer-caption">
         {layer === "fire-hotspots"
-          ? "Amarillo: candidato cálido en ambas composiciones. Fucsia: halo visual. No representa temperatura."
+          ? "Amarillo: candidato cálido coincidente en RGB y SWIR. Naranja: anomalía SWIR junto al humo, con menor confianza. El fucsia marca el halo; no representa temperatura."
           : layer === "vegetation"
-            ? "Verde: vegetación estimada por la clasificación visual de la escena."
+            ? "Verde: verdor aparente coincidente entre composiciones; no es una clasificación validada de cobertura vegetal."
             : layer === "possible-active-fire"
-              ? "Naranja: clase visual de posible fuego activo; requiere revisión independiente."
+              ? "Naranja: píxeles etiquetados como posible fuego por el clasificador activo; requiere revisión independiente."
               : layer === "reference-wildfires"
                 ? "Wildfires es una referencia de comparación y no se usa como verdad terreno."
                 : "Las capas son estimaciones a partir de composiciones renderizadas."}
@@ -500,7 +500,7 @@ export default function AdvancedWorkspace({ version, onVersionChange }) {
           {analysis?.state === "error" && <p className="form-error" role="alert">{analysis.error}</p>}
         </form>
         <p className="advanced-method-note">
-          El flujo avanzado ejecuta la clasificación de escena, estima vegetación y resalta candidatos visuales cálidos coincidentes entre True Color y SWIR.
+          El flujo avanzado mantiene su propio análisis y resultados. Calcula verdor aparente y separa los focos corroborados en RGB+SWIR de las anomalías SWIR próximas al humo.
         </p>
       </aside>
 
@@ -533,9 +533,10 @@ export default function AdvancedWorkspace({ version, onVersionChange }) {
           <>
             <p className="advanced-result-layer-label">Capa visible: <strong>{layerName}</strong></p>
             <div className="advanced-metric-grid">
-              <article className="advanced-metric-card"><span>Vegetación estimada</span><strong>{formatNumber(metrics?.vegetation_pct || 0, 1)} %</strong><small>{formatNumber(metrics?.vegetation_pixels || 0)} px</small></article>
-              <article className="advanced-metric-card is-hotspot"><span>Candidatos de focos</span><strong>{formatNumber(metrics?.visual_hotspot_components || 0)}</strong><small>{formatNumber(metrics?.visual_hotspot_candidate_pixels || 0)} px</small></article>
-              <article className="advanced-metric-card"><span>Clase de fuego posible</span><strong>{formatNumber(metrics?.active_fire_class_pixels || 0)} px</strong></article>
+              <article className="advanced-metric-card"><span>Verdor aparente</span><strong>{formatNumber(metrics?.vegetation_pct || 0, 1)} %</strong><small>{formatNumber(metrics?.vegetation_pixels || 0)} px · visual</small></article>
+              <article className="advanced-metric-card is-hotspot"><span>Focos RGB + SWIR</span><strong>{formatNumber(metrics?.hotspot_rgb_swir_components || 0)}</strong><small>{formatNumber(metrics?.hotspot_rgb_swir_pixels || 0)} px · mayor corroboración</small></article>
+              <article className="advanced-metric-card is-hotspot"><span>Anomalías SWIR junto al humo</span><strong>{formatNumber(metrics?.hotspot_swir_contextual_components || 0)}</strong><small>{formatNumber(metrics?.hotspot_swir_contextual_pixels || 0)} px · menor confianza</small></article>
+              {metrics?.active_fire_class_available && <article className="advanced-metric-card"><span>Clase de fuego posible</span><strong>{formatNumber(metrics.active_fire_class_pixels)} px</strong></article>}
               <article className="advanced-metric-card"><span>Superficie afectada candidata</span><strong>{formatNumber(metrics?.burned_surface_candidate_pct || 0, 2)} %</strong><small>{formatNumber(metrics?.burned_surface_area || 0, 1)} {metrics?.burned_surface_area_unit}</small></article>
               <article className="advanced-metric-card"><span>Humo probable</span><strong>{formatNumber(metrics?.smoke_pct || 0, 1)} %</strong></article>
               <article className="advanced-metric-card"><span>Agua posible</span><strong>{formatNumber(metrics?.water_possible_pixels || 0)} px</strong></article>
@@ -591,7 +592,7 @@ export default function AdvancedWorkspace({ version, onVersionChange }) {
               </div>}
             </section>
 
-            <p className="advanced-caveat">Los focos resaltados son candidatos visuales calculados sobre JPG/PNG renderizados; no miden temperatura ni confirman fuego activo. La progresión es una forma geométrica en píxeles, no una predicción validada. Revisa también la referencia Wildfires: no es verdad terreno.</p>
+            <p className="advanced-caveat">Los candidatos se calculan sobre composiciones JPG/PNG: el amarillo requiere coincidencia RGB+SWIR y el naranja usa evidencia SWIR próxima al humo con menor confianza. No miden temperatura ni confirman fuego activo; cero candidatos tampoco descarta un incendio. El verdor es aparente. La progresión es geométrica en píxeles, no una predicción validada. Wildfires solo sirve para comparar: no es verdad terreno.</p>
             {metrics?.reference_warning && <p className="form-error" role="status">{metrics.reference_warning}</p>}
           </>
         ) : (

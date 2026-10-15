@@ -40,6 +40,19 @@ export function formatArea(value, unit) {
   return `${formatNumber(value, 0)} px²`;
 }
 
+export function formatAreaKm2(value, unit) {
+  if (unit !== "m²" || !Number.isFinite(value)) return "GSD necesario";
+  const areaKm2 = value / 1_000_000;
+  const decimals = areaKm2 < 0.0001 ? 6 : areaKm2 < 0.01 ? 4 : 3;
+  return `${formatNumber(areaKm2, decimals)} km²`;
+}
+
+export function formatLengthKm(valueMeters, unit = "m") {
+  if (unit !== "m" || !Number.isFinite(valueMeters)) return "GSD necesario";
+  const distanceKm = valueMeters / 1000;
+  return `${formatNumber(distanceKm, distanceKm < 0.01 ? 4 : 3)} km`;
+}
+
 export function formatLength(value, unit) {
   if (unit === "m" && value >= 1000) return `${formatNumber(value / 1000, 2)} km`;
   return `${formatNumber(value, value < 10 ? 1 : 0)} ${unit}`;

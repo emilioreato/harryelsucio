@@ -10,6 +10,8 @@ import pytest
 from pyroscope.detectores.swir_histeresis import (
     clasificar_pixeles_area_afectada_swir,
 )
+from pyroscope.detectores.kmeans import clasificar_pixeles_area_afectada
+from pyroscope.detectores.fusion import clasificar_fusion_ponderada
 from pyroscope.caracteristicas import extraer_caracteristicas_pareja
 from pyroscope.agua import detectar_agua_probable
 from pyroscope.segmentacion import segmentar_superficie_afectada
@@ -149,4 +151,28 @@ def test_perfil_inicial_del_servidor_usa_valores_recomendados():
     assert perfil["keep_separate"] is False
     assert perfil["advanced"]["use_random_forest"] is False
     assert perfil["advanced"]["water_thresholds"]["swir_red_green_max"] == 0.85
+
+
+@pytest.mark.parametrize("color", [(120, 120, 120), (52, 120, 48)])
+@pytest.mark.parametrize("sensibilidad", [1, 6, 10])
+def test_kmeans_no_fuerza_superficie_sin_senal_swir(color, sensibilidad):
+    imagen = np.full((48, 48, 3), color, np.uint8)
+    resultado = clasificar_pixeles_area_afectada(imagen, imagen, sensibilidad=sensibilidad)
+    assert not resultado.mascara_candidata.any()
+    assert not resultado.mascara_candidata_bajo_humo.any()
+
+
+def test_kmeans_conserva_cicatriz_con_senal_swir():
+    tc, swir, quemado, _ = _escena("incendio")
+    resultado = clasificar_pixeles_area_afectada(tc, swir, sensibilidad=6)
+    precision, recall, *_ = _precision_recall(resultado.mascara_candidata, quemado)
+    assert precision >= 0.98
+    assert recall >= 0.98
+
+
+def test_fusion_umbral_cero_no_inventa_votos():
+    tc, swir, _, _ = _escena("sin_incendio", ruido=0)
+    resultado = clasificar_fusion_ponderada(tc, swir, umbral_voto=0)
+    assert not resultado.mascara_candidata.any()
+    assert not resultado.mascara_candidata_bajo_humo.any()
 

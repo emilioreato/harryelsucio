@@ -24,7 +24,12 @@ def clasificar_base_contextual(true_color, swir, **opciones):
         fraccion_distancia_nucleo=.16,
     )
     humo, confianza = humo_niveles.mascara_probable, humo_niveles.puntuacion
-    candidata_v2 = resultado.mascara_candidata & ~humo & ~resultado.mascara_agua
+    # Mantener la superficie que ya clasificó V2 fuera de la oclusión de
+    # referencia. La ampliación nueva de humo es una capa superpuesta, no un
+    # veto que pueda borrar esa evidencia visible.
+    candidata_v2 = (
+        resultado.mascara_candidata & ~humo_referencia & ~resultado.mascara_agua
+    )
     caracteristicas = resultado.caracteristicas_comunes
     evidencia_frente = evaluar_evidencia_frente(
         caracteristicas, candidata_v2, humo, resultado.mascara_agua

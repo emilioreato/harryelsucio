@@ -32,6 +32,7 @@ from .interfaz.procesamiento import preparar_pareja, procesar_pareja
 from .detectores import listar_detectores_superficie, obtener_detector_superficie
 from .detectores.kmeans import PESOS_SCORE_POR_DEFECTO
 from .agua import UMBRALES_AGUA_POR_DEFECTO
+from .cobertura import detectar_verdor_aparente
 from .escenarios import generar_escenario_progresion
 from .focos import crear_superposicion_focos, detectar_focos_visuales
 from .humo import PESOS_CONFIANZA_HUMO_POR_DEFECTO
@@ -818,7 +819,7 @@ def _iniciar_analisis_avanzado(
             )
             focos = detectar_focos_visuales(tc, swir, resultado)
             clases = resultado.clase_por_pixel
-            mascara_vegetacion = clases == ClaseSemantica.VEGETACION
+            mascara_vegetacion = detectar_verdor_aparente(tc, swir, resultado)
             mascara_fuego = clases == ClaseSemantica.FUEGO_ACTIVO_POSIBLE
             sistema = resultado.sistema_coordenadas
 
@@ -831,12 +832,13 @@ def _iniciar_analisis_avanzado(
                 "vegetation": _png_bytes(
                     superponer_mascara(tc, mascara_vegetacion, color=(58, 211, 122), opacidad=0.56)
                 ),
-                "possible-active-fire": _png_bytes(
-                    superponer_mascara(tc, mascara_fuego, color=(255, 92, 24), opacidad=0.86)
-                ),
                 "fire-hotspots": _png_bytes(crear_superposicion_focos(tc, focos)),
                 "mask": _png_bytes(resultado.mascara),
             }
+            if np.any(mascara_fuego):
+                outputs["possible-active-fire"] = _png_bytes(
+                    superponer_mascara(tc, mascara_fuego, color=(255, 92, 24), opacidad=0.86)
+                )
             aviso_referencia = None
             if referencia_wildfires_bytes:
                 try:
@@ -866,9 +868,19 @@ def _iniciar_analisis_avanzado(
                 "reference_warning": aviso_referencia,
                 "vegetation_pixels": pixeles_vegetacion,
                 "vegetation_pct": float(np.mean(mascara_vegetacion) * 100),
+                "vegetation_method": "verdor visual relativo en RGB/SWIR renderizados",
                 "active_fire_class_pixels": pixeles_fuego,
+                "active_fire_class_available": bool(pixeles_fuego),
                 "visual_hotspot_candidate_pixels": int(np.count_nonzero(focos.mascara)),
                 "visual_hotspot_components": focos.componentes,
+                "hotspot_rgb_swir_pixels": int(
+                    np.count_nonzero(focos.mascara_rgb_swir)
+                ),
+                "hotspot_rgb_swir_components": focos.componentes_rgb_swir,
+                "hotspot_swir_contextual_pixels": int(
+                    np.count_nonzero(focos.mascara_swir_contextual)
+                ),
+                "hotspot_swir_contextual_components": focos.componentes_swir_contextual,
                 "burned_surface_candidate_pixels": pixeles_area,
                 "burned_surface_candidate_pct": float(resultado.proporcion * 100),
                 "burned_surface_area": float(area),

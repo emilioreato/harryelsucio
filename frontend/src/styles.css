@@ -274,6 +274,13 @@ button:disabled, input:disabled, select:disabled { cursor: not-allowed !importan
   .layer-choice.rt-Button > span { overflow: hidden; text-overflow: ellipsis; }
   .overlay-toggle.rt-Button, .mark-toggle.rt-Button { width: 100%; min-width: 0; }
 }
+.layer-control--overlays {
+  display: grid;
+  flex: 1 1 360px;
+  min-width: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
 @media (max-width: 900px) {
   body { overflow: auto; }
   .workspace { height: auto; min-height: 100dvh; grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr); overflow: visible; }

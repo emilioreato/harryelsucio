@@ -91,6 +91,8 @@ La aplicación estima humo probable con ambas composiciones alineadas: usa el n�
 
 El filtro espacial prioriza por defecto el componente candidato más grande y puede descartar candidatos alejados. Si la escena puede contener focos independientes, activa **Conservar regiones desconectadas**; así se mantienen los componentes que superan el tamaño mínimo. Las coberturas mostradas son fracciones de píxeles candidatos, no una medida de precisión ni una estimación de fuego activo.
 
+K-Means exige un predominio rojo SWIR mínimo de 0,05 por píxel, además del ranking relativo entre grupos: así una escena gris o verde uniforme no se convierte entera en superficie candidata. Este umbral es heurístico y puede omitir señales débiles; no implica exactitud validada. En la fusión, un umbral de voto cero admite votos positivos, pero nunca píxeles sin apoyo de los detectores.
+
 ### Random Forest supervisado
 
 El detector Random Forest aparece tras entrenar un modelo con máscaras revisadas por escena. Las instrucciones, IDs de clase y estructura del conjunto están en la [guía de entrenamiento](<training Random Forest/README.md>). El entrenamiento reserva escenas completas para evaluación, usa RGB renderizado y textura local, y mantiene separados fuego activo, área quemada, humo, agua, nube o bruma, suelo y vegetación. Las capturas de referencia no sustituyen máscaras alineadas; no se trata como validado hasta evaluar escenas independientes.

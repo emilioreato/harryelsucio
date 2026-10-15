@@ -9,7 +9,7 @@ import VersionSwitcher from "./components/VersionSwitcher.jsx";
 import { api, fileToBase64 } from "./services/api.js";
 import { Button } from "@radix-ui/themes";
 import { Activity, Copy, Crosshair, MousePointer2, Play, Ruler, ScanLine, SlidersHorizontal } from "lucide-react";
-import { distanceBetween, formatArea, formatLength, formatNumber } from "./domain/measurements.js";
+import { distanceBetween, formatAreaKm2, formatLengthKm, formatNumber } from "./domain/measurements.js";
 
 const DEFAULT_KMEANS_WEIGHTS = {
   swir_red: 1.25,
@@ -218,8 +218,7 @@ function BasicWorkspace({ version, onVersionChange }) {
   const handleRegionsReady = useCallback((regions) => setRegionCount(regions.length), []);
   const hasMetricScale = Number.isFinite(grid?.gsd_x_m) && grid.gsd_x_m > 0
     && Number.isFinite(grid?.gsd_y_m) && grid.gsd_y_m > 0;
-  const marksUnit = hasMetricScale ? "m" : "px";
-  const currentDistance = grid && (distancePreview
+  const currentDistance = hasMetricScale && grid && (distancePreview
     ? distanceBetween(distancePreview.start, distancePreview.end, grid)
     : tool === "distance" && marks.length >= 2
       ? distanceBetween(marks[marks.length - 2], marks[marks.length - 1], grid)
@@ -630,14 +629,14 @@ function BasicWorkspace({ version, onVersionChange }) {
               ))}
             </div>
             {!showingHistory && <p className="measurement-hint" aria-live="polite">
-              {tool === "distance" ? `Arrastra sobre la imagen para medir una distancia en ${marksUnit}.` : tool === "area" && !regionCount ? "La máscara no contiene regiones para medir." : tool === "area" ? "Haz clic dentro de la máscara para medir el área." : tool === "pixel" ? "Selecciona un píxel para ver su coordenada." : "Elige una herramienta o compara las capas."}
+              {tool === "distance" && !hasMetricScale ? "Esta escena no tiene GSD; no se puede calcular una distancia real en km." : tool === "distance" ? "Arrastra sobre la imagen para medir una distancia en km." : tool === "area" && !hasMetricScale ? "Esta escena no tiene GSD; no se puede calcular el área real en km²." : tool === "area" && !regionCount ? "La máscara no contiene regiones para medir." : tool === "area" ? "Haz clic dentro de la máscara para medir el área en km²." : tool === "pixel" ? "Selecciona un píxel para ver su coordenada." : "Elige una herramienta o compara las capas."}
             </p>}
             {(currentDistance !== null || selectedRegion || (tool === "pixel" && inspectedPixel)) && <div className="measurement-readout" aria-live="polite">
-              {currentDistance !== null && <div><span>{distancePreview ? "Midiendo" : "Distancia"}</span><strong>{formatLength(currentDistance, marksUnit)}</strong></div>}
+              {currentDistance !== null && <div><span>{distancePreview ? "Midiendo" : "Distancia"}</span><strong>{formatLengthKm(currentDistance)}</strong></div>}
               {selectedRegion && <>
-                <div><span>Región seleccionada</span><strong>#{selectedRegion.id}</strong></div>
-                <div><span>Área de la región</span><strong>{formatArea(selectedRegion.area, selectedRegion.area_unit)}</strong></div>
-                <div><span>Perímetro</span><strong>{formatLength(selectedRegion.perimeter, selectedRegion.perimeter_unit)}</strong></div>
+                <div><span>{selectedRegion.kind === "under-smoke" ? "Candidata bajo humo" : "Superficie visible"}</span><strong>#{selectedRegion.id}</strong></div>
+                <div><span>Área de la región</span><strong>{formatAreaKm2(selectedRegion.area, selectedRegion.area_unit)}</strong></div>
+                <div><span>Perímetro</span><strong>{formatLengthKm(selectedRegion.perimeter, selectedRegion.perimeter_unit)}</strong></div>
               </>}
               {tool === "pixel" && inspectedPixel && <div><span>Coordenada</span><strong>({formatNumber(inspectedPixel.x)}, {formatNumber(inspectedPixel.y)}) px</strong></div>}
             </div>}

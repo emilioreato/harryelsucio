@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@radix-ui/themes";
-import { Eye, EyeOff, Flame, Image as ImageIcon, Layers3, ScanLine } from "lucide-react";
+import { Image as ImageIcon, Layers3, ScanLine } from "lucide-react";
 import { api } from "../services/api.js";
-import { formatNumber } from "../domain/measurements.js";
+import { distanceBetween, formatLengthKm, formatNumber } from "../domain/measurements.js";
 
 const LAYERS = [
   ["true-color", "True Color", ImageIcon],
@@ -34,6 +34,13 @@ function pixelLabel(point, grid) {
   return `Píxel (${x}, ${y}) · ${formatNumber(point.x * grid.gsd_x_m, 1)}, ${formatNumber(point.y * grid.gsd_y_m, 1)} m`;
 }
 
+function rulerDistanceLabel(start, end, grid) {
+  const hasMetricScale = Number.isFinite(grid?.gsd_x_m) && grid.gsd_x_m > 0
+    && Number.isFinite(grid?.gsd_y_m) && grid.gsd_y_m > 0;
+  if (!hasMetricScale) return "";
+  return formatLengthKm(distanceBetween(start, end, grid));
+}
+
 function labelMaskRegions(pixels, width, height, grid) {
   const size = width * height;
   const labels = new Uint32Array(size);
@@ -44,6 +51,7 @@ function labelMaskRegions(pixels, width, height, grid) {
   if (!foregroundCount) return { labels, regions: [], width, height };
 
   const queue = new Int32Array(foregroundCount);
+  const neighborOffsets = [-width, width, -1, 1];
   const scaleX = grid.gsd_x_m || 1;
   const scaleY = grid.gsd_y_m || 1;
   const metricScale = Number.isFinite(grid.gsd_x_m) && grid.gsd_x_m > 0
@@ -71,18 +79,13 @@ function labelMaskRegions(pixels, width, height, grid) {
       if (x === 0 || pixels[(index - 1) * 4] < 128) verticalEdges += 1;
       if (x === width - 1 || pixels[(index + 1) * 4] < 128) verticalEdges += 1;
 
-      for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
-        const neighborY = y + offsetY;
-        if (neighborY < 0 || neighborY >= height) continue;
-        for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
-          if (offsetX === 0 && offsetY === 0) continue;
-          const neighborX = x + offsetX;
-          if (neighborX < 0 || neighborX >= width) continue;
-          const neighbor = neighborY * width + neighborX;
-          if (!labels[neighbor] && pixels[neighbor * 4] >= 128) {
-            labels[neighbor] = id;
-            queue[tail++] = neighbor;
-          }
+      for (let direction = 0; direction < neighborOffsets.length; direction += 1) {
+        if ((direction === 0 && y === 0) || (direction === 1 && y === height - 1)
+          || (direction === 2 && x === 0) || (direction === 3 && x === width - 1)) continue;
+        const neighbor = index + neighborOffsets[direction];
+        if (!labels[neighbor] && pixels[neighbor * 4] >= 128) {
+          labels[neighbor] = id;
+          queue[tail++] = neighbor;
         }
       }
     }
@@ -115,7 +118,10 @@ export default function ImageViewer({
   const semanticOverlayRef = useRef(null);
   const activePointer = useRef(null);
   const dragStart = useRef(null);
+  const areaPointer = useRef(null);
+  const suppressAreaClick = useRef(false);
   const [maskLayers, setMaskLayers] = useState({});
+  const [maskLayersReady, setMaskLayersReady] = useState(false);
   const [showVisibleSurface, setShowVisibleSurface] = useState(true);
   const [showSmoke, setShowSmoke] = useState(true);
   const [showUnderSmoke, setShowUnderSmoke] = useState(true);
@@ -130,6 +136,7 @@ export default function ImageViewer({
   useEffect(() => {
     semanticOverlayRef.current = null;
     setMaskLayers({});
+    setMaskLayersReady(false);
     if (!hasResult) return undefined;
     let cancelled = false;
     const layers = ["visible-surface", "smoke", "smoke-candidates"];
@@ -137,7 +144,10 @@ export default function ImageViewer({
       name,
       await loadMaskImage(api.layerUrl(jobId, name)),
     ])).then((entries) => {
-      if (!cancelled) setMaskLayers(Object.fromEntries(entries));
+      if (!cancelled) {
+        setMaskLayers(Object.fromEntries(entries));
+        setMaskLayersReady(true);
+      }
     });
     return () => { cancelled = true; };
   }, [hasResult, jobId]);
@@ -145,27 +155,39 @@ export default function ImageViewer({
   useEffect(() => {
     regionLabelsRef.current = null;
     onRegionsReady([]);
-    if (!hasResult) return undefined;
+    if (!hasResult || !maskLayersReady) return undefined;
     let cancelled = false;
     const maskImage = new Image();
     maskImage.onload = () => {
       if (cancelled) return;
-      const maskCanvas = document.createElement("canvas");
-      maskCanvas.width = grid.ancho_px;
-      maskCanvas.height = grid.alto_px;
-      const maskContext = maskCanvas.getContext("2d", { willReadFrequently: true });
-      maskContext.drawImage(maskImage, 0, 0, maskCanvas.width, maskCanvas.height);
-      const pixels = maskContext.getImageData(0, 0, maskCanvas.width, maskCanvas.height).data;
-      const labeledMask = labelMaskRegions(pixels, maskCanvas.width, maskCanvas.height, grid);
-      regionLabelsRef.current = labeledMask;
-      onRegionsReady(labeledMask.regions);
+      const labelImage = (image) => {
+        const maskCanvas = document.createElement("canvas");
+        maskCanvas.width = grid.ancho_px;
+        maskCanvas.height = grid.alto_px;
+        const maskContext = maskCanvas.getContext("2d", { willReadFrequently: true });
+        maskContext.drawImage(image, 0, 0, maskCanvas.width, maskCanvas.height);
+        const pixels = maskContext.getImageData(0, 0, maskCanvas.width, maskCanvas.height).data;
+        return labelMaskRegions(pixels, maskCanvas.width, maskCanvas.height, grid);
+      };
+      const visible = labelImage(maskImage);
+      visible.regions = visible.regions.map((region) => ({ ...region, kind: "visible" }));
+      let underSmoke = { labels: new Uint32Array(grid.ancho_px * grid.alto_px), regions: [] };
+      const underSmokeImage = maskLayers["smoke-candidates"];
+      if (underSmokeImage) {
+        underSmoke = labelImage(underSmokeImage);
+        underSmoke.regions = underSmoke.regions.map((region) => ({ ...region, kind: "under-smoke" }));
+      }
+      const regions = [...visible.regions, ...underSmoke.regions];
+      regionLabelsRef.current = { visible, underSmoke };
+      onRegionsReady(regions);
     };
     maskImage.src = api.layerUrl(jobId, "mask");
     return () => {
       cancelled = true;
       regionLabelsRef.current = null;
     };
-  }, [hasResult, jobId, grid?.ancho_px, grid?.alto_px, grid?.gsd_x_m, grid?.gsd_y_m, onRegionsReady]);
+  }, [hasResult, maskLayersReady, jobId, grid?.ancho_px, grid?.alto_px, grid?.gsd_x_m, grid?.gsd_y_m,
+    maskLayers["smoke-candidates"], onRegionsReady]);
 
   useEffect(() => {
     const image = imageRef.current;
@@ -274,7 +296,7 @@ export default function ImageViewer({
       const scaleX = imageRect.width / image.naturalWidth;
       const scaleY = imageRect.height / image.naturalHeight;
       const toCanvas = (point) => ({ x: point.x * scaleX, y: point.y * scaleY });
-      const drawLine = (start, end, dashed = false) => {
+      const drawLine = (start, end, dashed = false, label = "") => {
         const a = toCanvas(start);
         const b = toCanvas(end);
         context.beginPath();
@@ -304,23 +326,57 @@ export default function ImageViewer({
         context.stroke();
         context.fillStyle = "#ff4fa3";
         context.fill();
+        if (label) {
+          let normalX = -(b.y - a.y) / lineLength;
+          let normalY = (b.x - a.x) / lineLength;
+          if (normalY > 0) {
+            normalX *= -1;
+            normalY *= -1;
+          }
+          context.font = "400 13px system-ui, sans-serif";
+          const metrics = context.measureText(label);
+          const halfWidth = metrics.width / 2;
+          const middleX = (a.x + b.x) / 2 + normalX * 13;
+          const middleY = (a.y + b.y) / 2 + normalY * 13;
+          const labelX = Math.max(halfWidth + 3, Math.min(imageRect.width - halfWidth - 3, middleX));
+          const labelY = Math.max(9, Math.min(imageRect.height - 9, middleY));
+          context.textAlign = "center";
+          context.textBaseline = "middle";
+          context.lineJoin = "round";
+          context.lineWidth = 3;
+          context.strokeStyle = "rgba(11, 20, 32, .9)";
+          context.strokeText(label, labelX, labelY);
+          context.fillStyle = "#ff4fa3";
+          context.fillText(label, labelX, labelY);
+        }
       };
 
       if (tool === "distance") {
-        for (let index = 0; index + 1 < marks.length; index += 2) drawLine(marks[index], marks[index + 1]);
-        if (distancePreview) drawLine(distancePreview.start, distancePreview.end, true);
+        for (let index = 0; index + 1 < marks.length; index += 2) {
+          const start = marks[index];
+          const end = marks[index + 1];
+          drawLine(start, end, false, rulerDistanceLabel(start, end, grid));
+        }
+        if (distancePreview) {
+          drawLine(distancePreview.start, distancePreview.end, true,
+            rulerDistanceLabel(distancePreview.start, distancePreview.end, grid));
+        }
       } else if (tool === "area" && selectedRegion && regionLabelsRef.current) {
-        const { labels, width, height } = regionLabelsRef.current;
+        const selectedMask = selectedRegion.kind === "under-smoke"
+          ? regionLabelsRef.current.underSmoke
+          : regionLabelsRef.current.visible;
+        const { labels, width, height } = selectedMask;
         const highlight = document.createElement("canvas");
         highlight.width = width;
         highlight.height = height;
         const highlightContext = highlight.getContext("2d");
         const overlay = highlightContext.createImageData(width, height);
         const selectedId = selectedRegion.id;
+        const selectionColor = selectedRegion.kind === "under-smoke" ? [220, 35, 190] : [255, 79, 163];
         const setPink = (offset, alpha) => {
-          overlay.data[offset] = 255;
-          overlay.data[offset + 1] = 79;
-          overlay.data[offset + 2] = 163;
+          overlay.data[offset] = selectionColor[0];
+          overlay.data[offset + 1] = selectionColor[1];
+          overlay.data[offset + 2] = selectionColor[2];
           overlay.data[offset + 3] = Math.max(overlay.data[offset + 3], alpha);
         };
 
@@ -355,9 +411,11 @@ export default function ImageViewer({
         context.strokeStyle = "rgba(255,255,255,.95)";
         context.lineWidth = 1.5;
         context.stroke();
-        context.fillStyle = "#fff";
-        context.font = "600 10px ui-monospace, monospace";
-        context.fillText(String(index + 1), x + 8, y - 8);
+        if (tool !== "distance") {
+          context.fillStyle = "#fff";
+          context.font = "600 10px ui-monospace, monospace";
+          context.fillText(String(index + 1), x + 8, y - 8);
+        }
       });
     };
 
@@ -372,7 +430,7 @@ export default function ImageViewer({
       observer?.disconnect();
     };
   }, [source, showMarks, marks, distancePreview, tool, inspectedPixel, selectedRegion,
-    supportsSeparateOverlays, grid?.ancho_px, grid?.alto_px, jobId, maskLayers,
+    supportsSeparateOverlays, grid?.ancho_px, grid?.alto_px, grid?.gsd_x_m, grid?.gsd_y_m, jobId, maskLayers,
     showVisibleSurface, showSmoke, showUnderSmoke, showSegmentation]);
 
   const pointAt = (clientX, clientY, clamp = false) => {
@@ -389,6 +447,11 @@ export default function ImageViewer({
   };
 
   const handlePointerDown = (event) => {
+    if (hasResult && tool === "area" && (event.pointerType !== "mouse" || event.button === 0)) {
+      suppressAreaClick.current = false;
+      areaPointer.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+      return;
+    }
     if (!hasResult || tool !== "distance" || (event.pointerType === "mouse" && event.button !== 0)) return;
     const point = pointAt(event.clientX, event.clientY);
     if (!point) return;
@@ -400,12 +463,24 @@ export default function ImageViewer({
   };
 
   const handlePointerMove = (event) => {
+    if (areaPointer.current?.pointerId === event.pointerId) {
+      if (Math.hypot(event.clientX - areaPointer.current.x, event.clientY - areaPointer.current.y) >= 4) {
+        areaPointer.current.moved = true;
+      }
+      return;
+    }
     if (activePointer.current !== event.pointerId || !dragStart.current) return;
     const end = pointAt(event.clientX, event.clientY, true);
     if (end) setDistancePreview({ start: dragStart.current, end });
   };
 
   const handlePointerUp = (event) => {
+    if (areaPointer.current?.pointerId === event.pointerId) {
+      suppressAreaClick.current = areaPointer.current.moved
+        || Math.hypot(event.clientX - areaPointer.current.x, event.clientY - areaPointer.current.y) >= 4;
+      areaPointer.current = null;
+      return;
+    }
     if (activePointer.current !== event.pointerId || !dragStart.current) return;
     const start = dragStart.current;
     const end = pointAt(event.clientX, event.clientY, true);
@@ -418,6 +493,11 @@ export default function ImageViewer({
   };
 
   const handlePointerCancel = (event) => {
+    if (areaPointer.current?.pointerId === event.pointerId) {
+      areaPointer.current = null;
+      suppressAreaClick.current = false;
+      return;
+    }
     if (activePointer.current !== event.pointerId) return;
     activePointer.current = null;
     dragStart.current = null;
@@ -426,15 +506,24 @@ export default function ImageViewer({
 
   const handleImageClick = (event) => {
     if (!hasResult || (tool !== "pixel" && tool !== "area")) return;
+    if (tool === "area" && suppressAreaClick.current) {
+      suppressAreaClick.current = false;
+      return;
+    }
     const point = pointAt(event.clientX, event.clientY);
     if (!point) return;
     if (tool === "area") {
       const labelMap = regionLabelsRef.current;
       if (!labelMap) return;
-      const x = Math.max(0, Math.min(labelMap.width - 1, Math.floor(point.x)));
-      const y = Math.max(0, Math.min(labelMap.height - 1, Math.floor(point.y)));
-      const regionId = labelMap.labels[y * labelMap.width + x];
-      onRegionSelect(regionId ? labelMap.regions[regionId - 1] : null);
+      const x = Math.max(0, Math.min(grid.ancho_px - 1, Math.floor(point.x)));
+      const y = Math.max(0, Math.min(grid.alto_px - 1, Math.floor(point.y)));
+      const pixel = y * grid.ancho_px + x;
+      const visibleId = labelMap.visible.labels[pixel];
+      const underSmokeId = labelMap.underSmoke.labels[pixel];
+      const region = visibleId
+        ? labelMap.visible.regions[visibleId - 1]
+        : underSmokeId ? labelMap.underSmoke.regions[underSmokeId - 1] : null;
+      onRegionSelect(region);
     } else if (tool === "pixel") setInspectedPixel(point);
   };
 
@@ -463,24 +552,24 @@ export default function ImageViewer({
             ><Icon size={14} aria-hidden="true" /><span>{label}</span></Button>
           ))}
         </div>
-        <div className="layer-control" role="group" aria-label="Capas de segmentación independientes">
+        <div className="layer-control layer-control--overlays" role="group" aria-label="Capas de segmentación independientes">
           <Button className={`layer-choice${showVisibleSurface ? " is-active" : ""}`} variant="ghost" size="1" type="button"
             disabled={!hasResult || !supportsSeparateOverlays || !maskLayers["visible-surface"]}
             aria-pressed={showVisibleSurface} title="Superficie observada fuera del humo; roja."
             onClick={() => setShowVisibleSurface((visible) => !visible)}>
-            <Flame size={13} aria-hidden="true" /><span>Superficie</span>
+            <span>Superficie</span>
           </Button>
           <Button className={`layer-choice${showSmoke ? " is-active" : ""}`} variant="ghost" size="1" type="button"
             disabled={!hasResult || !supportsSeparateOverlays || !maskLayers.smoke}
             aria-pressed={showSmoke} title="Humo probable; azul."
             onClick={() => setShowSmoke((visible) => !visible)}>
-            <Layers3 size={13} aria-hidden="true" /><span>Humo</span>
+            <span>Humo</span>
           </Button>
           <Button className={`layer-choice${showUnderSmoke ? " is-active" : ""}`} variant="ghost" size="1" type="button"
             disabled={!hasResult || !supportsSeparateOverlays || !maskLayers["smoke-candidates"]}
             aria-pressed={showUnderSmoke} title="Evidencia SWIR bajo humo; fucsia tramado, hipótesis no confirmada."
             onClick={() => setShowUnderSmoke((visible) => !visible)}>
-            <ScanLine size={13} aria-hidden="true" /><span>Bajo humo</span>
+            <span>Bajo humo</span>
           </Button>
         </div>
         <Button
@@ -494,11 +583,9 @@ export default function ImageViewer({
           title="Alternar el contorno confirmado y el borde discontinuo de la hipótesis. Las capas se controlan por separado."
           onClick={() => setShowSegmentation((visible) => !visible)}
         >
-          {showSegmentation ? <Flame size={13} aria-hidden="true" /> : <Eye size={13} aria-hidden="true" />}
-          <span>{showSegmentation ? "Contornos" : "Sin contorno"}</span>
+          <span>Borde</span>
         </Button>
         <Button className={`mark-toggle${showMarks ? " is-active" : ""}`} variant="ghost" size="1" type="button" disabled={!hasResult} aria-pressed={showMarks} aria-label={`${showMarks ? "Ocultar" : "Mostrar"} marcas`} title={`${showMarks ? "Ocultar" : "Mostrar"} marcas`} onClick={() => setShowMarks((visible) => !visible)}>
-          {showMarks ? <EyeOff size={13} aria-hidden="true" /> : <Eye size={13} aria-hidden="true" />}
           <span>Marcas</span>
         </Button>
       </div>

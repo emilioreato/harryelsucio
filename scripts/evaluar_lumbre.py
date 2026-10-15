@@ -27,7 +27,7 @@ sys.path.insert(0, str(ROOT))
 from pyroscope.caracteristicas import extraer_caracteristicas_pareja
 from pyroscope.detectores.contextual import clasificar_base_contextual
 from pyroscope.detectores.swir_histeresis import clasificar_pixeles_area_afectada_swir
-from pyroscope.evidencia_contextual import evidencia_desde_v2
+from pyroscope.evidencia_contextual import EvidenciaContextual, evidencia_desde_v2
 from pyroscope.estimacion_bajo_humo import estimar_bajo_humo
 from pyroscope.geometria_segmentacion import segmentar_regiones_espaciales
 from pyroscope.humo_visible import ampliar_humo_true_color
@@ -125,12 +125,52 @@ def ejecutar(tc: np.ndarray, swir: np.ndarray, *, experimental: bool) -> dict:
     if caracteristicas is None:
         caracteristicas = extraer_caracteristicas_pareja(tc, swir)
     score = evidencia_desde_v2(clasificacion, caracteristicas)
+    humo_para_superficie = clasificacion.mascara_humo
+    evidencia_superficie = score
+    if experimental:
+        humo_referencia = (clasificacion.diagnosticos_evidencia or {}).get(
+            "humo_referencia"
+        )
+        if humo_referencia is not None:
+            humo_para_superficie = np.asarray(humo_referencia, dtype=bool)
+            oculto_sin_semilla_visible = (
+                clasificacion.mascara_humo
+                & ~humo_para_superficie
+                & ~clasificacion.mascara_candidata
+            )
+            if np.any(oculto_sin_semilla_visible):
+                valores_visibles = np.asarray(score, dtype=np.float32).copy()
+                valores_visibles[oculto_sin_semilla_visible] = 0
+                evidencia_superficie = EvidenciaContextual(
+                    valores_visibles,
+                    getattr(score, "diagnosticos", {}) or {},
+                )
     regiones = segmentar_contextual(
         tc, swir, clasificacion.mascara_candidata, clasificacion.mascara_agua,
-        clasificacion.mascara_humo, evidencia=score, caracteristicas=caracteristicas,
+        humo_para_superficie, evidencia=evidencia_superficie,
+        caracteristicas=caracteristicas,
     )
+    clasificacion_geometria = replace(
+        clasificacion, mascara_candidata=regiones.mascara
+    )
+    if experimental:
+        solape_superficie_humo_nuevo = (
+            regiones.mascara
+            & clasificacion.mascara_humo
+            & ~humo_para_superficie
+        )
+        if np.any(solape_superficie_humo_nuevo):
+            clases_geometria = clasificacion.clase_por_pixel.copy()
+            clases_geometria[solape_superficie_humo_nuevo] = (
+                ClaseSemantica.SUPERFICIE_AFECTADA_CANDIDATA
+            )
+            clasificacion_geometria = replace(
+                clasificacion_geometria,
+                mascara_humo=humo_para_superficie,
+                clase_por_pixel=clases_geometria,
+            )
     regiones_espaciales = segmentar_regiones_espaciales(
-        replace(clasificacion, mascara_candidata=regiones.mascara),
+        clasificacion_geometria,
         area_minima_pct=.15, distancia_maxima_pct=10,
         conservar_regiones_separadas=True, preservar_geometria=True,
     )

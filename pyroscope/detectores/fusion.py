@@ -90,8 +90,10 @@ def clasificar_fusion_ponderada(
     )
     agua = clasificacion_kmeans.mascara_agua | clasificacion_swir.mascara_agua
     humo = clasificacion_kmeans.mascara_humo | clasificacion_swir.mascara_humo
-    candidata = (voto >= umbral_voto) & ~agua & ~humo
-    candidata_bajo_humo = (voto >= umbral_voto) & humo & ~agua
+    # El umbral cero admite cualquier voto positivo, nunca ausencia de evidencia.
+    apoyo = (voto > 0) & (voto >= umbral_voto)
+    candidata = apoyo & ~agua & ~humo
+    candidata_bajo_humo = apoyo & humo & ~agua
 
     clases = np.full(candidata.shape, ClaseSemantica.INDETERMINADO, dtype=np.uint8)
     clases[agua] = ClaseSemantica.AGUA_POSIBLE

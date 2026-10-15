@@ -25,6 +25,10 @@ class ResultadoFocos:
     contraste_local: np.ndarray
     puntuacion_visual: np.ndarray
     componentes: int
+    mascara_rgb_swir: np.ndarray | None = None
+    mascara_swir_contextual: np.ndarray | None = None
+    componentes_rgb_swir: int = 0
+    componentes_swir_contextual: int = 0
 
 
 def detectar_focos_visuales(
@@ -34,19 +38,27 @@ def detectar_focos_visuales(
     *,
     contraste_minimo: float = 14.0,
     area_minima_px: int = 3,
+    contraste_swir_contextual_minimo: float = 40.0,
+    area_maxima_swir_contextual_px: int = 100,
 ) -> ResultadoFocos:
-    """Marca píxeles cálidos de alto contraste coincidentes en RGB y SWIR.
+    """Devuelve candidatos estrictos RGB+SWIR y una señal SWIR contextual.
 
-    El color cálido en ambas vistas sigue la lógica conservadora documentada
-    en `algoritmos_segmentacion_fuego_humo_agua.md`. El contraste se mide
-    respecto a un fondo suavizado local. Agua posible y humo probable se vetan.
-    Los umbrales son valores iniciales para revisar, no magnitudes físicas.
+    La coincidencia cálida en ambas composiciones sigue la lógica conservadora
+    documentada en `algoritmos_segmentacion_fuego_humo_agua.md`. Por separado,
+    se conservan anomalías cálidas SWIR pequeñas junto al borde del humo y
+    dentro de la superficie candidata. Ambas señales usan colores renderizados:
+    sus umbrales son valores iniciales para revisar, no magnitudes físicas.
     """
     validar_par_alineado(true_color, swir)
     if resultado.mascara.shape != true_color.shape[:2]:
         raise ValueError("Las imágenes y el resultado deben compartir la misma rejilla.")
-    if contraste_minimo < 0 or area_minima_px < 1:
-        raise ValueError("El contraste mínimo no puede ser negativo y el área debe ser positiva.")
+    if (
+        contraste_minimo < 0
+        or contraste_swir_contextual_minimo < 0
+        or area_minima_px < 1
+        or area_maxima_swir_contextual_px < area_minima_px
+    ):
+        raise ValueError("Los contrastes y el rango de área de los candidatos no son válidos.")
 
     alto, ancho = true_color.shape[:2]
     lado = max(9, min(41, (min(alto, ancho) // 24) | 1))
@@ -72,23 +84,69 @@ def detectar_focos_visuales(
     contraste = np.maximum(contraste_rgb, contraste_swir)
 
     agua = resultado.clase_por_pixel == ClaseSemantica.AGUA_POSIBLE
-    mascara = calido_rgb & calido_swir & (contraste >= contraste_minimo)
-    mascara &= ~agua & ~resultado.mascara_humo
+    mascara_estricta = calido_rgb & calido_swir & (contraste >= contraste_minimo)
+    mascara_estricta &= ~agua & ~resultado.mascara_humo
 
-    binaria = mascara.astype(np.uint8)
+    binaria = mascara_estricta.astype(np.uint8)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
     binaria = cv2.morphologyEx(binaria, cv2.MORPH_CLOSE, kernel)
     cantidad, etiquetas, estadisticas, _ = cv2.connectedComponentsWithStats(binaria, 8)
-    limpia = np.zeros_like(binaria, dtype=bool)
-    componentes = 0
+    limpia_estricta = np.zeros_like(binaria, dtype=bool)
+    componentes_estrictos = 0
     for etiqueta in range(1, cantidad):
         if estadisticas[etiqueta, cv2.CC_STAT_AREA] >= area_minima_px:
-            limpia[etiquetas == etiqueta] = True
-            componentes += 1
+            limpia_estricta[etiquetas == etiqueta] = True
+            componentes_estrictos += 1
+
+    # La rama SWIR de contexto es evidencia de menor confianza. Solo busca
+    # anomalías cálidas pequeñas dentro de la superficie candidata y junto al
+    # borde del humo; el núcleo de humo, el agua y la referencia Wildfires se
+    # excluyen. Se entrega separada de la coincidencia estricta RGB+SWIR.
+    rojo_swir = swir[:, :, 0].astype(np.float32)
+    fondo_rojo_swir = cv2.GaussianBlur(rojo_swir, (lado, lado), 0)
+    contraste_rojo_swir = np.maximum(rojo_swir - fondo_rojo_swir, 0.0)
+    superficie = np.asarray(
+        getattr(resultado, "mascara_clasificada", resultado.mascara), dtype=bool
+    )
+    humo = np.asarray(resultado.mascara_humo, dtype=bool)
+    kernel_borde_humo = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (13, 13))
+    cerca_del_humo = cv2.dilate(humo.astype(np.uint8), kernel_borde_humo, iterations=1) > 0
+    mascara_contextual = (
+        calido_swir
+        & (contraste_rojo_swir >= contraste_swir_contextual_minimo)
+        & superficie
+        & cerca_del_humo
+        & ~humo
+        & ~agua
+        & ~limpia_estricta
+    )
+    cantidad_ctx, etiquetas_ctx, estadisticas_ctx, _ = cv2.connectedComponentsWithStats(
+        mascara_contextual.astype(np.uint8), 8
+    )
+    limpia_contextual = np.zeros_like(mascara_contextual)
+    componentes_contextuales = 0
+    for etiqueta in range(1, cantidad_ctx):
+        area = estadisticas_ctx[etiqueta, cv2.CC_STAT_AREA]
+        if area_minima_px <= area <= area_maxima_swir_contextual_px:
+            limpia_contextual[etiquetas_ctx == etiqueta] = True
+            componentes_contextuales += 1
+
+    limpia = limpia_estricta | limpia_contextual
+    cantidad_total, _, _, _ = cv2.connectedComponentsWithStats(limpia.astype(np.uint8), 8)
+    componentes = cantidad_total - 1
 
     puntuacion = np.clip(contraste / 64.0, 0.0, 1.0).astype(np.float32)
     puntuacion[~limpia] = 0.0
-    return ResultadoFocos(limpia, contraste.astype(np.float32), puntuacion, componentes)
+    return ResultadoFocos(
+        limpia,
+        contraste.astype(np.float32),
+        puntuacion,
+        componentes,
+        limpia_estricta,
+        limpia_contextual,
+        componentes_estrictos,
+        componentes_contextuales,
+    )
 
 
 def crear_superposicion_focos(imagen_rgb: np.ndarray, focos: ResultadoFocos) -> np.ndarray:
@@ -100,10 +158,21 @@ def crear_superposicion_focos(imagen_rgb: np.ndarray, focos: ResultadoFocos) -> 
     if not np.any(mascara):
         return salida
 
+    mascara_estricta = (
+        focos.mascara_rgb_swir.astype(bool)
+        if focos.mascara_rgb_swir is not None
+        else focos.mascara.astype(bool)
+    )
+    mascara_contextual = (
+        focos.mascara_swir_contextual.astype(bool)
+        if focos.mascara_swir_contextual is not None
+        else np.zeros_like(focos.mascara, dtype=bool)
+    )
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     halo = cv2.dilate(mascara, kernel, iterations=1).astype(bool) & ~focos.mascara
     salida = superponer_mascara(salida, halo, color=(255, 30, 220), opacidad=0.7)
-    salida = superponer_mascara(salida, focos.mascara, color=(255, 244, 0), opacidad=0.92)
+    salida = superponer_mascara(salida, mascara_contextual, color=(255, 145, 35), opacidad=0.90)
+    salida = superponer_mascara(salida, mascara_estricta, color=(255, 244, 0), opacidad=0.92)
     contornos, _ = cv2.findContours(mascara * 255, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cv2.drawContours(salida, contornos, -1, (255, 255, 255), 1)
     return salida

@@ -77,10 +77,10 @@ def _escena_terreno_sintetica(*, incluir_agua=True):
 )
 def test_escena_uniforme_no_se_convierte_entera_en_agua(color_tc, color_swir, ruido):
     tc, swir = _caracteristicas_uniformes(color_tc, color_swir, ruido=ruido)
-    resultado = detectar_agua_probable(
-        extraer_caracteristicas_pareja(tc, swir), np.zeros(tc.shape[:2], dtype=bool)
-    )
-    assert not resultado.any()
+    caracteristicas = extraer_caracteristicas_pareja(tc, swir)
+    mascara_humo = np.zeros(tc.shape[:2], dtype=bool)
+    assert not detectar_agua_probable(caracteristicas, mascara_humo).any()
+    assert not _detectar_agua_probable_experimental(caracteristicas, mascara_humo).any()
 
 
 def test_agua_oscura_azulada_se_detecta_con_apoyo_de_las_dos_vistas():

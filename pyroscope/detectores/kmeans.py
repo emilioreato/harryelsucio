@@ -153,6 +153,11 @@ def clasificar_pixeles_area_afectada(
     rojo_verde_minimo = max(-0.75, float(np.quantile(muestra_z[:, 6], 0.35)))
     mascara &= normalizado_3d[:, :, 6] >= rojo_verde_minimo
 
+    # Una clase siempre gana el ranking, incluso en una escena gris o verde
+    # uniforme. Exigir evidencia absoluta evita convertir esa elección relativa
+    # en superficie afectada. El mínimo coincide con la semilla del detector SWIR.
+    mascara &= features[:, :, 0] >= 0.05
+
     # True Color y SWIR deben coincidir antes de vetar un píxel como agua.
     mascara_agua = detectar_agua_probable(
         features, mascara_humo, umbrales_percentil=umbrales_agua

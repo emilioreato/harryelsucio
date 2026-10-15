@@ -9,6 +9,7 @@ import re
 
 RAIZ_REPOSITORIO = Path(__file__).resolve().parents[2]
 CARPETA_IMAGENES = RAIZ_REPOSITORIO / "imagenes"
+CARPETA_REFERENCIAS_RETO = RAIZ_REPOSITORIO / "DOCUMENTACION" / "Presentacion reto"
 EXTENSIONES_IMAGEN = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
 MAX_LADO_ANALISIS = 1800
 MAX_LADO_CONTEXTUAL = 2500
@@ -62,19 +63,11 @@ def listar_escenas_disponibles() -> tuple[EscenaDisponible, ...]:
         fecha = (fechas_true or fechas_swir or (None,))[0]
         if fecha:
             fecha = f"{fecha[8:10]}/{fecha[5:7]}/{fecha[:4]}"
-        carpeta_referencias = carpeta / "referencias"
-        referencias_wildfires = (
-            tuple(
-                ruta
-                for ruta in carpeta_referencias.iterdir()
-                if ruta.is_file()
-                and "wildfires" in _nombre_normalizado(ruta)
-                and ruta.suffix.casefold() in EXTENSIONES_IMAGEN
-            )
-            if carpeta_referencias.is_dir()
-            else ()
+        referencia_wildfires = _buscar_referencia_wildfires(
+            carpeta,
+            true_color[0],
+            swir[0],
         )
-        referencia_wildfires = referencias_wildfires[0] if len(referencias_wildfires) == 1 else None
         gsd = _gsd_de_metadatos(carpeta / "metadatos.json")
         escenas.append(
             EscenaDisponible(
@@ -87,6 +80,44 @@ def listar_escenas_disponibles() -> tuple[EscenaDisponible, ...]:
             )
         )
     return tuple(escenas)
+
+
+def _buscar_referencia_wildfires(
+    carpeta_escena: Path,
+    true_color: Path,
+    swir: Path,
+) -> Path | None:
+    """Resuelve Wildfires en referencias locales o en el paquete canónico del reto.
+
+    El nombre de la carpeta y la fecha de adquisición evitan asociar por error
+    una referencia de otra escena o de otro día. Si queda más de una candidata,
+    se omite en lugar de elegir una arbitrariamente.
+    """
+    fecha_pareja = set(_fechas_archivo(true_color)) | set(_fechas_archivo(swir))
+    carpetas_referencia = (
+        carpeta_escena / "referencias",
+        CARPETA_REFERENCIAS_RETO / carpeta_escena.name,
+    )
+    for carpeta_referencia in carpetas_referencia:
+        if not carpeta_referencia.is_dir():
+            continue
+        candidatas = tuple(
+            ruta
+            for ruta in carpeta_referencia.iterdir()
+            if ruta.is_file()
+            and "wildfires" in _nombre_normalizado(ruta)
+            and ruta.suffix.casefold() in EXTENSIONES_IMAGEN
+            and not (
+                fecha_pareja
+                and _fechas_archivo(ruta)
+                and not (fecha_pareja & set(_fechas_archivo(ruta)))
+            )
+        )
+        if len(candidatas) == 1:
+            return candidatas[0]
+        if candidatas:
+            return None
+    return None
 
 
 def _nombre_normalizado(ruta: Path) -> str:

@@ -57,10 +57,9 @@ def evidencia_desde_v2(clasificacion, caracteristicas):
         if frente_fuerte is not None:
             frente_fuerte = np.asarray(frente_fuerte, dtype=bool)
             score[frente_fuerte] = np.maximum(score[frente_fuerte], .85)
-    # Una vez que el píxel está bajo humo, se sustituye toda evidencia previa
-    # por la evaluación que leyó exclusivamente el RGB SWIR. En particular,
-    # True Color, la evidencia visual del frente y el veto de agua conjunto no
-    # deciden la clasificación del suelo ocluido.
+    # El humo nuevo y la superficie son capas independientes. Solo se sustituye
+    # la evidencia donde no había ya una observación V2; el solapamiento humo +
+    # superficie observada conserva su semilla original.
     mascara_humo = np.asarray(clasificacion.mascara_humo, dtype=bool)
     evidencia_oculta = diagnosticos.get("evidencia_bajo_humo_swir")
     if evidencia_oculta is not None:
@@ -69,7 +68,8 @@ def evidencia_desde_v2(clasificacion, caracteristicas):
                 or not np.isfinite(evidencia_oculta).all()
                 or np.any((evidencia_oculta < 0) | (evidencia_oculta > 1))):
             raise ValueError("La evidencia SWIR bajo humo debe estar alineada y normalizada.")
-        score[mascara_humo] = evidencia_oculta[mascara_humo]
+        suelo_sin_observacion = mascara_humo & ~mascara_v2
+        score[suelo_sin_observacion] = evidencia_oculta[suelo_sin_observacion]
     score[clasificacion.mascara_agua & ~mascara_humo] = 0
     diagnosticos["evidencia_swir_v2"] = score_v2
     diagnosticos["evidencia_combinada"] = score.copy()
