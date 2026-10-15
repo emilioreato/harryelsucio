@@ -4,7 +4,7 @@ import ImageViewer from "./components/ImageViewer.jsx";
 import { api, fileToBase64 } from "./services/api.js";
 import { Button, Card } from "@radix-ui/themes";
 import { Activity, Crosshair, MousePointer2, Play, Ruler, ScanLine, SlidersHorizontal } from "lucide-react";
-import { distanceBetween, formatArea, formatLength, formatNumber, polygonArea, polylineLength } from "./domain/measurements.js";
+import { distanceBetween, formatArea, formatLength, formatNumber } from "./domain/measurements.js";
 
 const DEFAULT_KMEANS_WEIGHTS = {
   swir_red: 1.25,
@@ -33,7 +33,7 @@ const DEFAULT_WATER_THRESHOLDS = {
 const TOOL_OPTIONS = [
   { id: "view", label: "Ver", Icon: MousePointer2 },
   { id: "distance", label: "Regla", Icon: Ruler },
-  { id: "polygon", label: "Área", Icon: Crosshair },
+  { id: "area", label: "Área", Icon: Crosshair },
   { id: "pixel", label: "Píxel", Icon: ScanLine },
 ];
 
@@ -95,7 +95,7 @@ function App() {
   const [tool, setTool] = useState("view");
   const [marks, setMarks] = useState([]);
   const [distancePreview, setDistancePreview] = useState(null);
-  const [polygonClosed, setPolygonClosed] = useState(false);
+  const [selectedRegionId, setSelectedRegionId] = useState(null);
   const [inspectedPixel, setInspectedPixel] = useState(null);
 
   useEffect(() => {
@@ -128,23 +128,21 @@ function App() {
   const hasResult = Boolean(result && result.state === "complete");
   const grid = result?.grid || null;
   const metrics = result?.metrics || null;
-  const marksUnit = grid?.gsd_x_m ? "m" : "px";
+  const selectedRegion = metrics?.regions?.find((region) => region.id === selectedRegionId) || null;
+  const hasMetricScale = Number.isFinite(grid?.gsd_x_m) && grid.gsd_x_m > 0
+    && Number.isFinite(grid?.gsd_y_m) && grid.gsd_y_m > 0;
+  const marksUnit = hasMetricScale ? "m" : "px";
   const currentDistance = grid && (distancePreview
     ? distanceBetween(distancePreview.start, distancePreview.end, grid)
     : tool === "distance" && marks.length >= 2
       ? distanceBetween(marks[marks.length - 2], marks[marks.length - 1], grid)
       : null);
-  const manualArea = grid && tool === "polygon" && marks.length >= 3 ? polygonArea(marks, grid) : null;
-  const manualPerimeter = grid && tool === "polygon" && marks.length >= 2
-    ? polylineLength(marks, grid, polygonClosed)
-    : null;
-
   const selectTool = (nextTool) => {
     if (nextTool === tool) return;
     setTool(nextTool);
     setMarks([]);
     setDistancePreview(null);
-    setPolygonClosed(false);
+    setSelectedRegionId(null);
     setInspectedPixel(null);
   };
 
@@ -217,7 +215,7 @@ function App() {
       setResult(null);
       setMarks([]);
       setDistancePreview(null);
-      setPolygonClosed(false);
+      setSelectedRegionId(null);
       setInspectedPixel(null);
       setRunning(true);
       setConnection({ ready: true, label: "Analizando…" });
@@ -278,13 +276,14 @@ function App() {
         });
       }
     }
-    if (tool === "polygon" && polygonClosed && marks.length >= 3) {
+    if (selectedRegion) {
       elements.push({
-        id: "poligono-1",
-        tipo: "poligono",
-        vertices_px: marks.map((point) => [point.x, point.y]),
-        area: { valor: polygonArea(marks, grid), unidad: grid.gsd_x_m ? "m²" : "px²" },
-        perimetro: { valor: polylineLength(marks, grid, true), unidad: marksUnit },
+        id: `region-segmentada-${selectedRegion.id}`,
+        tipo: "region_segmentada",
+        region_id: selectedRegion.id,
+        pixel_count: selectedRegion.pixel_count,
+        area: { valor: selectedRegion.area, unidad: selectedRegion.area_unit },
+        perimetro: { valor: selectedRegion.perimeter, unidad: selectedRegion.perimeter_unit },
       });
     }
     saveBlob(
@@ -306,6 +305,13 @@ function App() {
               <span className="status-dot" />{connection.label}
             </span>
           </div>
+
+          <section className="sidebar-progress" aria-label="Progreso del análisis">
+            <div className="progress-summary" aria-live="polite"><span>{progress.label}</span><strong>{progress.value}%</strong></div>
+            <div className="progress-track" role="progressbar" aria-label="Progreso del análisis" aria-valuemin="0" aria-valuemax="100" aria-valuenow={progress.value}>
+              <span style={{ width: `${progress.value}%` }} />
+            </div>
+          </section>
 
           <form onSubmit={runAnalysis}>
             <div className="source-switch" role="tablist" aria-label="Origen de las imágenes">
@@ -381,15 +387,7 @@ function App() {
           </form>
         </aside>
 
-        <section className="analysis-column" aria-label="Plano y progreso">
-          <div className="analysis-heading">
-            <div className="analysis-title"><h2>{jobId || running ? jobLabel : activeLabel}</h2></div>
-            <div className="progress-summary" aria-live="polite"><span>{progress.label}</span><strong>{progress.value}%</strong></div>
-          </div>
-          <div className="progress-track" role="progressbar" aria-label="Progreso del análisis" aria-valuemin="0" aria-valuemax="100" aria-valuenow={progress.value}>
-            <span style={{ width: `${progress.value}%` }} />
-          </div>
-
+        <section className="analysis-column" aria-label="Visor del análisis">
           <div className="viewer-card">
             <ImageViewer
               jobId={hasResult ? jobId : null}
@@ -408,8 +406,8 @@ function App() {
               setDistancePreview={setDistancePreview}
               inspectedPixel={inspectedPixel}
               setInspectedPixel={setInspectedPixel}
-              polygonClosed={polygonClosed}
-              setPolygonClosed={setPolygonClosed}
+              selectedRegion={selectedRegion}
+              onRegionSelect={setSelectedRegionId}
               errorMessage={running ? "La vista aparecerá al terminar la segmentación." : ""}
               onError={setError}
             />
@@ -422,37 +420,39 @@ function App() {
             <p className="panel-kicker">HERRAMIENTAS</p>
             <div className="tool-grid" role="group" aria-label="Seleccionar herramienta">
               {TOOL_OPTIONS.map(({ id, label, Icon }) => (
-                <Button key={id} className={`tool-button${tool === id ? " is-active" : ""}`} variant={tool === id ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult} aria-pressed={tool === id} onClick={() => selectTool(id)}>
+                <Button key={id} className={`tool-button${tool === id ? " is-active" : ""}`} variant={tool === id ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult || (id === "distance" && !hasMetricScale) || (id === "area" && !metrics?.regions?.length)} title={id === "distance" && hasResult && !hasMetricScale ? "Introduce un GSD y vuelve a analizar para medir en metros." : undefined} aria-pressed={tool === id} onClick={() => selectTool(id)}>
                   <Icon size={14} aria-hidden="true" /><span>{label}</span>
                 </Button>
               ))}
             </div>
             <p className="measurement-hint" aria-live="polite">
-              {tool === "distance" ? "Arrastra sobre la imagen para medir una distancia." : tool === "polygon" ? "Marca vértices en la imagen para medir un área." : tool === "pixel" ? "Selecciona un píxel para ver su coordenada." : "Elige una herramienta o compara las capas en el visor."}
+              {tool === "distance" && hasResult && !hasMetricScale ? "Introduce el GSD y vuelve a analizar para habilitar la regla en metros." : tool === "distance" ? "Arrastra sobre la imagen para medir una distancia en metros." : tool === "area" ? "Haz clic dentro del contorno segmentado para medir esa región." : tool === "pixel" ? "Selecciona un píxel para ver su coordenada." : "Elige una herramienta o compara las capas en el visor."}
             </p>
-            {(currentDistance !== null || manualArea !== null || (tool === "pixel" && inspectedPixel)) && <div className="measurement-readout" aria-live="polite">
+            {(currentDistance !== null || selectedRegion || (tool === "pixel" && inspectedPixel)) && <div className="measurement-readout" aria-live="polite">
               {currentDistance !== null && <div><span>{distancePreview ? "Midiendo" : "Distancia"}</span><strong>{formatLength(currentDistance, marksUnit)}</strong></div>}
-              {manualArea !== null && <div><span>{polygonClosed ? "Área dibujada" : "Área aproximada"}</span><strong>{formatArea(manualArea, grid.gsd_x_m ? "m²" : "px²")}</strong></div>}
-              {manualPerimeter !== null && <div><span>Perímetro del área</span><strong>{formatLength(manualPerimeter, marksUnit)}</strong></div>}
+              {selectedRegion && <>
+                <div><span>Región seleccionada</span><strong>#{selectedRegion.id}</strong></div>
+                <div><span>Área de la región</span><strong>{formatArea(selectedRegion.area, selectedRegion.area_unit)}</strong></div>
+                <div><span>Perímetro</span><strong>{formatLength(selectedRegion.perimeter, selectedRegion.perimeter_unit)}</strong></div>
+              </>}
               {tool === "pixel" && inspectedPixel && <div><span>Coordenada</span><strong>({formatNumber(inspectedPixel.x)}, {formatNumber(inspectedPixel.y)}) px</strong></div>}
             </div>}
             <div className="measurement-actions">
-              <button className="text-button" type="button" disabled={!hasResult || (!marks.length && !inspectedPixel)} onClick={() => {
+              <button className="text-button" type="button" disabled={!hasResult || (!marks.length && !inspectedPixel && !selectedRegion)} onClick={() => {
                 if (tool === "pixel") setInspectedPixel(null);
+                else if (tool === "area") setSelectedRegionId(null);
                 else setMarks((current) => current.slice(0, tool === "distance" ? -2 : -1));
                 setDistancePreview(null);
-                setPolygonClosed(false);
               }}>Deshacer</button>
-              {tool === "polygon" && <button className="text-button" type="button" disabled={!hasResult || marks.length < 3 || polygonClosed} onClick={() => setPolygonClosed(true)}>Cerrar área</button>}
-              <button className="text-button" type="button" disabled={!hasResult || (!marks.length && !inspectedPixel)} onClick={() => {
-                setMarks([]); setInspectedPixel(null); setDistancePreview(null); setPolygonClosed(false);
+              <button className="text-button" type="button" disabled={!hasResult || (!marks.length && !inspectedPixel && !selectedRegion)} onClick={() => {
+                setMarks([]); setInspectedPixel(null); setDistancePreview(null); setSelectedRegionId(null);
               }}>Borrar marcas</button>
             </div>
             <hr className="measurement-separator" />
             <label className="scale-input" htmlFor="gsd"><span>GSD <small>metros por píxel</small></span>
               <input className="field-control" id="gsd" type="number" min="0.000001" step="any" inputMode="decimal" placeholder="Opcional" value={gsd} onChange={(event) => setGsd(event.target.value)} disabled={running} />
             </label>
-            <p className="field-help">Se aplica en el siguiente análisis. Sin GSD, las medidas quedan en píxeles.</p>
+            <p className="field-help">Se aplica en el siguiente análisis. La regla solo se habilita si el análisis incluye GSD y mide en metros.</p>
             <details className="resolution-reference">
               <summary>Área por píxel y referencia</summary>
               <p className="resolution-formula">Para píxeles cuadrados: superficie/píxel = tamaño de píxel²</p>
@@ -483,7 +483,7 @@ function App() {
           {metrics && <>
             <div className="metrics-grid">
               <Card className="metric-card metric-primary" size="1"><span>Superficie candidata</span><strong>{formatNumber(metrics.coverage_pct, 1)} %</strong></Card>
-              <Card className="metric-card" size="1"><span>Área</span><strong>{formatArea(metrics.area, metrics.area_unit)}</strong></Card>
+              <Card className="metric-card" size="1"><span>Área total segmentada</span><strong>{formatArea(metrics.area, metrics.area_unit)}</strong></Card>
               <Card className="metric-card" size="1"><span>Perímetro</span><strong>{formatLength(metrics.perimeter, metrics.perimeter_unit)}</strong></Card>
               <Card className="metric-card" size="1"><span>Humo probable</span><strong>{formatNumber(metrics.smoke_pct, 1)} %</strong></Card>
             </div>

@@ -26,17 +26,43 @@ function pixelLabel(point, grid) {
 export default function ImageViewer({
   jobId, grid, layer, setLayer, showSegmentation, setShowSegmentation,
   showMarks, setShowMarks, tool, marks, setMarks, distancePreview,
-  setDistancePreview, inspectedPixel, setInspectedPixel, polygonClosed,
-  setPolygonClosed, errorMessage, onError,
+  setDistancePreview, inspectedPixel, setInspectedPixel, selectedRegion,
+  onRegionSelect, errorMessage, onError,
 }) {
   const stageRef = useRef(null);
   const imageRef = useRef(null);
   const canvasRef = useRef(null);
+  const regionLabelsRef = useRef(null);
   const activePointer = useRef(null);
   const dragStart = useRef(null);
   const currentLayer = jobId ? visibleLayer(layer, showSegmentation) : null;
   const source = currentLayer && jobId ? `${api.layerUrl(jobId, currentLayer)}?v=${jobId}` : "";
   const hasResult = Boolean(jobId && grid);
+
+  useEffect(() => {
+    regionLabelsRef.current = null;
+    if (!hasResult) return undefined;
+    let cancelled = false;
+    const regionImage = new Image();
+    regionImage.onload = () => {
+      if (cancelled) return;
+      const labelsCanvas = document.createElement("canvas");
+      labelsCanvas.width = grid.ancho_px;
+      labelsCanvas.height = grid.alto_px;
+      const labelsContext = labelsCanvas.getContext("2d", { willReadFrequently: true });
+      labelsContext.drawImage(regionImage, 0, 0, labelsCanvas.width, labelsCanvas.height);
+      regionLabelsRef.current = {
+        width: labelsCanvas.width,
+        height: labelsCanvas.height,
+        data: labelsContext.getImageData(0, 0, labelsCanvas.width, labelsCanvas.height).data,
+      };
+    };
+    regionImage.src = api.layerUrl(jobId, "region-ids");
+    return () => {
+      cancelled = true;
+      regionLabelsRef.current = null;
+    };
+  }, [hasResult, jobId, grid?.ancho_px, grid?.alto_px]);
 
   useEffect(() => {
     const image = imageRef.current;
@@ -68,9 +94,14 @@ export default function ImageViewer({
         context.beginPath();
         context.moveTo(a.x, a.y);
         context.lineTo(b.x, b.y);
+        context.lineCap = "round";
+        context.lineJoin = "round";
         context.setLineDash(dashed ? [7, 5] : []);
-        context.strokeStyle = "#f6dc49";
-        context.lineWidth = 2;
+        context.strokeStyle = "rgba(24, 15, 30, .88)";
+        context.lineWidth = 5;
+        context.stroke();
+        context.strokeStyle = "#ff4fa3";
+        context.lineWidth = 2.6;
         context.stroke();
         context.setLineDash([]);
         const lineLength = Math.hypot(b.x - a.x, b.y - a.y);
@@ -82,24 +113,35 @@ export default function ImageViewer({
         context.lineTo(b.x - headLength * Math.cos(angle - Math.PI / 7), b.y - headLength * Math.sin(angle - Math.PI / 7));
         context.lineTo(b.x - headLength * Math.cos(angle + Math.PI / 7), b.y - headLength * Math.sin(angle + Math.PI / 7));
         context.closePath();
-        context.fillStyle = "#f6dc49";
+        context.strokeStyle = "rgba(24, 15, 30, .92)";
+        context.lineWidth = 2;
+        context.stroke();
+        context.fillStyle = "#ff4fa3";
         context.fill();
       };
 
       if (tool === "distance") {
         for (let index = 0; index + 1 < marks.length; index += 2) drawLine(marks[index], marks[index + 1]);
         if (distancePreview) drawLine(distancePreview.start, distancePreview.end, true);
-      } else if (tool === "polygon" && marks.length > 1) {
-        context.beginPath();
-        marks.forEach((point, index) => {
-          const p = toCanvas(point);
-          if (index === 0) context.moveTo(p.x, p.y);
-          else context.lineTo(p.x, p.y);
-        });
-        if (polygonClosed && marks.length > 2) context.closePath();
-        context.strokeStyle = "#f6dc49";
-        context.lineWidth = 2;
-        context.stroke();
+      } else if (tool === "area" && selectedRegion?.contours?.length) {
+        context.lineCap = "round";
+        context.lineJoin = "round";
+        for (const contour of selectedRegion.contours) {
+          if (contour.length < 2) continue;
+          context.beginPath();
+          contour.forEach(([x, y], index) => {
+            const point = toCanvas({ x, y });
+            if (index === 0) context.moveTo(point.x, point.y);
+            else context.lineTo(point.x, point.y);
+          });
+          context.closePath();
+          context.strokeStyle = "rgba(24, 15, 30, .92)";
+          context.lineWidth = 5;
+          context.stroke();
+          context.strokeStyle = "#ff4fa3";
+          context.lineWidth = 2.6;
+          context.stroke();
+        }
       }
 
       const points = tool === "pixel" && inspectedPixel ? [inspectedPixel] : marks;
@@ -128,7 +170,7 @@ export default function ImageViewer({
       window.removeEventListener("resize", draw);
       observer?.disconnect();
     };
-  }, [source, showMarks, marks, distancePreview, tool, polygonClosed, inspectedPixel]);
+  }, [source, showMarks, marks, distancePreview, tool, inspectedPixel, selectedRegion]);
 
   const pointAt = (clientX, clientY, clamp = false) => {
     const image = imageRef.current;
@@ -180,14 +222,20 @@ export default function ImageViewer({
   };
 
   const handleImageClick = (event) => {
-    if (!hasResult || (tool !== "pixel" && tool !== "polygon")) return;
+    if (!hasResult || (tool !== "pixel" && tool !== "area")) return;
     const point = pointAt(event.clientX, event.clientY);
     if (!point) return;
-    if (tool === "pixel") setInspectedPixel(point);
-    else {
-      setMarks((current) => [...current, point]);
-      setPolygonClosed(false);
-    }
+    if (tool === "area") {
+      const labelMap = regionLabelsRef.current;
+      if (!labelMap) return;
+      const x = Math.max(0, Math.min(labelMap.width - 1, Math.floor(point.x)));
+      const y = Math.max(0, Math.min(labelMap.height - 1, Math.floor(point.y)));
+      const offset = (y * labelMap.width + x) * 4;
+      const regionId = labelMap.data[offset]
+        | (labelMap.data[offset + 1] << 8)
+        | (labelMap.data[offset + 2] << 16);
+      onRegionSelect(regionId || null);
+    } else if (tool === "pixel") setInspectedPixel(point);
   };
 
   const pixelReadout = tool === "pixel" && inspectedPixel ? pixelLabel(inspectedPixel, grid) : "";
@@ -226,7 +274,7 @@ export default function ImageViewer({
       </div>
 
       <div
-        className={`image-stage${tool === "distance" ? " is-ruling" : tool === "polygon" || tool === "pixel" ? " has-tool" : ""}`}
+        className={`image-stage${tool === "distance" ? " is-ruling" : tool === "area" || tool === "pixel" ? " has-tool" : ""}`}
         ref={stageRef}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
