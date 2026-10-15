@@ -439,3 +439,41 @@ h1, h2 { color: #f1f0e8; font-size: 17px; font-weight: 600; letter-spacing: -.02
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+
+/* Controles compactos: las opciones viven en selectores, no en filas de botones */
+.viewer-toolbar { gap: 12px; }
+.viewer-select-label, .measurement-select-label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: #b8c0b8;
+  font-size: 9px;
+  white-space: nowrap;
+}
+.viewer-select-label { flex: 1 1 240px; }
+.measurement-select-label { flex: 0 1 220px; }
+.viewer-select {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0 28px 0 9px;
+  border: 1px solid rgba(220, 226, 215, .14);
+  border-radius: 7px;
+  outline: 0;
+  color: #f1f0e8;
+  background: #202a2e;
+  font: inherit;
+  cursor: pointer;
+}
+.viewer-select:focus-visible { border-color: #e7b873; outline: 2px solid rgba(231, 184, 115, .22); outline-offset: 1px; }
+.viewer-select:disabled { cursor: not-allowed; opacity: .55; }
+.viewer-select option { color: #edf0e9; background: #202a2e; }
+.measurement-toolbar { flex-wrap: wrap; }
+.mark-actions { flex-wrap: wrap; }
+@media (max-width: 430px) {
+  .viewer-toolbar { align-items: stretch; flex-direction: column; }
+  .viewer-select-label, .measurement-select-label { flex-basis: auto; justify-content: space-between; }
+  .viewer-select { flex: 1; width: auto; }
+}
