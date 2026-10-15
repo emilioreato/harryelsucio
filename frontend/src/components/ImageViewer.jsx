@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
+import { Button } from "@radix-ui/themes";
+import { Eye, EyeOff, Flame, Image as ImageIcon, Layers3, ScanLine } from "lucide-react";
 import { api } from "../services/api.js";
 import { formatNumber } from "../domain/measurements.js";
 
 const LAYERS = [
-  ["true-color", "True Color"],
-  ["swir", "SWIR"],
-  ["candidates", "Clases + humo"],
+  ["true-color", "True Color", ImageIcon],
+  ["swir", "SWIR", ScanLine],
+  ["candidates", "Clases + humo", Layers3],
 ];
 
 function visibleLayer(layer, showSegmentation) {
@@ -183,10 +185,12 @@ export default function ImageViewer({
     <>
       <div className="viewer-toolbar">
         <div className="layer-control" role="group" aria-label="Composición visible">
-          {LAYERS.map(([id, label]) => (
-            <button
+          {LAYERS.map(([id, label, Icon]) => (
+            <Button
               className={`layer-choice${layer === id ? " is-active" : ""}`}
               key={id}
+              variant={layer === id ? "soft" : "ghost"}
+              size="1"
               type="button"
               aria-pressed={layer === id}
               disabled={!hasResult}
@@ -194,19 +198,20 @@ export default function ImageViewer({
                 setLayer(id);
                 if (id === "candidates") setShowSegmentation(true);
               }}
-            >{label}</button>
+            ><Icon size={14} aria-hidden="true" /><span>{label}</span></Button>
           ))}
         </div>
         <div className="overlay-control" role="group" aria-label="Original o segmentación">
-          <button className={`overlay-choice${!showSegmentation ? " is-active" : ""}`} type="button" disabled={!hasResult} aria-pressed={!showSegmentation} onClick={() => {
+          <Button className={`overlay-choice${!showSegmentation ? " is-active" : ""}`} variant={!showSegmentation ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult} aria-pressed={!showSegmentation} onClick={() => {
             if (layer === "candidates") setLayer("true-color");
             setShowSegmentation(false);
-          }}>Original</button>
-          <button className={`overlay-choice${showSegmentation ? " is-active" : ""}`} type="button" disabled={!hasResult || layer === "candidates"} aria-pressed={showSegmentation} onClick={() => setShowSegmentation(true)}>Contorno</button>
+          }}><Eye size={13} aria-hidden="true" />Original</Button>
+          <Button className={`overlay-choice${showSegmentation ? " is-active" : ""}`} variant={showSegmentation ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult || layer === "candidates"} aria-pressed={showSegmentation} onClick={() => setShowSegmentation(true)}><Flame size={13} aria-hidden="true" />Contorno</Button>
         </div>
-        <button className={`mark-toggle${showMarks ? " is-active" : ""}`} type="button" disabled={!hasResult} aria-pressed={showMarks} onClick={() => setShowMarks((visible) => !visible)}>
-          {showMarks ? "Ocultar marcas" : "Ver marcas"}
-        </button>
+        <Button className={`mark-toggle${showMarks ? " is-active" : ""}`} variant="outline" size="1" type="button" disabled={!hasResult} aria-pressed={showMarks} onClick={() => setShowMarks((visible) => !visible)}>
+          {showMarks ? <EyeOff size={13} aria-hidden="true" /> : <Eye size={13} aria-hidden="true" />}
+          {showMarks ? "Marcas" : "Ver marcas"}
+        </Button>
       </div>
 
       <div

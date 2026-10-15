@@ -86,6 +86,7 @@ def segmentar_superficie_afectada(
         sistema_coordenadas=sistema_coordenadas,
         mascara=regiones.mascara,
         mascara_clasificada=clasificacion.mascara_candidata,
+        mascara_candidata_bajo_humo=clasificacion.mascara_candidata_bajo_humo,
         mascara_humo=clasificacion.mascara_humo,
         confianza_humo=clasificacion.confianza_humo,
         clase_por_pixel=clasificacion.clase_por_pixel,

@@ -382,9 +382,6 @@ function App() {
                   <input id="keep-separate" type="checkbox" checked={keepSeparate} onChange={(event) => setKeepSeparate(event.target.checked)} />
                   <span>Conservar focos separados</span>
                 </label>
-                <div className="section-rule measurement-rule"><span>CALIBRACIÓN</span></div>
-                <label className="field-label" htmlFor="gsd">GSD · metros por píxel <span className="optional">opcional</span></label>
-                <input className="field-control" id="gsd" type="number" min="0.000001" step="any" inputMode="decimal" placeholder="Sin escala: medidas en píxeles" value={gsd} onChange={(event) => setGsd(event.target.value)} />
               </div>
             </details>
 
@@ -462,6 +459,7 @@ function App() {
                 setMarks([]); setInspectedPixel(null); setDistancePreview(null); setPolygonClosed(false);
               }}>Borrar marcas</button>
             </div>
+            <Separator className="measurement-separator" />
             <section className="resolution-reference" aria-labelledby="resolution-title">
               <h3 id="resolution-title">Resolución y superficie</h3>
               <p className="resolution-formula">Para píxeles cuadrados: superficie/píxel = tamaño de píxel²</p>
@@ -471,7 +469,7 @@ function App() {
                   <tr><th scope="row">Superficie</th><td>100 m²</td><td>400 m²</td><td>3.600 m²</td></tr>
                 </tbody>
               </table>
-              <p className="resolution-warning">Valores nominales. JPG puede estar reescalado; el área queda en píxeles hasta verificar escala y georreferenciación.</p>
+              <p className="resolution-warning">Valores nominales. 60 m corresponde a bandas atmosféricas, no a True Color ni SWIR. JPG puede estar reescalado; el área queda en píxeles hasta verificar escala y georreferenciación.</p>
               <details className="resolution-details">
                 <summary>Referencia técnica y límites</summary>
               <div className="resolution-longform">
@@ -491,12 +489,12 @@ function App() {
           </div>
           {metrics && <>
             <div className="metrics-grid">
-              <article className="metric-card metric-primary"><span>Superficie candidata</span><strong>{formatNumber(metrics.coverage_pct, 1)} %</strong></article>
-              <article className="metric-card"><span>Área</span><strong>{formatArea(metrics.area, metrics.area_unit)}</strong></article>
-              <article className="metric-card"><span>Perímetro</span><strong>{formatLength(metrics.perimeter, metrics.perimeter_unit)}</strong></article>
-              <article className="metric-card"><span>Humo probable</span><strong>{formatNumber(metrics.smoke_pct, 1)} %</strong></article>
+              <Card className="metric-card metric-primary" size="1"><span>Superficie candidata</span><strong>{formatNumber(metrics.coverage_pct, 1)} %</strong></Card>
+              <Card className="metric-card" size="1"><span>Área</span><strong>{formatArea(metrics.area, metrics.area_unit)}</strong></Card>
+              <Card className="metric-card" size="1"><span>Perímetro</span><strong>{formatLength(metrics.perimeter, metrics.perimeter_unit)}</strong></Card>
+              <Card className="metric-card" size="1"><span>Humo probable</span><strong>{formatNumber(metrics.smoke_pct, 1)} %</strong></Card>
             </div>
-            <p className="result-caveat">Resultado orientativo; revisa la máscara. Área en píxeles, sin escala terrestre verificada.</p>
+            <p className="result-caveat">Resultado orientativo; revisa la máscara. En fucsia: {formatNumber(metrics.smoke_covered_candidates_px)} px con evidencia de superficie afectada bajo humo; es una hipótesis, no se suma al área ni detecta fuego activo.</p>
           </>}
 
           <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("overlay-true-color", "lumbre_mapa_segmentado.png")}><span>Mapa con contorno</span><span>PNG ↓</span></button>

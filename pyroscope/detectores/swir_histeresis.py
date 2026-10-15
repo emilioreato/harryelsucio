@@ -30,8 +30,8 @@ def clasificar_pixeles_area_afectada_swir(
     El umbral alto localiza semillas con una señal rojiza SWIR marcada; el
     umbral bajo permite crecer desde esas semillas por píxeles contiguos que
     conservan evidencia cromática moderada. True Color aporta el verdor y la
-    oscuridad visible; ambas vistas se combinan para vetar agua. El humo se
-    aparta antes del crecimiento.
+    oscuridad visible; ambas vistas se combinan para vetar agua. La máscara
+    principal aparta el humo y en paralelo conserva hipótesis bajo esa capa.
     """
     validar_par_alineado(true_color, swir)
     if not 1 <= sensibilidad <= 10:
@@ -83,6 +83,7 @@ def clasificar_pixeles_area_afectada_swir(
         clases[mascara_humo] = ClaseSemantica.HUMO_PROBABLE
         return ResultadoClasificacionSemantica(
             mascara_candidata=np.zeros((alto, ancho), dtype=bool),
+            mascara_candidata_bajo_humo=np.zeros((alto, ancho), dtype=bool),
             mascara_agua=np.zeros((alto, ancho), dtype=bool),
             mascara_humo=mascara_humo,
             confianza_humo=humo.confianza,
@@ -121,18 +122,18 @@ def clasificar_pixeles_area_afectada_swir(
 
     # Evita que los umbrales degeneren si la escena tiene un histograma plano.
     umbral_crecimiento = min(umbral_crecimiento, umbral_semilla)
-    mascara_semillas = (
+    evidencia_semilla = (
         (rojo_swir >= umbral_semilla)
         & (rojo_verde_swir >= umbral_rg_semilla)
         & (verde_visible <= limite_vegetacion)
-        & despejado
     )
-    mascara_crecimiento = (
+    evidencia_crecimiento = (
         (rojo_swir >= umbral_crecimiento)
         & (rojo_verde_swir >= umbral_rg_crecimiento)
         & (verde_visible <= limite_vegetacion)
-        & despejado
     )
+    mascara_semillas = evidencia_semilla & despejado
+    mascara_crecimiento = evidencia_crecimiento & despejado
 
     agua = detectar_agua_probable(
         caracteristicas, mascara_humo, umbrales_percentil=umbrales_agua
@@ -154,6 +155,33 @@ def clasificar_pixeles_area_afectada_swir(
     candidata_u8[mascara_humo | agua] = 0
     candidata = candidata_u8 > 0
 
+    # Evaluar en paralelo la misma firma SWIR dentro del humo. Los cuantiles
+    # siguen aprendidos del terreno despejado; el resultado es solo una
+    # hipótesis subyacente y nunca se suma al área visible.
+    semillas_subyacentes = evidencia_semilla & ~agua
+    crecimiento_subyacente = evidencia_crecimiento & ~agua
+    cantidad_subyacente, etiquetas_subyacentes = cv2.connectedComponents(
+        crecimiento_subyacente.astype(np.uint8), connectivity=8
+    )
+    clases_con_semilla_subyacente = np.unique(
+        etiquetas_subyacentes[semillas_subyacentes]
+    )
+    clases_con_semilla_subyacente = clases_con_semilla_subyacente[
+        clases_con_semilla_subyacente != 0
+    ]
+    if cantidad_subyacente > 1 and clases_con_semilla_subyacente.size:
+        candidata_subyacente = np.isin(
+            etiquetas_subyacentes, clases_con_semilla_subyacente
+        )
+        candidata_subyacente = cv2.morphologyEx(
+            candidata_subyacente.astype(np.uint8),
+            cv2.MORPH_CLOSE,
+            np.ones((5, 5), dtype=np.uint8),
+        ) > 0
+        candidata_bajo_humo = candidata_subyacente & mascara_humo
+    else:
+        candidata_bajo_humo = np.zeros((alto, ancho), dtype=bool)
+
     clases = np.full((alto, ancho), ClaseSemantica.INDETERMINADO, dtype=np.uint8)
     clases[agua] = ClaseSemantica.AGUA_POSIBLE
     clases[candidata] = ClaseSemantica.SUPERFICIE_AFECTADA_CANDIDATA
@@ -161,6 +189,7 @@ def clasificar_pixeles_area_afectada_swir(
 
     return ResultadoClasificacionSemantica(
         mascara_candidata=candidata,
+        mascara_candidata_bajo_humo=candidata_bajo_humo,
         mascara_agua=agua,
         mascara_humo=mascara_humo,
         confianza_humo=humo.confianza,

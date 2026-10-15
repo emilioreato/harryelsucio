@@ -81,6 +81,7 @@ def clasificar_pixeles_area_afectada(
         clases[mascara_humo] = ClaseSemantica.HUMO_PROBABLE
         return ResultadoClasificacionSemantica(
             mascara_candidata=np.zeros((alto, ancho), dtype=bool),
+            mascara_candidata_bajo_humo=np.zeros((alto, ancho), dtype=bool),
             mascara_agua=np.zeros((alto, ancho), dtype=bool),
             mascara_humo=mascara_humo,
             confianza_humo=humo.confianza,
@@ -157,8 +158,10 @@ def clasificar_pixeles_area_afectada(
         features, mascara_humo, umbrales_percentil=umbrales_agua
     )
     mascara &= ~mascara_agua
-    # Bajo humo no se aplica la regla cromática de terreno despejado. El fondo
-    # queda indeterminado hasta disponer de bandas/calidad para otra política.
+    # Separar la oclusión de la evidencia de superficie: si las señales SWIR
+    # sugieren superficie afectada bajo el humo, conservarla como hipótesis.
+    # No entra en la máscara de área observada ni en su perímetro.
+    mascara_candidata_bajo_humo = mascara & mascara_humo
     mascara &= ~mascara_humo
 
     clases = np.full((alto, ancho), ClaseSemantica.INDETERMINADO, dtype=np.uint8)
@@ -168,6 +171,7 @@ def clasificar_pixeles_area_afectada(
 
     return ResultadoClasificacionSemantica(
         mascara_candidata=mascara,
+        mascara_candidata_bajo_humo=mascara_candidata_bajo_humo,
         mascara_agua=mascara_agua,
         mascara_humo=mascara_humo,
         confianza_humo=humo.confianza,

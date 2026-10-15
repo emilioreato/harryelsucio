@@ -47,9 +47,9 @@ Buscar zonas de True Color claras y poco saturadas, compatibles con gris/blanco,
 
 Esta regla es deliberadamente simple: **nubes, bruma, suelo claro, roca y algunas superficies artificiales pueden parecer humo**. Para separar humo de nubes se necesita contexto adicional (forma, posición, otras bandas, escenas temporales o anotaciones manuales). La máscara debe llamarse “humo candidato”, no detección confirmada.
 
-### D. Exclusividad y prioridad
+### D. Humo como capa de oclusión, no como clase terminal
 
-Las máscaras finales se hacen mutuamente excluyentes con este orden: agua → fuego → humo. Guardar también las máscaras candidatas intermedias para poder diagnosticar por qué se ha clasificado una región.
+La máscara de humo describe visibilidad y puede solaparse con hipótesis de agua, fuego o superficie del terreno. No debe borrar esas hipótesis ni detener el árbol de decisión. Mantener por separado las capas de oclusión y de superficie; cuando exista evidencia bajo humo, mostrarla como hipótesis de menor certeza y excluirla de la superficie observada hasta validarla. Si la imagen no aporta señal suficiente, dejar el sustrato como indeterminado. Guardar también las máscaras candidatas intermedias para poder diagnosticar cada decisión.
 
 ## 4. Implementación Python de referencia
 
@@ -164,10 +164,9 @@ def segmentar_incendio(rgb_path, swir_path, salida_dir="resultados",
     # poco saturado y claro en SWIR. Esto también puede capturar nubes.
     humo_rgb = (rgb_v >= 145) & (rgb_s <= 75)
     humo_swir = (swir_v >= 115) & (swir_s <= 100)
-    humo_candidato = humo_rgb & humo_swir & (~agua) & (~fuego)
+    # Humo es una capa de oclusión y puede coincidir con agua o fuego debajo.
+    humo_candidato = humo_rgb & humo_swir
     humo = limpiar_mascara(humo_candidato, min_area=min_area_humo)
-    humo &= ~agua
-    humo &= ~fuego
 
     # 4) Guardar máscaras binarias. Blanco = clase detectada.
     out = Path(salida_dir)
@@ -179,11 +178,17 @@ def segmentar_incendio(rgb_path, swir_path, salida_dir="resultados",
                 humo.astype(np.uint8) * 255)
 
     # Vista rápida: BGR, agua=azul, fuego=rojo, humo=gris/blanco.
-    overlay = rgb.copy()
-    overlay[agua] = (255, 80, 0)
-    overlay[fuego] = (0, 0, 255)
-    overlay[humo] = (220, 220, 220)
-    mezcla = cv2.addWeighted(rgb, 0.55, overlay, 0.45, 0)
+    # Mezclar capa a capa deja visibles las coincidencias entre humo y suelo.
+    mezcla = rgb.copy()
+    for mascara, color in (
+        (agua, (255, 80, 0)),
+        (fuego, (0, 0, 255)),
+        (humo, (220, 220, 220)),
+    ):
+        mezcla[mascara] = (
+            0.55 * mezcla[mascara]
+            + 0.45 * np.asarray(color, dtype=np.float32)
+        ).astype(np.uint8)
     cv2.imwrite(str(out / "superposicion.png"), mezcla)
 
     total = rgb.shape[0] * rgb.shape[1]

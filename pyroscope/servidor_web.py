@@ -345,6 +345,9 @@ def _iniciar_analisis(job_id: str, true_bytes: bytes, swir_bytes: bytes, ajustes
                 "perimeter": float(perimetro),
                 "perimeter_unit": unidad_perimetro,
                 "smoke_pct": float(np.mean(resultado.mascara_humo) * 100),
+                "smoke_covered_candidates_px": int(
+                    np.count_nonzero(resultado.mascara_candidata_bajo_humo)
+                ),
                 "pixel_count": pixeles,
                 "water_excluded": int(resultado.pixeles_agua_excluidos),
                 "remote_regions_discarded": int(resultado.componentes_remotos_descartados),

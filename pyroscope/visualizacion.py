@@ -17,6 +17,12 @@ def crear_superposicion(
     salida = superponer_mascara(imagen_base, resultado.mascara)
     salida = superponer_mascara(
         salida,
+        resultado.mascara_candidata_bajo_humo,
+        color=(220, 55, 175),
+        opacidad=0.62,
+    )
+    salida = superponer_mascara(
+        salida,
         resultado.mascara_humo,
         color=(0, 165, 255),
         opacidad=0.42,
@@ -41,6 +47,12 @@ def crear_vista_clasificacion(
         resultado.mascara_clasificada,
         color=(255, 115, 25),
         opacidad=0.36,
+    )
+    salida = superponer_mascara(
+        salida,
+        resultado.mascara_candidata_bajo_humo,
+        color=(220, 55, 175),
+        opacidad=0.62,
     )
     return superponer_mascara(
         salida,

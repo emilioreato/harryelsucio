@@ -14,6 +14,9 @@ class ResultadoClasificacionSemantica:
     """Evidencia por píxel antes de aplicar reglas de forma y proximidad."""
 
     mascara_candidata: np.ndarray
+    # Hipótesis de superficie afectada que coincide con la oclusión por humo.
+    # Se mantiene separada y no contribuye al área/perímetro observados.
+    mascara_candidata_bajo_humo: np.ndarray
     mascara_agua: np.ndarray
     mascara_humo: np.ndarray
     confianza_humo: np.ndarray
@@ -43,6 +46,7 @@ class ResultadoAreaAfectada:
     sistema_coordenadas: SistemaCoordenadasImagen
     mascara: np.ndarray
     mascara_clasificada: np.ndarray
+    mascara_candidata_bajo_humo: np.ndarray
     mascara_humo: np.ndarray
     confianza_humo: np.ndarray
     clase_por_pixel: np.ndarray
