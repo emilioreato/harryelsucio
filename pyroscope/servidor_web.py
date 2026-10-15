@@ -4,18 +4,23 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
+import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
+import ipaddress
 import json
 import mimetypes
 import os
 from pathlib import Path
 import re
+import secrets
 import tempfile
 import threading
 import time
 from typing import Any
 from urllib.parse import urlsplit
+from urllib.request import Request, urlopen
 import uuid
 import webbrowser
 
@@ -37,6 +42,13 @@ _JOBS: dict[str, dict[str, Any]] = {}
 _JOBS_LOCK = threading.RLock()
 _ANALYSIS_LOCK = threading.Lock()
 _INSTANCIA_LOCK: Any | None = None
+_ID_INSTANCIA: str | None = None
+_TOKEN_INSTANCIA: str | None = None
+_ID_REPOSITORIO = hashlib.sha256(
+    str(RAIZ_REPOSITORIO.resolve()).casefold().encode("utf-8")
+).hexdigest()[:16]
+_RUTA_ESTADO_INSTANCIA = Path(tempfile.gettempdir()) / f"lumbre-{_ID_REPOSITORIO}.json"
+_RUTA_BLOQUE_INSTANCIA = Path(tempfile.gettempdir()) / f"lumbre-{_ID_REPOSITORIO}.lock"
 
 
 class _ServidorWebExclusivo(ThreadingHTTPServer):
@@ -52,8 +64,7 @@ class _ServidorWebExclusivo(ThreadingHTTPServer):
 def _adquirir_bloque_instancia() -> bool:
     """Evita que varios clics al lanzador creen servidores y pestañas duplicados."""
     global _INSTANCIA_LOCK
-    ruta = Path(tempfile.gettempdir()) / "pyroscope-local-web.lock"
-    archivo = ruta.open("a+b")
+    archivo = _RUTA_BLOQUE_INSTANCIA.open("a+b")
     archivo.seek(0, os.SEEK_END)
     if archivo.tell() == 0:
         archivo.write(b"\0")
@@ -93,6 +104,153 @@ def _liberar_bloque_instancia() -> None:
             fcntl.flock(archivo.fileno(), fcntl.LOCK_UN)
     finally:
         archivo.close()
+
+
+def _es_instancia_lumbre(url: str, id_instancia: str | None = None) -> bool:
+    """Comprueba que la URL pertenece a Lumbre y, si se indica, a esa ejecución."""
+    try:
+        with urlopen(f"{url.rstrip('/')}/api/health", timeout=0.6) as respuesta:
+            estado = json.loads(respuesta.read().decode("utf-8"))
+        return (
+            estado.get("app") == "Lumbre"
+            and (id_instancia is None or estado.get("instance_id") == id_instancia)
+        )
+    except Exception:
+        # Compatibilidad con una instancia que siga abierta desde una versión
+        # anterior, que aún no publica /api/health.
+        if id_instancia is not None:
+            return False
+        try:
+            with urlopen(f"{url.rstrip('/')}/api/scenes", timeout=0.6) as respuesta:
+                escenas = json.loads(respuesta.read().decode("utf-8"))
+            with urlopen(f"{url.rstrip('/')}/api/detectors", timeout=0.6) as respuesta:
+                detectores = json.loads(respuesta.read().decode("utf-8"))
+            return isinstance(escenas.get("scenes"), list) and isinstance(
+                detectores.get("detectors"), list
+            )
+        except Exception:
+            return False
+
+
+def _buscar_instancia_activa(host: str, puerto: int) -> str | None:
+    try:
+        direccion = ipaddress.ip_address(host)
+        host_local = host if direccion.is_loopback else "127.0.0.1"
+    except ValueError:
+        host_local = "127.0.0.1"
+    host_url = f"[{host_local}]" if ":" in host_local else host_local
+    for candidato in range(puerto, min(puerto + 20, 65536)):
+        url = f"http://{host_url}:{candidato}"
+        if _es_instancia_lumbre(url):
+            return url
+    return None
+
+
+def _leer_estado_instancia() -> dict[str, Any] | None:
+    try:
+        datos = json.loads(_RUTA_ESTADO_INSTANCIA.read_text(encoding="utf-8"))
+        url = str(datos["url"])
+        partes = urlsplit(url)
+        if partes.scheme != "http" or not partes.hostname or not partes.port:
+            return None
+        if not ipaddress.ip_address(partes.hostname).is_loopback:
+            return None
+        if not isinstance(datos.get("token"), str) or not isinstance(
+            datos.get("instance_id"), str
+        ):
+            return None
+        return datos
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return None
+
+
+def _guardar_estado_instancia(url: str) -> str:
+    global _ID_INSTANCIA, _TOKEN_INSTANCIA
+    _ID_INSTANCIA = uuid.uuid4().hex
+    _TOKEN_INSTANCIA = secrets.token_urlsafe(32)
+    estado = {
+        "pid": os.getpid(),
+        "url": url,
+        "instance_id": _ID_INSTANCIA,
+        "token": _TOKEN_INSTANCIA,
+    }
+    temporal = _RUTA_ESTADO_INSTANCIA.with_suffix(f".{os.getpid()}.tmp")
+    temporal.write_text(json.dumps(estado), encoding="utf-8")
+    os.replace(temporal, _RUTA_ESTADO_INSTANCIA)
+    return _ID_INSTANCIA
+
+
+def _borrar_estado_instancia() -> None:
+    if _TOKEN_INSTANCIA is None:
+        return
+    estado = _leer_estado_instancia()
+    if estado and hmac.compare_digest(str(estado.get("token", "")), _TOKEN_INSTANCIA):
+        try:
+            _RUTA_ESTADO_INSTANCIA.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _abrir_navegador(url: str) -> None:
+    try:
+        if webbrowser.open(url, new=2):
+            return
+    except Exception:
+        pass
+    if os.name == "nt":
+        try:
+            os.startfile(url)  # type: ignore[attr-defined]
+            return
+        except OSError:
+            pass
+    print(f"No se pudo abrir el navegador automáticamente. Abre: {url}")
+
+
+def cerrar_servidor_local() -> bool:
+    """Solicita el cierre solo a la instancia local de este repositorio."""
+    estado = _leer_estado_instancia()
+    if estado is None:
+        url_antigua = _buscar_instancia_activa("127.0.0.1", 8501)
+        if url_antigua:
+            print(
+                "Lumbre está abierta, pero se inició con una versión anterior del servidor. "
+                "Ciérrala con Ctrl+C en su ventana."
+            )
+        else:
+            print("Lumbre no está abierta.")
+        return False
+
+    url = str(estado["url"])
+    instance_id = str(estado["instance_id"])
+    if not _es_instancia_lumbre(url, instance_id):
+        print("Lumbre no está abierta; se encontró un estado antiguo y se ha descartado.")
+        try:
+            _RUTA_ESTADO_INSTANCIA.unlink()
+        except FileNotFoundError:
+            pass
+        return False
+
+    solicitud = Request(
+        f"{url.rstrip('/')}/api/shutdown",
+        data=b"",
+        headers={"X-Lumbre-Token": str(estado["token"])},
+        method="POST",
+    )
+    try:
+        with urlopen(solicitud, timeout=2) as respuesta:
+            respuesta.read()
+    except Exception as exc:
+        print(f"No se pudo cerrar Lumbre: {exc}")
+        return False
+
+    limite = time.monotonic() + 5
+    while time.monotonic() < limite:
+        if not _es_instancia_lumbre(url, instance_id):
+            print("Lumbre se ha cerrado.")
+            return True
+        time.sleep(0.15)
+    print("La solicitud de cierre se envió, pero el servidor todavía responde.")
+    return False
 
 
 def _png_bytes(imagen: np.ndarray) -> bytes:
@@ -384,6 +542,12 @@ class LumbreHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - nombre requerido por BaseHTTPRequestHandler
         ruta = urlsplit(self.path).path
+        if ruta == "/api/health":
+            self._json(
+                200,
+                {"app": "Lumbre", "instance_id": _ID_INSTANCIA, "pid": os.getpid()},
+            )
+            return
         if ruta == "/api/scenes":
             escenas = [
                 {"id": escena.nombre, "label": escena.etiqueta, "name": escena.nombre, "date": escena.fecha}
@@ -459,6 +623,22 @@ class LumbreHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         ruta = urlsplit(self.path).path
+        if ruta == "/api/shutdown":
+            try:
+                cliente_local = ipaddress.ip_address(self.client_address[0]).is_loopback
+            except ValueError:
+                cliente_local = False
+            token_recibido = self.headers.get("X-Lumbre-Token", "")
+            if (
+                not cliente_local
+                or _TOKEN_INSTANCIA is None
+                or not hmac.compare_digest(token_recibido, _TOKEN_INSTANCIA)
+            ):
+                self._json(403, {"error": "Solicitud de cierre no autorizada."})
+                return
+            self._json(200, {"message": "Cerrando Lumbre."})
+            threading.Thread(target=self.server.shutdown, daemon=True).start()
+            return
         if ruta != "/api/analyze":
             self._json(404, {"error": "Ruta no encontrada."})
             return
@@ -565,10 +745,33 @@ class LumbreHandler(BaseHTTPRequestHandler):
 def ejecutar_servidor(host: str = "127.0.0.1", puerto: int = 8501, abrir_navegador: bool = True) -> bool:
     """Inicia una sola instancia y elige puerto libre si el principal está ocupado.
 
-    Devuelve ``False`` si ya hay una instancia de Lumbre activa.
+    Reutiliza la instancia activa y devuelve ``False`` si ya hay una instancia.
     """
+    url_existente = _buscar_instancia_activa(host, puerto)
+    if url_existente:
+        print(f"Lumbre ya está abierta en {url_existente}/. Abriendo esa instancia.")
+        _abrir_navegador(f"{url_existente}/")
+        return False
+
     if not _adquirir_bloque_instancia():
-        print("Lumbre ya está ejecutándose; no se abrió otra instancia.")
+        # El proceso que obtuvo el bloqueo puede seguir preparando el servidor.
+        limite = time.monotonic() + 4
+        while time.monotonic() < limite:
+            estado = _leer_estado_instancia()
+            if estado and _es_instancia_lumbre(
+                str(estado["url"]), str(estado["instance_id"])
+            ):
+                url_existente = str(estado["url"])
+                break
+            url_existente = _buscar_instancia_activa(host, puerto)
+            if url_existente:
+                break
+            time.sleep(0.15)
+        if url_existente:
+            print(f"Lumbre ya está abierta en {url_existente}/. Abriendo esa instancia.")
+            _abrir_navegador(f"{url_existente}/")
+        else:
+            print("Lumbre se está iniciando en otra ventana. No se abrió otro servidor.")
         return False
 
     servidor = None
@@ -587,10 +790,13 @@ def ejecutar_servidor(host: str = "127.0.0.1", puerto: int = 8501, abrir_navegad
         servidor.daemon_threads = True
         puerto_real = servidor.server_address[1]
         url = f"http://{host}:{puerto_real}/"
+        instance_id = _guardar_estado_instancia(url.rstrip("/"))
         print(f"Lumbre disponible en {url}")
         print("Mantén esta ventana abierta mientras usas la aplicación. Ctrl+C detiene el servidor.")
         if abrir_navegador:
-            threading.Timer(0.8, webbrowser.open, args=(url,)).start()
+            temporizador = threading.Timer(0.8, _abrir_navegador, args=(url,))
+            temporizador.daemon = True
+            temporizador.start()
         try:
             servidor.serve_forever()
         except KeyboardInterrupt:
@@ -598,8 +804,9 @@ def ejecutar_servidor(host: str = "127.0.0.1", puerto: int = 8501, abrir_navegad
     finally:
         if servidor is not None:
             servidor.server_close()
+        _borrar_estado_instancia()
         _liberar_bloque_instancia()
     return True
 
 
-__all__ = ["ejecutar_servidor"]
+__all__ = ["cerrar_servidor_local", "ejecutar_servidor"]

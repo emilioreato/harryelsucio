@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 
-echo Iniciando Lumbre. Se abrira la pagina de analisis satelital.
+echo Iniciando Lumbre. Si ya esta abierta, se reutilizara esa instancia y se abrira su pagina.
 echo Deja esta ventana abierta mientras uses la aplicacion. Pulsa Ctrl+C para detenerla.
 echo.
 
@@ -45,7 +45,7 @@ if errorlevel 2 goto ya_activa
 goto final
 
 :ya_activa
-echo Lumbre ya esta abierto. No se inicio otra ventana de servidor.
+echo Lumbre ya estaba abierto. Se ha intentado abrir la pagina existente en el navegador.
 endlocal
 exit /b 0
 
