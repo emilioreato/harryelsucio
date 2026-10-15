@@ -9,6 +9,11 @@ __pycache__/
 .streamlit/secrets.toml
 .streamlit/credentials.toml
 
+# Estado local del servidor Lumbre
+.lumbre-instance.json
+.lumbre-instance.lock
+.lumbre-instance.*.tmp
+
 # Frontend React/Vite
 frontend/node_modules/
 frontend/.vite/

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import binascii
-import hashlib
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
@@ -15,7 +14,6 @@ import os
 from pathlib import Path
 import re
 import secrets
-import tempfile
 import threading
 import time
 from typing import Any
@@ -44,11 +42,8 @@ _ANALYSIS_LOCK = threading.Lock()
 _INSTANCIA_LOCK: Any | None = None
 _ID_INSTANCIA: str | None = None
 _TOKEN_INSTANCIA: str | None = None
-_ID_REPOSITORIO = hashlib.sha256(
-    str(RAIZ_REPOSITORIO.resolve()).casefold().encode("utf-8")
-).hexdigest()[:16]
-_RUTA_ESTADO_INSTANCIA = Path(tempfile.gettempdir()) / f"lumbre-{_ID_REPOSITORIO}.json"
-_RUTA_BLOQUE_INSTANCIA = Path(tempfile.gettempdir()) / f"lumbre-{_ID_REPOSITORIO}.lock"
+_RUTA_ESTADO_INSTANCIA = RAIZ_REPOSITORIO / ".lumbre-instance.json"
+_RUTA_BLOQUE_INSTANCIA = RAIZ_REPOSITORIO / ".lumbre-instance.lock"
 
 
 class _ServidorWebExclusivo(ThreadingHTTPServer):
@@ -164,7 +159,7 @@ def _leer_estado_instancia() -> dict[str, Any] | None:
         return None
 
 
-def _guardar_estado_instancia(url: str) -> str:
+def _guardar_estado_instancia(url: str) -> None:
     global _ID_INSTANCIA, _TOKEN_INSTANCIA
     _ID_INSTANCIA = uuid.uuid4().hex
     _TOKEN_INSTANCIA = secrets.token_urlsafe(32)
@@ -174,10 +169,9 @@ def _guardar_estado_instancia(url: str) -> str:
         "instance_id": _ID_INSTANCIA,
         "token": _TOKEN_INSTANCIA,
     }
-    temporal = _RUTA_ESTADO_INSTANCIA.with_suffix(f".{os.getpid()}.tmp")
+    temporal = _RUTA_ESTADO_INSTANCIA.with_name(f".lumbre-instance.{os.getpid()}.tmp")
     temporal.write_text(json.dumps(estado), encoding="utf-8")
     os.replace(temporal, _RUTA_ESTADO_INSTANCIA)
-    return _ID_INSTANCIA
 
 
 def _borrar_estado_instancia() -> None:
@@ -213,7 +207,7 @@ def cerrar_servidor_local() -> bool:
         url_antigua = _buscar_instancia_activa("127.0.0.1", 8501)
         if url_antigua:
             print(
-                "Lumbre está abierta, pero se inició con una versión anterior del servidor. "
+                "Lumbre está abierta, pero no se encontró el estado de cierre de esta copia. "
                 "Ciérrala con Ctrl+C en su ventana."
             )
         else:
@@ -749,8 +743,11 @@ def ejecutar_servidor(host: str = "127.0.0.1", puerto: int = 8501, abrir_navegad
     """
     url_existente = _buscar_instancia_activa(host, puerto)
     if url_existente:
-        print(f"Lumbre ya está abierta en {url_existente}/. Abriendo esa instancia.")
-        _abrir_navegador(f"{url_existente}/")
+        if abrir_navegador:
+            print(f"Lumbre ya está abierta en {url_existente}/. Abriendo esa instancia.")
+            _abrir_navegador(f"{url_existente}/")
+        else:
+            print(f"Lumbre ya está abierta en {url_existente}/.")
         return False
 
     if not _adquirir_bloque_instancia():
@@ -768,8 +765,11 @@ def ejecutar_servidor(host: str = "127.0.0.1", puerto: int = 8501, abrir_navegad
                 break
             time.sleep(0.15)
         if url_existente:
-            print(f"Lumbre ya está abierta en {url_existente}/. Abriendo esa instancia.")
-            _abrir_navegador(f"{url_existente}/")
+            if abrir_navegador:
+                print(f"Lumbre ya está abierta en {url_existente}/. Abriendo esa instancia.")
+                _abrir_navegador(f"{url_existente}/")
+            else:
+                print(f"Lumbre ya está abierta en {url_existente}/.")
         else:
             print("Lumbre se está iniciando en otra ventana. No se abrió otro servidor.")
         return False
@@ -790,7 +790,7 @@ def ejecutar_servidor(host: str = "127.0.0.1", puerto: int = 8501, abrir_navegad
         servidor.daemon_threads = True
         puerto_real = servidor.server_address[1]
         url = f"http://{host}:{puerto_real}/"
-        instance_id = _guardar_estado_instancia(url.rstrip("/"))
+        _guardar_estado_instancia(url.rstrip("/"))
         print(f"Lumbre disponible en {url}")
         print("Mantén esta ventana abierta mientras usas la aplicación. Ctrl+C detiene el servidor.")
         if abrir_navegador:
