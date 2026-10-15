@@ -32,9 +32,16 @@ from .interfaz.procesamiento import preparar_pareja, procesar_pareja
 from .detectores import listar_detectores_superficie, obtener_detector_superficie
 from .detectores.kmeans import PESOS_SCORE_POR_DEFECTO
 from .agua import UMBRALES_AGUA_POR_DEFECTO
+from .escenarios import generar_escenario_progresion
+from .focos import crear_superposicion_focos, detectar_focos_visuales
 from .humo import PESOS_CONFIANZA_HUMO_POR_DEFECTO
 from .ontologia import ClaseSemantica
-from .visualizacion import crear_superposicion, crear_vista_clasificacion, colorear_diagnostico
+from .visualizacion import (
+    crear_superposicion,
+    crear_vista_clasificacion,
+    colorear_diagnostico,
+    superponer_mascara,
+)
 from .observabilidad_pipeline import CheckpointPipeline
 
 
@@ -47,6 +54,8 @@ _MAX_CHECKPOINT_IMAGE_BYTES = 1536 * 1024
 _MAX_CHECKPOINTS_PER_IMAGE = 900
 _JOBS: dict[str, dict[str, Any]] = {}
 _JOBS_LOCK = threading.RLock()
+_ADVANCED_JOBS: dict[str, dict[str, Any]] = {}
+_ADVANCED_JOBS_LOCK = threading.RLock()
 _ANALYSIS_LOCK = threading.Lock()
 _INSTANCIA_LOCK: Any | None = None
 _ID_INSTANCIA: str | None = None
@@ -335,6 +344,27 @@ def _resumen_trabajo(trabajo: dict[str, Any]) -> dict[str, Any]:
         "grid": trabajo.get("grid"),
         "checkpoints": [dict(item) for item in trabajo.get("checkpoints", ())],
         "checkpoint_warnings": list(trabajo.get("checkpoint_warnings", ())),
+    }
+
+
+def _actualizar_trabajo_avanzado(job_id: str, **cambios: Any) -> None:
+    with _ADVANCED_JOBS_LOCK:
+        trabajo = _ADVANCED_JOBS.get(job_id)
+        if trabajo is not None:
+            trabajo.update(cambios)
+            trabajo["updated_at"] = time.time()
+
+
+def _resumen_trabajo_avanzado(trabajo: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": trabajo["id"],
+        "state": trabajo["state"],
+        "stage": trabajo["stage"],
+        "progress": trabajo["progress"],
+        "error": trabajo.get("error"),
+        "metrics": trabajo.get("metrics"),
+        "grid": trabajo.get("grid"),
+        "progression": trabajo.get("progression"),
     }
 
 
@@ -728,6 +758,148 @@ def _iniciar_analisis(
         )
 
 
+def _iniciar_analisis_avanzado(
+    job_id: str,
+    true_bytes: bytes,
+    swir_bytes: bytes,
+    ajustes: dict[str, Any],
+    referencia_wildfires_bytes: bytes | None = None,
+) -> None:
+    """Ejecuta el flujo avanzado con su propio ciclo de vida y almacenamiento."""
+    try:
+        _actualizar_trabajo_avanzado(job_id, stage="En cola para iniciar el análisis", progress=1)
+        with _ANALYSIS_LOCK:
+            _actualizar_trabajo_avanzado(
+                job_id,
+                state="running",
+                stage="Leyendo y comprobando True Color y SWIR",
+                progress=3,
+            )
+            from .interfaz.configuracion import MAX_LADO_CONTEXTUAL
+
+            pareja = preparar_pareja(
+                true_bytes,
+                swir_bytes,
+                ajustes["gsd_m_per_px"],
+                max_lado=MAX_LADO_CONTEXTUAL,
+            )
+
+            def progreso(etapa: str, porcentaje: int) -> None:
+                with _ADVANCED_JOBS_LOCK:
+                    trabajo = _ADVANCED_JOBS.get(job_id)
+                    if trabajo is not None:
+                        trabajo.update(
+                            stage=str(etapa),
+                            progress=max(
+                                int(trabajo.get("progress", 0)),
+                                max(0, min(94, int(porcentaje))),
+                            ),
+                            updated_at=time.time(),
+                        )
+
+            tc, swir, resultado = procesar_pareja(
+                pareja.true_color,
+                pareja.swir,
+                ajustes["sensitivity"],
+                ajustes["num_classes"],
+                ajustes["minimum_area_pct"],
+                ajustes["max_distance_pct"],
+                pareja.gsd_x_m,
+                pareja.gsd_y_m,
+                ajustes["detector"].id,
+                ajustes["keep_separate"],
+                progreso,
+                ajustes["advanced"],
+            )
+            _actualizar_trabajo_avanzado(
+                job_id,
+                stage="Buscando candidatos visuales de focos activos",
+                progress=95,
+            )
+            focos = detectar_focos_visuales(tc, swir, resultado)
+            clases = resultado.clase_por_pixel
+            mascara_vegetacion = clases == ClaseSemantica.VEGETACION
+            mascara_fuego = clases == ClaseSemantica.FUEGO_ACTIVO_POSIBLE
+            sistema = resultado.sistema_coordenadas
+
+            outputs = {
+                "true-color": _png_bytes(tc),
+                "swir": _png_bytes(swir),
+                "overlay-true-color": _png_bytes(crear_superposicion(tc, resultado)),
+                "overlay-swir": _png_bytes(crear_superposicion(swir, resultado)),
+                "candidates": _png_bytes(crear_vista_clasificacion(tc, resultado)),
+                "vegetation": _png_bytes(
+                    superponer_mascara(tc, mascara_vegetacion, color=(58, 211, 122), opacidad=0.56)
+                ),
+                "possible-active-fire": _png_bytes(
+                    superponer_mascara(tc, mascara_fuego, color=(255, 92, 24), opacidad=0.86)
+                ),
+                "fire-hotspots": _png_bytes(crear_superposicion_focos(tc, focos)),
+                "mask": _png_bytes(resultado.mascara),
+            }
+            aviso_referencia = None
+            if referencia_wildfires_bytes:
+                try:
+                    with Image.open(BytesIO(referencia_wildfires_bytes)) as referencia:
+                        proporcion_referencia = referencia.width / referencia.height
+                        proporcion_rejilla = sistema.ancho_px / sistema.alto_px
+                        if abs(proporcion_referencia - proporcion_rejilla) > 0.002:
+                            aviso_referencia = (
+                                "La referencia Wildfires tiene una proporción distinta y no se mostró."
+                            )
+                        else:
+                            referencia = referencia.convert("RGB").resize(
+                                (sistema.ancho_px, sistema.alto_px),
+                                Image.Resampling.LANCZOS,
+                            )
+                            outputs["reference-wildfires"] = _png_bytes(np.asarray(referencia))
+                except Exception:
+                    aviso_referencia = "No se pudo leer la referencia Wildfires; el análisis sí terminó."
+
+            pixeles_area = int(np.count_nonzero(resultado.mascara))
+            pixeles_vegetacion = int(np.count_nonzero(mascara_vegetacion))
+            pixeles_fuego = int(np.count_nonzero(mascara_fuego))
+            area, unidad_area = sistema.area_de_pixeles(pixeles_area)
+            metrics = {
+                "available_layers": list(outputs),
+                "warnings": list(resultado.avisos),
+                "reference_warning": aviso_referencia,
+                "vegetation_pixels": pixeles_vegetacion,
+                "vegetation_pct": float(np.mean(mascara_vegetacion) * 100),
+                "active_fire_class_pixels": pixeles_fuego,
+                "visual_hotspot_candidate_pixels": int(np.count_nonzero(focos.mascara)),
+                "visual_hotspot_components": focos.componentes,
+                "burned_surface_candidate_pixels": pixeles_area,
+                "burned_surface_candidate_pct": float(resultado.proporcion * 100),
+                "burned_surface_area": float(area),
+                "burned_surface_area_unit": unidad_area,
+                "smoke_pct": float(np.mean(resultado.mascara_humo) * 100),
+                "water_possible_pixels": int(
+                    np.count_nonzero(clases == ClaseSemantica.AGUA_POSIBLE)
+                ),
+                "grid_width": int(sistema.ancho_px),
+                "grid_height": int(sistema.alto_px),
+                "gsd_x_m": sistema.gsd_x_m,
+                "gsd_y_m": sistema.gsd_y_m,
+            }
+            _actualizar_trabajo_avanzado(
+                job_id,
+                state="complete",
+                stage="Análisis avanzado completado",
+                progress=100,
+                metrics=metrics,
+                grid=sistema.a_dict(),
+                outputs=outputs,
+            )
+    except Exception as exc:
+        _actualizar_trabajo_avanzado(
+            job_id,
+            state="error",
+            stage="No se pudo completar el análisis avanzado",
+            error=str(exc) or exc.__class__.__name__,
+        )
+
+
 class LumbreHandler(BaseHTTPRequestHandler):
     """Sirve el frontend y la API local de análisis."""
 
@@ -782,6 +954,53 @@ class LumbreHandler(BaseHTTPRequestHandler):
                 return
             self._bytes(200, miniatura, "image/jpeg")
             return
+        vista_escena_avanzada = re.fullmatch(
+            r"/api/advanced/scenes/([^/]+)/preview/(true-color|swir|wildfires)", ruta
+        )
+        if vista_escena_avanzada:
+            escena_id, canal = vista_escena_avanzada.groups()
+            escena_id = unquote(escena_id)
+            escena = next(
+                (item for item in listar_escenas_disponibles() if item.nombre == escena_id),
+                None,
+            )
+            if escena is None:
+                self._json(404, {"error": "No se encontró esa escena."})
+                return
+            ruta_imagen = {
+                "true-color": escena.true_color,
+                "swir": escena.swir,
+                "wildfires": escena.referencia_wildfires,
+            }[canal]
+            if ruta_imagen is None:
+                self._json(404, {"error": "Esta escena no incluye referencia Wildfires."})
+                return
+            try:
+                miniatura = _jpeg_scene_preview(ruta_imagen)
+            except (OSError, ValueError) as exc:
+                logging.getLogger(__name__).warning(
+                    "No se pudo crear la vista previa avanzada de %s (%s): %s",
+                    escena_id,
+                    canal,
+                    exc,
+                )
+                self._json(422, {"error": "No se pudo leer la imagen de esta escena."})
+                return
+            self._bytes(200, miniatura, "image/jpeg")
+            return
+        if ruta == "/api/advanced/scenes":
+            escenas = [
+                {
+                    "id": escena.nombre,
+                    "label": escena.etiqueta,
+                    "date": escena.fecha,
+                    "has_wildfires_reference": escena.referencia_wildfires is not None,
+                    "gsd_m_per_px": escena.gsd_m_por_pixel,
+                }
+                for escena in listar_escenas_disponibles()
+            ]
+            self._json(200, {"scenes": escenas})
+            return
         if ruta == "/api/scenes":
             escenas = [
                 {
@@ -812,6 +1031,31 @@ class LumbreHandler(BaseHTTPRequestHandler):
                     ]
                 },
             )
+            return
+
+        coincidencia_avanzada = re.fullmatch(r"/api/advanced/jobs/([a-f0-9-]{36})", ruta)
+        if coincidencia_avanzada:
+            with _ADVANCED_JOBS_LOCK:
+                trabajo = _ADVANCED_JOBS.get(coincidencia_avanzada.group(1))
+                resumen = _resumen_trabajo_avanzado(trabajo) if trabajo else None
+            if resumen is None:
+                self._json(404, {"error": "No se encontró ese análisis avanzado."})
+            else:
+                self._json(200, resumen)
+            return
+
+        imagen_avanzada = re.fullmatch(
+            r"/api/advanced/jobs/([a-f0-9-]{36})/layers/([a-z-]+)\.png", ruta
+        )
+        if imagen_avanzada:
+            job_id, nombre = imagen_avanzada.groups()
+            with _ADVANCED_JOBS_LOCK:
+                trabajo = _ADVANCED_JOBS.get(job_id)
+                datos = trabajo.get("outputs", {}).get(nombre) if trabajo else None
+            if datos is None:
+                self._json(404, {"error": "La capa avanzada todavía no está disponible."})
+            else:
+                self._bytes(200, datos, "image/png")
             return
 
         coincidencia = re.fullmatch(r"/api/jobs/([a-f0-9-]{36})", ruta)
@@ -899,6 +1143,142 @@ class LumbreHandler(BaseHTTPRequestHandler):
             self._json(200, {"message": "Cerrando Lumbre."})
             threading.Thread(target=self.server.shutdown, daemon=True).start()
             return
+        escenario_avanzado = re.fullmatch(
+            r"/api/advanced/jobs/([a-f0-9-]{36})/fire-progression", ruta
+        )
+        if escenario_avanzado:
+            try:
+                job_id = escenario_avanzado.group(1)
+                with _ADVANCED_JOBS_LOCK:
+                    trabajo = _ADVANCED_JOBS.get(job_id)
+                    if trabajo is None:
+                        raise ValueError("No se encontró ese análisis avanzado.")
+                    if trabajo.get("state") != "complete" or not trabajo.get("grid"):
+                        raise ValueError("El análisis avanzado debe terminar antes de crear el escenario.")
+                    rejilla = trabajo["grid"]
+                datos = self._leer_json()
+                resultado = generar_escenario_progresion(
+                    int(rejilla["ancho_px"]), int(rejilla["alto_px"]), datos
+                )
+                with _ADVANCED_JOBS_LOCK:
+                    trabajo = _ADVANCED_JOBS.get(job_id)
+                    if trabajo is not None:
+                        trabajo["progression"] = resultado
+                        trabajo["updated_at"] = time.time()
+                self._json(200, resultado)
+            except (ValueError, TypeError, json.JSONDecodeError) as exc:
+                self._json(400, {"error": str(exc)})
+            except Exception as exc:
+                self._json(500, {"error": f"No se pudo crear el escenario avanzado: {exc}"})
+            return
+
+        if ruta == "/api/advanced/analyze":
+            try:
+                datos = self._leer_json()
+                settings = datos.get("settings", {})
+                if not isinstance(settings, dict):
+                    raise ValueError("Los ajustes del análisis avanzado deben ser un objeto.")
+                origen = datos.get("source", "preloaded")
+                gsd = datos.get("gsd_m_per_px", settings.get("gsd_m_per_px"))
+                if origen == "preloaded":
+                    escena_id = datos.get("scene")
+                    escena = next(
+                        (item for item in listar_escenas_disponibles() if item.nombre == escena_id),
+                        None,
+                    )
+                    if escena is None:
+                        raise ValueError("Selecciona una escena precargada válida para el análisis avanzado.")
+                    true_bytes = escena.true_color.read_bytes()
+                    swir_bytes = escena.swir.read_bytes()
+                    referencia_wildfires_bytes = (
+                        escena.referencia_wildfires.read_bytes()
+                        if escena.referencia_wildfires is not None
+                        else None
+                    )
+                    if gsd in (None, ""):
+                        gsd = escena.gsd_m_por_pixel
+                elif origen == "upload":
+                    true_encoded = datos.get("true_color", "")
+                    swir_encoded = datos.get("swir", "")
+                    reference_encoded = datos.get("wildfires_reference", "")
+                    if not all(isinstance(valor, str) for valor in (
+                        true_encoded, swir_encoded, reference_encoded
+                    )):
+                        raise ValueError("Las imágenes cargadas no tienen un formato válido.")
+                    true_bytes = base64.b64decode(true_encoded, validate=True)
+                    swir_bytes = base64.b64decode(swir_encoded, validate=True)
+                    referencia_wildfires_bytes = (
+                        base64.b64decode(reference_encoded, validate=True)
+                        if reference_encoded
+                        else None
+                    )
+                    if not true_bytes or not swir_bytes:
+                        raise ValueError("Carga True Color y SWIR; Wildfires es una referencia opcional.")
+                else:
+                    raise ValueError("El origen de las imágenes avanzadas no es válido.")
+
+                ajustes_entrada = {
+                    **settings,
+                    "method": "contextual_hibrida",
+                    "sensitivity": 6,
+                    "num_classes": 7,
+                    "minimum_area_pct": 0.15,
+                    "max_distance_pct": 10,
+                    "keep_separate": False,
+                    "gsd_m_per_px": gsd,
+                }
+                ajustes = _validar_ajustes(ajustes_entrada)
+                job_id = str(uuid.uuid4())
+                ahora = time.time()
+                with _ADVANCED_JOBS_LOCK:
+                    expirados = [
+                        key for key, item in _ADVANCED_JOBS.items()
+                        if item["state"] in ("complete", "error")
+                        and ahora - item["updated_at"] > 3600
+                    ]
+                    for key in expirados:
+                        _ADVANCED_JOBS.pop(key, None)
+                    if len(_ADVANCED_JOBS) >= _MAX_JOBS:
+                        terminados = sorted(
+                            (
+                                (key, item)
+                                for key, item in _ADVANCED_JOBS.items()
+                                if item["state"] in ("complete", "error")
+                            ),
+                            key=lambda par: par[1]["updated_at"],
+                        )
+                        while len(_ADVANCED_JOBS) >= _MAX_JOBS and terminados:
+                            key, _ = terminados.pop(0)
+                            _ADVANCED_JOBS.pop(key, None)
+                    if len(_ADVANCED_JOBS) >= _MAX_JOBS:
+                        raise ValueError(
+                            "Hay doce análisis avanzados activos o en cola. Espera a que termine alguno."
+                        )
+                    _ADVANCED_JOBS[job_id] = {
+                        "id": job_id,
+                        "state": "queued",
+                        "stage": "Preparando análisis avanzado",
+                        "progress": 0,
+                        "updated_at": ahora,
+                        "metrics": None,
+                        "grid": None,
+                        "outputs": {},
+                        "progression": None,
+                    }
+                worker = threading.Thread(
+                    target=_iniciar_analisis_avanzado,
+                    args=(job_id, true_bytes, swir_bytes, ajustes, referencia_wildfires_bytes),
+                    name=f"lumbre-avanzado-{job_id[:8]}",
+                    daemon=True,
+                )
+                worker.start()
+                self._json(202, {"job_id": job_id})
+            except (ValueError, TypeError, json.JSONDecodeError, binascii.Error) as exc:
+                self._json(400, {"error": str(exc)})
+            except Exception as exc:
+                self._json(500, {"error": f"No se pudo iniciar el análisis avanzado: {exc}"})
+            return
+
         if ruta != "/api/analyze":
             self._json(404, {"error": "Ruta no encontrada."})
             return

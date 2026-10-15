@@ -4,6 +4,8 @@ import AdvancedSettings from "./components/AdvancedSettings.jsx";
 import ImageViewer from "./components/ImageViewer.jsx";
 import PipelineTimeline from "./components/PipelineTimeline.jsx";
 import CheckpointViewer from "./components/CheckpointViewer.jsx";
+import AdvancedWorkspace from "./components/AdvancedWorkspace.jsx";
+import VersionSwitcher from "./components/VersionSwitcher.jsx";
 import { api, fileToBase64 } from "./services/api.js";
 import { Button } from "@radix-ui/themes";
 import { Activity, Copy, Crosshair, MousePointer2, Play, Ruler, ScanLine, SlidersHorizontal } from "lucide-react";
@@ -83,7 +85,7 @@ function saveBlob(blob, filename) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function App() {
+function BasicWorkspace({ version, onVersionChange }) {
   const [scenes, setScenes] = useState([]);
   const [detectors, setDetectors] = useState([]);
   const [connection, setConnection] = useState({ ready: false, label: "Conectando…" });
@@ -438,6 +440,7 @@ function App() {
               <span className="status-dot" />{connection.label}
             </span>
           </div>
+          <VersionSwitcher version={version} onChange={onVersionChange} />
 
           <section className="sidebar-timeline" aria-label="Etapas de la segmentación">
             <PipelineTimeline
@@ -665,6 +668,14 @@ function App() {
       </nav>
     </>
   );
+}
+
+function App() {
+  const [version, setVersion] = useState("basic");
+  if (version === "advanced") {
+    return <AdvancedWorkspace version={version} onVersionChange={setVersion} />;
+  }
+  return <BasicWorkspace version={version} onVersionChange={setVersion} />;
 }
 
 export default App;

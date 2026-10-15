@@ -30,6 +30,40 @@ export const api = {
   },
 };
 
+// La experiencia avanzada tiene rutas propias y almacena sus análisis por
+// separado; solo comparte la lectura de escenas y utilidades de archivo.
+export const advancedApi = {
+  scenes: () => requestJson("/api/advanced/scenes"),
+  scenePreviewUrl: (sceneId, channel) => (
+    `/api/advanced/scenes/${encodeURIComponent(sceneId)}/preview/${channel}`
+  ),
+  analyze: (request) => requestJson("/api/advanced/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  }),
+  job: (jobId) => requestJson(`/api/advanced/jobs/${encodeURIComponent(jobId)}`),
+  fireProgression: (jobId, scenario) => requestJson(
+    `/api/advanced/jobs/${encodeURIComponent(jobId)}/fire-progression`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(scenario),
+    },
+  ),
+  layerUrl: (jobId, name) => (
+    `/api/advanced/jobs/${encodeURIComponent(jobId)}/layers/${encodeURIComponent(name)}.png`
+  ),
+  async downloadLayer(jobId, name) {
+    const response = await fetch(advancedApi.layerUrl(jobId, name));
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || "No se pudo preparar la capa avanzada.");
+    }
+    return response.blob();
+  },
+};
+
 export function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

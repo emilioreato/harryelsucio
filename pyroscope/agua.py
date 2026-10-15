@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import cv2
 import numpy as np
 
 
@@ -21,12 +22,46 @@ def detectar_agua_probable(
     *,
     umbrales_percentil: dict[str, float] | None = None,
 ) -> np.ndarray:
-    """Estima agua oscura con evidencia concordante de True Color y SWIR.
+    """Estima agua oscura con señales de True Color y SWIR.
 
-    Solo usa señales RGB renderizadas: oscuridad en ambas vistas y ausencia de
-    predominio rojo en SWIR. Los cuantiles se calculan sobre píxeles despejados
-    de la escena. Es una máscara auxiliar conservadora, no un mapa de agua.
+    Los cuantiles se calculan sobre píxeles despejados. Es una máscara auxiliar
+    conservadora, no un mapa de agua.
     """
+    return _detectar_agua_probable_impl(
+        caracteristicas,
+        mascara_humo,
+        umbrales_percentil=umbrales_percentil,
+        experimental=False,
+    )
+
+
+def _detectar_agua_probable_experimental(
+    caracteristicas: np.ndarray,
+    mascara_humo: np.ndarray,
+    *,
+    umbrales_percentil: dict[str, float] | None = None,
+) -> np.ndarray:
+    """Propuesta cromática conservadora; no está conectada a los detectores.
+
+    Se mantiene experimental porque, al retirar falsos píxeles de agua,
+    SWIR + histéresis admite parte de ellos como superficie afectada.
+    """
+    return _detectar_agua_probable_impl(
+        caracteristicas,
+        mascara_humo,
+        umbrales_percentil=umbrales_percentil,
+        experimental=True,
+    )
+
+
+def _detectar_agua_probable_impl(
+    caracteristicas: np.ndarray,
+    mascara_humo: np.ndarray,
+    *,
+    umbrales_percentil: dict[str, float] | None,
+    experimental: bool,
+) -> np.ndarray:
+    """Valida entradas y calcula la variante vigente o la experimental."""
     caracteristicas = np.asarray(caracteristicas, dtype=np.float32)
     if caracteristicas.ndim != 3 or caracteristicas.shape[2] < 8:
         raise ValueError("Se requieren al menos ocho características por píxel.")
@@ -58,7 +93,10 @@ def detectar_agua_probable(
     luma_true_color = caracteristicas[:, :, 3]
     luma_swir = caracteristicas[:, :, 4]
     predominio_rojo_swir = caracteristicas[:, :, 0]
+    cromaticidad_swir = caracteristicas[:, :, 1]
+    predominio_verde_true_color = caracteristicas[:, :, 2]
     rojo_sobre_verde_swir = caracteristicas[:, :, 6]
+    predominio_azul_true_color = caracteristicas[:, :, 7]
 
     # Un percentil calculado sobre una imagen uniforme coincide con todos los
     # píxeles. Usar <= en ese caso convertía una escena plana entera en agua.
@@ -87,17 +125,78 @@ def detectar_agua_probable(
         luma_true_color, percentiles["true_color_darkness"]
     )
     limite_luma_swir = limite_oscuridad(luma_swir, percentiles["swir_darkness"])
-    limite_predominio_rojo = float(
+    cuantil_predominio_rojo = float(
         np.quantile(predominio_rojo_swir[despejado], percentiles["swir_red_max"])
     )
-    limite_rojo_verde = float(
-        np.quantile(rojo_sobre_verde_swir[despejado], percentiles["swir_red_green_max"])
+    cuantil_rojo_verde = float(
+        np.quantile(
+            rojo_sobre_verde_swir[despejado],
+            percentiles["swir_red_green_max"],
+        )
+    )
+    if not experimental:
+        return (
+            despejado
+            & (luma_true_color <= limite_luma_tc)
+            & (luma_swir <= limite_luma_swir)
+            & (predominio_rojo_swir <= cuantil_predominio_rojo)
+            & (rojo_sobre_verde_swir <= cuantil_rojo_verde)
+        )
+
+    # Si un cuantil negativo se usa como máximo, se exige que el píxel sea más
+    # verde que el percentil de la escena: el agua neutra (valor cercano a 0)
+    # queda fuera. Cero representa ausencia de predominio, no una señal de agua.
+    limite_predominio_rojo = max(0.0, cuantil_predominio_rojo)
+    limite_rojo_verde = max(0.0, cuantil_rojo_verde)
+
+    # Una única señal no basta para etiquetar agua. Rechazar verdor fuerte solo
+    # cuando coinciden predominio verde visible, verde SWIR y cromaticidad alta.
+    limite_verde_visible = float(
+        np.quantile(predominio_verde_true_color[despejado], 0.65)
+    )
+    limite_verde_swir = float(
+        np.quantile(rojo_sobre_verde_swir[despejado], 0.25)
+    )
+    limite_cromaticidad_vegetacion = float(
+        np.quantile(cromaticidad_swir[despejado], 0.65)
+    )
+    vegetacion_clara = (
+        (predominio_verde_true_color >= limite_verde_visible)
+        & (rojo_sobre_verde_swir <= limite_verde_swir)
+        & (cromaticidad_swir >= limite_cromaticidad_vegetacion)
     )
 
-    return (
+    # Se conserva el agua oscura y poco cromática. Un agua más azul y saturada
+    # también puede pasar si True Color aporta predominio azul sin verdor fuerte.
+    limite_cromaticidad_agua = limite_cromaticidad_vegetacion
+    limite_azul_visible = float(
+        np.quantile(predominio_azul_true_color[despejado], 0.85)
+    )
+    limite_verde_visible_azul = float(
+        np.quantile(predominio_verde_true_color[despejado], 0.75)
+    )
+    apoyo_azul = (
+        (predominio_azul_true_color >= limite_azul_visible)
+        & (predominio_azul_true_color > 0.0)
+        & (predominio_verde_true_color < limite_verde_visible_azul)
+    )
+    candidato_cromatico = (
         despejado
         & (luma_true_color <= limite_luma_tc)
         & (luma_swir <= limite_luma_swir)
         & (predominio_rojo_swir <= limite_predominio_rojo)
         & (rojo_sobre_verde_swir <= limite_rojo_verde)
+        & ~vegetacion_clara
+        & ((cromaticidad_swir <= limite_cromaticidad_agua) | apoyo_azul)
     )
+
+    # La vecindad inmediata retira motas sin respaldo local; no se usa un área
+    # mínima, por lo que los cuerpos pequeños y coherentes siguen siendo válidos.
+    cantidad_vecinos = cv2.boxFilter(
+        candidato_cromatico.astype(np.float32),
+        cv2.CV_32F,
+        (3, 3),
+        normalize=False,
+        borderType=cv2.BORDER_CONSTANT,
+    ) - candidato_cromatico.astype(np.float32)
+    return candidato_cromatico & (cantidad_vecinos > 0)

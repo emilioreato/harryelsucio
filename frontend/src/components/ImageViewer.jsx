@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@radix-ui/themes";
 import { Eye, EyeOff, Flame, Image as ImageIcon, Layers3, ScanLine } from "lucide-react";
 import { api } from "../services/api.js";
@@ -12,11 +12,19 @@ const LAYERS = [
 
 const CLASSIFICATION_DESCRIPTION = "Vista de clasificación estimada: superficie afectada candidata, humo probable y otras clases contextuales. Es orientativa, no verdad terreno.";
 
-function visibleLayer(layer, showSegmentation) {
+function visibleLayer(layer) {
   if (layer === "candidates") return "candidates";
   if (layer === "reference-wildfires") return "reference-wildfires";
-  if (!showSegmentation) return layer;
-  return layer === "swir" ? "overlay-swir" : "overlay-true-color";
+  return layer;
+}
+
+function loadMaskImage(url) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = url;
+  });
 }
 
 function pixelLabel(point, grid) {
@@ -104,14 +112,35 @@ export default function ImageViewer({
   const imageRef = useRef(null);
   const canvasRef = useRef(null);
   const regionLabelsRef = useRef(null);
+  const semanticOverlayRef = useRef(null);
   const activePointer = useRef(null);
   const dragStart = useRef(null);
-  const currentLayer = jobId ? visibleLayer(layer, showSegmentation) : null;
+  const [maskLayers, setMaskLayers] = useState({});
+  const [showVisibleSurface, setShowVisibleSurface] = useState(true);
+  const [showSmoke, setShowSmoke] = useState(true);
+  const [showUnderSmoke, setShowUnderSmoke] = useState(true);
+  const currentLayer = jobId ? visibleLayer(layer) : null;
   const source = currentLayer && jobId ? `${api.layerUrl(jobId, currentLayer)}?v=${jobId}` : "";
   const hasResult = Boolean(jobId && grid);
+  const supportsSeparateOverlays = layer === "true-color" || layer === "swir";
   const availableLayers = hasWildfiresReference
     ? [...LAYERS, ["reference-wildfires", "Wildfires · ref.", Layers3]]
     : LAYERS;
+
+  useEffect(() => {
+    semanticOverlayRef.current = null;
+    setMaskLayers({});
+    if (!hasResult) return undefined;
+    let cancelled = false;
+    const layers = ["visible-surface", "smoke", "smoke-candidates"];
+    Promise.all(layers.map(async (name) => [
+      name,
+      await loadMaskImage(api.layerUrl(jobId, name)),
+    ])).then((entries) => {
+      if (!cancelled) setMaskLayers(Object.fromEntries(entries));
+    });
+    return () => { cancelled = true; };
+  }, [hasResult, jobId]);
 
   useEffect(() => {
     regionLabelsRef.current = null;
@@ -157,6 +186,89 @@ export default function ImageViewer({
       const context = canvas.getContext("2d");
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
       context.clearRect(0, 0, imageRect.width, imageRect.height);
+
+      if (supportsSeparateOverlays) {
+        const width = grid.ancho_px;
+        const height = grid.alto_px;
+        const cached = semanticOverlayRef.current;
+        const overlayKey = {
+          jobId,
+          width,
+          height,
+          smoke: maskLayers.smoke,
+          visible: maskLayers["visible-surface"],
+          hidden: maskLayers["smoke-candidates"],
+          showSmoke,
+          showVisibleSurface,
+          showUnderSmoke,
+          showContours: showSegmentation,
+        };
+        const cacheMatches = cached && Object.keys(overlayKey).every(
+          (key) => cached.key[key] === overlayKey[key],
+        );
+        if (!cacheMatches) {
+          const overlay = document.createElement("canvas");
+          overlay.width = width;
+          overlay.height = height;
+          const overlayContext = overlay.getContext("2d", { willReadFrequently: true });
+          const composite = overlayContext.createImageData(width, height);
+          const sampleMask = (image) => {
+            if (!image) return null;
+            const maskCanvas = document.createElement("canvas");
+            maskCanvas.width = width;
+            maskCanvas.height = height;
+            const maskContext = maskCanvas.getContext("2d", { willReadFrequently: true });
+            maskContext.drawImage(image, 0, 0, width, height);
+            return maskContext.getImageData(0, 0, width, height).data;
+          };
+          const smoke = showSmoke ? sampleMask(maskLayers.smoke) : null;
+          const visible = showVisibleSurface ? sampleMask(maskLayers["visible-surface"]) : null;
+          const hidden = showUnderSmoke ? sampleMask(maskLayers["smoke-candidates"]) : null;
+          const inside = (data, pixel) => Boolean(data && data[pixel * 4] >= 128);
+          const edge = (data, pixel, x, y) => inside(data, pixel) && (
+            x === 0 || !inside(data, pixel - 1)
+            || x === width - 1 || !inside(data, pixel + 1)
+            || y === 0 || !inside(data, pixel - width)
+            || y === height - 1 || !inside(data, pixel + width)
+          );
+          const putLayer = (pixel, color, alpha) => {
+            const offset = pixel * 4;
+            const priorAlpha = composite.data[offset + 3] / 255;
+            const outputAlpha = alpha + priorAlpha * (1 - alpha);
+            if (!outputAlpha) return;
+            const priorWeight = priorAlpha * (1 - alpha);
+            composite.data[offset] = (color[0] * alpha + composite.data[offset] * priorWeight) / outputAlpha;
+            composite.data[offset + 1] = (color[1] * alpha + composite.data[offset + 1] * priorWeight) / outputAlpha;
+            composite.data[offset + 2] = (color[2] * alpha + composite.data[offset + 2] * priorWeight) / outputAlpha;
+            composite.data[offset + 3] = outputAlpha * 255;
+          };
+
+          for (let pixel = 0; pixel < width * height; pixel += 1) {
+            const x = pixel % width;
+            const y = Math.floor(pixel / width);
+            // El humo se pinta primero y las dos superficies después para que
+            // el azul no desature el rojo ni oculte la hipótesis SWIR.
+            if (inside(smoke, pixel)) putLayer(pixel, [35, 145, 235], 0.27);
+            if (inside(visible, pixel)) putLayer(pixel, [230, 38, 30], 0.50);
+            if (inside(hidden, pixel)) {
+              const hatch = (x + y) % 10 < 2;
+              putLayer(pixel, [220, 30, 195], hatch ? 0.62 : 0.34);
+            }
+            if (showSegmentation && edge(visible, pixel, x, y)) {
+              putLayer(pixel, [255, 230, 30], 1);
+            } else if (showSegmentation && edge(hidden, pixel, x, y) && (x + y) % 8 < 4) {
+              // Borde discontinuo: hipótesis, no perímetro confirmado.
+              putLayer(pixel, [255, 45, 220], 1);
+            }
+          }
+          overlayContext.putImageData(composite, 0, 0);
+          semanticOverlayRef.current = { key: overlayKey, canvas: overlay };
+        }
+        if (semanticOverlayRef.current?.canvas) {
+          context.drawImage(semanticOverlayRef.current.canvas, 0, 0, imageRect.width, imageRect.height);
+        }
+      }
+
       if (!showMarks) return;
 
       const scaleX = imageRect.width / image.naturalWidth;
@@ -259,7 +371,9 @@ export default function ImageViewer({
       window.removeEventListener("resize", draw);
       observer?.disconnect();
     };
-  }, [source, showMarks, marks, distancePreview, tool, inspectedPixel, selectedRegion]);
+  }, [source, showMarks, marks, distancePreview, tool, inspectedPixel, selectedRegion,
+    supportsSeparateOverlays, grid?.ancho_px, grid?.alto_px, jobId, maskLayers,
+    showVisibleSurface, showSmoke, showUnderSmoke, showSegmentation]);
 
   const pointAt = (clientX, clientY, clamp = false) => {
     const image = imageRef.current;
@@ -349,6 +463,26 @@ export default function ImageViewer({
             ><Icon size={14} aria-hidden="true" /><span>{label}</span></Button>
           ))}
         </div>
+        <div className="layer-control" role="group" aria-label="Capas de segmentación independientes">
+          <Button className={`layer-choice${showVisibleSurface ? " is-active" : ""}`} variant="ghost" size="1" type="button"
+            disabled={!hasResult || !supportsSeparateOverlays || !maskLayers["visible-surface"]}
+            aria-pressed={showVisibleSurface} title="Superficie observada fuera del humo; roja."
+            onClick={() => setShowVisibleSurface((visible) => !visible)}>
+            <Flame size={13} aria-hidden="true" /><span>Superficie</span>
+          </Button>
+          <Button className={`layer-choice${showSmoke ? " is-active" : ""}`} variant="ghost" size="1" type="button"
+            disabled={!hasResult || !supportsSeparateOverlays || !maskLayers.smoke}
+            aria-pressed={showSmoke} title="Humo probable; azul."
+            onClick={() => setShowSmoke((visible) => !visible)}>
+            <Layers3 size={13} aria-hidden="true" /><span>Humo</span>
+          </Button>
+          <Button className={`layer-choice${showUnderSmoke ? " is-active" : ""}`} variant="ghost" size="1" type="button"
+            disabled={!hasResult || !supportsSeparateOverlays || !maskLayers["smoke-candidates"]}
+            aria-pressed={showUnderSmoke} title="Evidencia SWIR bajo humo; fucsia tramado, hipótesis no confirmada."
+            onClick={() => setShowUnderSmoke((visible) => !visible)}>
+            <ScanLine size={13} aria-hidden="true" /><span>Bajo humo</span>
+          </Button>
+        </div>
         <Button
           className={`overlay-toggle${showSegmentation ? " is-active" : ""}`}
           variant="ghost"
@@ -356,12 +490,12 @@ export default function ImageViewer({
           type="button"
           disabled={!hasResult || layer === "candidates" || layer === "reference-wildfires"}
           aria-pressed={showSegmentation}
-          aria-label={`Vista ${showSegmentation ? "con contorno" : "original"}. Cambiar a ${showSegmentation ? "original" : "contorno"}.`}
-          title="Alternar entre la imagen original y el contorno de la segmentación"
+          aria-label={`${showSegmentation ? "Ocultar" : "Mostrar"} los contornos de superficie visible e hipótesis bajo humo.`}
+          title="Alternar el contorno confirmado y el borde discontinuo de la hipótesis. Las capas se controlan por separado."
           onClick={() => setShowSegmentation((visible) => !visible)}
         >
           {showSegmentation ? <Flame size={13} aria-hidden="true" /> : <Eye size={13} aria-hidden="true" />}
-          <span>{showSegmentation ? "Contorno" : "Original"}</span>
+          <span>{showSegmentation ? "Contornos" : "Sin contorno"}</span>
         </Button>
         <Button className={`mark-toggle${showMarks ? " is-active" : ""}`} variant="ghost" size="1" type="button" disabled={!hasResult} aria-pressed={showMarks} aria-label={`${showMarks ? "Ocultar" : "Mostrar"} marcas`} title={`${showMarks ? "Ocultar" : "Mostrar"} marcas`} onClick={() => setShowMarks((visible) => !visible)}>
           {showMarks ? <EyeOff size={13} aria-hidden="true" /> : <Eye size={13} aria-hidden="true" />}
@@ -389,7 +523,7 @@ export default function ImageViewer({
             <img
               ref={imageRef}
               src={source}
-              alt={layer === "candidates" ? CLASSIFICATION_DESCRIPTION : layer === "reference-wildfires" ? "Composición Wildfires de referencia; no es verdad terreno" : `${layer === "swir" ? "SWIR" : "True Color"}${showSegmentation ? " con segmentación" : " original"}`}
+              alt={layer === "candidates" ? CLASSIFICATION_DESCRIPTION : layer === "reference-wildfires" ? "Composición Wildfires de referencia; no es verdad terreno" : `${layer === "swir" ? "SWIR" : "True Color"}${supportsSeparateOverlays ? " con capas independientes" : ""}`}
               draggable="false"
               onError={() => onError("No se pudo cargar la imagen resultante.")}
             />

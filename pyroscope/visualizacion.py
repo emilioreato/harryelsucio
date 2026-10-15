@@ -11,12 +11,24 @@ def crear_superposicion(
     imagen_base: np.ndarray,
     resultado: ResultadoAreaAfectada,
 ) -> np.ndarray:
-    """Dibuja relleno translúcido y perímetro sobre una composición RGB."""
+    """Dibuja capas independientes; el humo no apaga la superficie inferida."""
     if imagen_base.shape[:2] != resultado.mascara.shape:
         raise ValueError("La imagen y la máscara deben tener las mismas dimensiones.")
 
-    superficie = resultado.mascara | resultado.mascara_candidata_bajo_humo
-    salida = superponer_mascara(imagen_base, superficie)
+    # El orden de pintado mantiene legibles ambas evidencias. Las tres máscaras
+    # también se exportan por separado: este PNG combinado es solo una vista.
+    salida = superponer_mascara(
+        imagen_base, resultado.mascara_humo,
+        color=(35, 145, 225), opacidad=0.22,
+    )
+    salida = superponer_mascara(
+        salida, resultado.mascara,
+        color=(225, 45, 35), opacidad=0.56,
+    )
+    salida = superponer_mascara(
+        salida, resultado.mascara_candidata_bajo_humo,
+        color=(220, 35, 190), opacidad=0.48,
+    )
     salida = _superponer_clases_adicionales(
         salida,
         resultado,
@@ -24,15 +36,10 @@ def crear_superposicion(
         opacidad_fuego=0.78,
         opacidad_nube=0.28,
     )
-    salida = superponer_mascara(
-        salida,
-        resultado.mascara_humo,
-        color=(0, 165, 255),
-        opacidad=0.28,
-    )
     if resultado.contornos:
         grosor = max(2, round(max(salida.shape[:2]) / 900))
         cv2.drawContours(salida, list(resultado.contornos), -1, (255, 238, 60), grosor)
+    _superponer_borde_inferido(salida, resultado.mascara_candidata_bajo_humo)
     return salida
 
 
@@ -45,10 +52,16 @@ def crear_vista_clasificacion(
         raise ValueError("La imagen y las máscaras deben tener las mismas dimensiones.")
 
     salida = superponer_mascara(
-        true_color,
-        resultado.mascara_clasificada | resultado.mascara_candidata_bajo_humo,
-        color=(245, 65, 35),
-        opacidad=0.36,
+        true_color, resultado.mascara_humo,
+        color=(35, 145, 225), opacidad=0.22,
+    )
+    salida = superponer_mascara(
+        salida, resultado.mascara_clasificada,
+        color=(225, 45, 35), opacidad=0.46,
+    )
+    salida = superponer_mascara(
+        salida, resultado.mascara_candidata_bajo_humo,
+        color=(220, 35, 190), opacidad=0.48,
     )
     salida = _superponer_clases_adicionales(
         salida,
@@ -57,12 +70,7 @@ def crear_vista_clasificacion(
         opacidad_fuego=0.82,
         opacidad_nube=0.3,
     )
-    salida = superponer_mascara(
-        salida,
-        resultado.mascara_humo,
-        color=(0, 165, 255),
-        opacidad=0.28,
-    )
+    _superponer_borde_inferido(salida, resultado.mascara_candidata_bajo_humo)
     return salida
 
 
@@ -138,3 +146,14 @@ def superponer_mascara(
         + opacidad * np.asarray(color, dtype=np.float32)
     ).astype(np.uint8)
     return salida
+
+
+def _superponer_borde_inferido(imagen_rgb: np.ndarray, mascara: np.ndarray) -> None:
+    """Traza una frontera discontinua para que la hipótesis no parezca observada."""
+    if mascara.shape != imagen_rgb.shape[:2] or not np.any(mascara):
+        return
+    binaria = mascara.astype(np.uint8)
+    borde = cv2.morphologyEx(binaria, cv2.MORPH_GRADIENT, np.ones((3, 3), np.uint8)).astype(bool)
+    yy, xx = np.indices(mascara.shape)
+    discontinuo = borde & ((xx + yy) % 8 < 4)
+    imagen_rgb[discontinuo] = (255, 45, 220)
