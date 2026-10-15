@@ -156,21 +156,15 @@ export default function ImageViewer({
   return (
     <>
       <div className="viewer-toolbar">
-        <div className="layer-control" role="group" aria-label="Composición visible">
-          {LAYERS.map(([id, label]) => (
-            <button
-              className={`layer-choice${layer === id ? " is-active" : ""}`}
-              key={id}
-              type="button"
-              aria-pressed={layer === id}
-              disabled={!hasResult}
-              onClick={() => {
-                setLayer(id);
-                if (id === "candidates") setShowSegmentation(true);
-              }}
-            >{label}</button>
-          ))}
-        </div>
+        <label className="viewer-select-label">
+          <span>Composición</span>
+          <select className="viewer-select" aria-label="Composición visible" value={layer} disabled={!hasResult} onChange={(event) => {
+            setLayer(event.target.value);
+            if (event.target.value === "candidates") setShowSegmentation(true);
+          }}>
+            {LAYERS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          </select>
+        </label>
         <label className="toggle-control">
           <input
             type="checkbox"
@@ -214,20 +208,15 @@ export default function ImageViewer({
       </div>
 
       <div className="measurement-toolbar" aria-label="Herramientas de medición">
-        <div className="tool-group" role="group" aria-label="Herramienta">
-          {TOOLS.map(([id, label]) => (
-            <button
-              key={id}
-              className={`tool-button${tool === id ? " is-active" : ""}`}
-              type="button"
-              disabled={!hasResult}
-              onClick={() => {
-                setTool(id);
-                if (id === "pixel") setInspectedPixel(null);
-              }}
-            >{label}</button>
-          ))}
-        </div>
+        <label className="measurement-select-label">
+          <span>Herramienta</span>
+          <select className="viewer-select" aria-label="Herramienta de medición" value={tool} disabled={!hasResult} onChange={(event) => {
+            setTool(event.target.value);
+            if (event.target.value === "pixel") setInspectedPixel(null);
+          }}>
+            {TOOLS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          </select>
+        </label>
         <div className="mark-actions">
           <button className="text-button" type="button" disabled={!hasResult || (!marks.length && !inspectedPixel)} onClick={undo}>Deshacer</button>
           <button className="text-button" type="button" disabled={!canClosePolygon} onClick={closePolygon}>Cerrar área</button>
