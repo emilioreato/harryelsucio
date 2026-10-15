@@ -76,13 +76,22 @@ def clasificar_fusion_ponderada(
 
     peso_k = peso_kmeans / suma_pesos
     peso_s = peso_swir / suma_pesos
+    evidencia_superficie_kmeans = (
+        clasificacion_kmeans.mascara_candidata
+        | clasificacion_kmeans.mascara_candidata_bajo_humo
+    )
+    evidencia_superficie_swir = (
+        clasificacion_swir.mascara_candidata
+        | clasificacion_swir.mascara_candidata_bajo_humo
+    )
     voto = (
-        peso_k * clasificacion_kmeans.mascara_candidata.astype(np.float32)
-        + peso_s * clasificacion_swir.mascara_candidata.astype(np.float32)
+        peso_k * evidencia_superficie_kmeans.astype(np.float32)
+        + peso_s * evidencia_superficie_swir.astype(np.float32)
     )
     agua = clasificacion_kmeans.mascara_agua | clasificacion_swir.mascara_agua
     humo = clasificacion_kmeans.mascara_humo | clasificacion_swir.mascara_humo
     candidata = (voto >= umbral_voto) & ~agua & ~humo
+    candidata_bajo_humo = (voto >= umbral_voto) & humo & ~agua
 
     clases = np.full(candidata.shape, ClaseSemantica.INDETERMINADO, dtype=np.uint8)
     clases[agua] = ClaseSemantica.AGUA_POSIBLE
@@ -93,6 +102,7 @@ def clasificar_fusion_ponderada(
 
     return ResultadoClasificacionSemantica(
         mascara_candidata=candidata,
+        mascara_candidata_bajo_humo=candidata_bajo_humo,
         mascara_agua=agua,
         mascara_humo=humo,
         confianza_humo=np.maximum(

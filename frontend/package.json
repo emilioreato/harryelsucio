@@ -1,5 +1,5 @@
 {
-  "name": "pyroscope-web",
+  "name": "lumbre-web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,6 +10,8 @@
     "test": "node --test"
   },
   "dependencies": {
+    "@radix-ui/themes": "^3.3.0",
+    "lucide-react": "^1.57.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

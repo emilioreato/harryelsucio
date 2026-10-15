@@ -14,6 +14,9 @@ class ResultadoClasificacionSemantica:
     """Evidencia por píxel antes de aplicar reglas de forma y proximidad."""
 
     mascara_candidata: np.ndarray
+    # Hipótesis de superficie afectada que coincide con la oclusión por humo.
+    # Se mantiene separada y no contribuye al área/perímetro observados.
+    mascara_candidata_bajo_humo: np.ndarray
     mascara_agua: np.ndarray
     mascara_humo: np.ndarray
     confianza_humo: np.ndarray
@@ -21,6 +24,7 @@ class ResultadoClasificacionSemantica:
     centros: np.ndarray
     clases_seleccionadas: tuple[int, ...]
     puntuaciones_clase: np.ndarray
+    caracteristicas_comunes: np.ndarray | None = None
 
 
 @dataclass(frozen=True)
@@ -43,6 +47,7 @@ class ResultadoAreaAfectada:
     sistema_coordenadas: SistemaCoordenadasImagen
     mascara: np.ndarray
     mascara_clasificada: np.ndarray
+    mascara_candidata_bajo_humo: np.ndarray
     mascara_humo: np.ndarray
     confianza_humo: np.ndarray
     clase_por_pixel: np.ndarray
@@ -55,3 +60,12 @@ class ResultadoAreaAfectada:
     pixeles_agua_excluidos: int
     distancia_maxima_px: int
     componentes_remotos_descartados: int
+    # Ampliaciones opcionales: los detectores existentes no cambian su contrato.
+    mascara_indeterminada: np.ndarray | None = None
+    mascara_bajo_humo_espectral: np.ndarray | None = None
+    mascara_bajo_humo_continuidad: np.ndarray | None = None
+    diagnosticos_contextuales: dict[str, np.ndarray] | None = None
+
+    @property
+    def mascara_superficie_visible(self) -> np.ndarray:
+        return self.mascara

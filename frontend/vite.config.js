@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import process from "node:process";
 
 const frontendRoot = fileURLToPath(new URL(".", import.meta.url));
-const apiTarget = process.env.PYROSCOPE_API_TARGET || "http://127.0.0.1:8501";
+const apiTarget = process.env.LUMBRE_API_TARGET || "http://127.0.0.1:8501";
 
 export default defineConfig({
   root: frontendRoot,

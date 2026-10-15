@@ -1,6 +1,6 @@
 """Compatibilidad con la ruta previa del detector SWIR.
 
-El código actual vive en :mod:`pyroscope.detectores.swir_histeresis`.
+La implementación vigente forma parte del paquete de detectores de superficie.
 """
 
 from .detectores.swir_histeresis import clasificar_pixeles_area_afectada_swir

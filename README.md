@@ -1,6 +1,6 @@
-# Espejo Ustorio
+# Lumbre
 
-**Espejo Ustorio** es una herramienta para analizar y segmentar imágenes satelitales de incendios. El nombre rinde homenaje al espejo ustorio asociado a Arquímedes. La orientación técnica y los supuestos iniciales están en [`DOCUMENTACION/Ideas/inicial.md`](DOCUMENTACION/Ideas/inicial.md).
+Aplicación de análisis satelital para revisar incendios, humo y superficie afectada. La orientación técnica está en [`DOCUMENTACION/Ideas/inicial.md`](DOCUMENTACION/Ideas/inicial.md).
 
 ## Preparación del entorno de desarrollo
 
@@ -60,21 +60,21 @@ La primera versión de la aplicación, centrada en el reto básico, se ejecuta d
 python app.py
 ```
 
-En Windows también puedes iniciarla con doble clic en [`encender_aplicacion.bat`](encender_aplicacion.bat), situado en la raíz del repositorio. El script selecciona Python 3.12 o 3.11 si están disponibles y abre la página local en el navegador. Deja esa ventana abierta mientras uses la aplicación; para detenerla, pulsa `Ctrl+C`.
+En Windows puedes iniciarla con doble clic en [`encender_aplicacion.bat`](encender_aplicacion.bat), situado en la raíz del repositorio. El script selecciona Python 3.12 o 3.11 si están disponibles y abre la página local en el navegador. Si Lumbre ya está abierta, vuelve a abrir esa instancia en lugar de iniciar otro servidor. Para cerrarla desde otra ventana, ejecuta [`cerrar_aplicacion.bat`](cerrar_aplicacion.bat); también puedes pulsar `Ctrl+C` en la ventana del servidor. Si el servidor no responde, el cierre busca procesos Python asociados al `app.py` de esta copia y termina solo esos procesos.
 
-Para desarrollar la interfaz React con recarga automática, abre dos terminales: en una inicia `python app.py --no-browser`; en la otra entra en `frontend/` y ejecuta `npm run dev`. Vite sirve la interfaz en `http://127.0.0.1:5173/` y reenvía `/api` al servidor Python local. Si el puerto 8501 está ocupado y Python anuncia otro puerto, configura `PYROSCOPE_API_TARGET` con esa dirección antes de arrancar Vite.
+Para desarrollar la interfaz React con recarga automática, abre dos terminales: en una inicia `python app.py --no-browser`; en la otra entra en `frontend/` y ejecuta `npm run dev`. Vite sirve la interfaz en `http://127.0.0.1:5173/` y reenvía `/api` al servidor Python local. Si el puerto 8501 está ocupado y Python anuncia otro puerto, configura `LUMBRE_API_TARGET` con esa dirección antes de arrancar Vite.
 
-Se abre en el navegador. Permite elegir una escena precargada o subir una pareja True Color/SWIR. Las parejas precargadas se guardan en `imagenes/<nombre-de-escena>/`, una carpeta por escena con solo un archivo True Color y otro SWIR de la misma adquisición. La aplicación descubre esas carpetas al cargarse; admite JPEG, PNG y TIFF. El panel **Plano de análisis** alterna las composiciones, la superposición y la capa de candidatos/humo; permite trazar flechas con distancia y delimitar áreas manuales. El panel lateral resume la superficie candidata, el área estimada y el humo probable, y permite exportar el mapa, la máscara y las mediciones. El progreso avanza al terminar etapas del algoritmo, no estima el tiempo restante. Sin escala, las medidas quedan en píxeles; cuando se conozca el GSD real de la pareja, se introduce en metros por píxel. No hay que suponer que un JPEG conserva la resolución nominal del satélite.
+Se abre en el navegador. Permite elegir una escena precargada o subir una pareja True Color/SWIR. Las parejas precargadas se guardan en `imagenes/<nombre-de-escena>/`, una carpeta por escena con solo un archivo True Color y otro SWIR de la misma adquisición. La aplicación descubre esas carpetas al cargarse; admite JPEG, PNG y TIFF. El panel **Plano de análisis** alterna las composiciones, la superposición y la capa de candidatos/humo; también permite medir distancias y polígonos e inspeccionar píxeles. La herramienta **Regla** requiere introducir el GSD en metros por píxel y ejecutar el análisis; entonces muestra distancias en metros, ajustadas a la rejilla de trabajo. Si el resultado no incluye GSD, la regla queda deshabilitada en vez de presentar píxeles como distancia terrestre. El panel lateral resume área, perímetro, oclusión por humo y otros datos calculados, y ofrece descargas y notas temporales de campo. El progreso avanza al terminar etapas del algoritmo, no estima el tiempo restante. Las unidades métricas dependen de que el GSD introducido sea correcto; no se infiere la escala a partir del nombre o tamaño de un JPG.
 
 ### Detectores y tratamiento del humo
 
 En **Detector de superficie** se puede comparar el K-Means conjunto (True Color + SWIR) con **Contraste SWIR + histéresis (V2)**. V2 busca semillas con contraste SWIR alto y crece por píxeles contiguos con evidencia menor; True Color contribuye a vetar agua probable y vegetación muy verde. Los dos detectores clasifican candidatos, no confirman por sí solos terreno quemado. El control **Grupos de color por escena** solo aplica a K-Means.
 
-Antes de clasificar el suelo, la aplicación estima humo probable con ambas composiciones alineadas: usa el núcleo cian de SWIR y lo amplía solo sobre velo muy liso, neutro y cercano al núcleo. Los píxeles marcados en cian quedan como superficie indeterminada y no se usan como terreno despejado. Esta separación evita aplicar a ciegas los umbrales de SWIR del suelo visible a píxeles ocluidos. No reconstruye lo que hay debajo del humo: el perímetro puede tener huecos y la máscara puede confundir humo con nubes o veladuras. Compara siempre las dos vistas y revisa el resultado.
+La aplicación estima humo probable con ambas composiciones alineadas: usa el núcleo cian de SWIR y lo amplía solo sobre velo muy liso, neutro y cercano al núcleo. El humo se conserva como capa de oclusión; en paralelo, el detector busca evidencia compatible con superficie afectada debajo. Esa hipótesis se muestra en fucsia y no se suma al área ni al perímetro observados. No reconstruye el terreno tapado: puede confundir humo con nubes o veladuras y no detecta fuego activo ni clasifica vegetación/suelo desnudo como clases separadas. Compara ambas vistas y revisa el resultado.
 
 El filtro espacial prioriza por defecto el componente candidato más grande y puede descartar candidatos alejados. Si la escena puede contener focos independientes, activa **Conservar regiones desconectadas**; así se mantienen los componentes que superan el tamaño mínimo. Las coberturas mostradas son fracciones de píxeles candidatos, no una medida de precisión ni una estimación de fuego activo.
 
-La interfaz React se desarrolla en `frontend/` y Vite compila el sitio estático en `web/`. El servidor Python local sirve esa interfaz y la API de análisis; ejecuta los algoritmos, informa del progreso y entrega capas y exportaciones. La aplicación no usa Streamlit. Para usar la app normal no hace falta abrir Vite ni desplegar nada: el lanzador inicia un único servidor local y una sola pestaña. La preparación de imágenes y el motor científico siguen en `pyroscope/`.
+La interfaz React se desarrolla en `frontend/` y Vite compila el sitio estático en `web/`. El servidor Python local sirve la interfaz y la API de análisis; ejecuta los algoritmos, informa del progreso y entrega capas y exportaciones. Para usar la aplicación no hace falta abrir Vite ni desplegar nada: el lanzador inicia un único servidor local y una sola pestaña.
 
 La aplicación y sus resultados usan una rejilla común de píxeles con origen arriba a la izquierda. Máscaras, marcas manuales y capas auxiliares deben compartir esa rejilla; para combinar en el futuro capas meteorológicas o geográficas será necesario transformarlas/alinearlas a la imagen y conservar su CRS y transformación geográfica. El GSD basta para mediciones métricas locales, pero no para obtener latitud/longitud. Los pasos del algoritmo y sus límites se explican en [`DOCUMENTACION/Ideas/segmentacion_basica.md`](DOCUMENTACION/Ideas/segmentacion_basica.md).
 
@@ -86,3 +86,27 @@ La aplicación y sus resultados usan una rejilla común de píxeles con origen a
 - **Google Earth Engine**, previsto para una fase posterior: requiere una cuenta de Google, un proyecto de Google Cloud registrado para Earth Engine, permisos y autenticación. El acceso no comercial requiere registrar y acreditar el uso no comercial; el uso comercial necesita la configuración y plan comercial correspondientes. No se instala en este entorno inicial.
 
 Para cada fuente se deben guardar fecha, resolución, licencia y procedencia de los datos. Las reconstrucciones meteorológicas y las capas de vegetación son estimaciones/contexto, no mediciones exactas del incendio.
+
+
+### Segmentación contextual híbrida (experimental)
+
+El nuevo modo conserva V2 como fuente semántica y añade SLIC conjunto, estadísticas regionales, un grafo de adyacencia (RAG), crecimiento limitado y Watershed local con marcadores y fallback. Sigue disponible K-Means, V2 y fusión; K-Means continúa como predeterminado. No modifica entrenamiento, etiquetas ni modelos Random Forest.
+
+El híbrido analiza hasta 2500 píxeles de lado (La Mierla y Niebla conservan su resolución original), frente a 1800 en los modos anteriores. El esfuerzo espacial se concentra en recortes alrededor de **todos** los candidatos con margen de 24 píxeles, conservando cicatrices independientes. No se descarta una cicatriz por estar lejos de la principal. El motor semántico sigue examinando la escena completa: el recorte no recupera regiones que el clasificador omita.
+
+La máscara visible conserva huecos y veta agua/humo. El humo es independiente de la hipótesis fucsia; la trama gris indica suelo desconocido bajo humo. Las hipótesis espectrales y de continuidad corta se exportan separadas en **Capas de humo y diagnóstico** y nunca se suman al área observada. Una columna extensa puede quedar sin inferencia; la menor superficie fucsia es una política de abstención, no prueba de mejor detección. Las distancias son píxeles de trabajo y el área solo es métrica con GSD fiable.
+
+Ver [evaluación, parámetros y límites](DOCUMENTACION/Ideas/segmentacion_contextual_evaluacion.md). No se ha demostrado una mejora de exactitud con máscaras de referencia reales; el modo permanece experimental.
+
+Comprobaciones y artefactos reproducibles (sin dependencias nuevas):
+
+```powershell
+python -m pytest tests -q
+python scripts/comparar_contextual.py --fase baseline
+python scripts/comparar_contextual.py --fase contextual_roi
+python scripts/evaluar_humo_sintetico.py
+# Con python app.py --no-browser ya iniciado:
+python scripts/verificar_http_contextual.py --url http://127.0.0.1:8501
+```
+
+Las comparaciones controladas usan 1800 de lado en todos los métodos; la verificación HTTP usa la resolución real del modo (2500). Los resultados se guardan en `resultados_contextual/` (excluida de Git). El baseline histórico de esta intervención se guardó antes de corregir la geometría; volver a ejecutar `--fase baseline` lo sustituye por el comportamiento actual. No compares recuentos de píxeles de rejillas distintas como si fueran cambios de superficie.

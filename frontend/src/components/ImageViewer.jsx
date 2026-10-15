@@ -1,72 +1,144 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import { Button } from "@radix-ui/themes";
+import { Eye, EyeOff, Flame, Image as ImageIcon, Layers3, ScanLine } from "lucide-react";
 import { api } from "../services/api.js";
-import { formatArea, formatLength, distanceBetween, polygonArea } from "../domain/measurements.js";
+import { formatNumber } from "../domain/measurements.js";
 
 const LAYERS = [
-  ["true-color", "True Color"],
-  ["swir", "SWIR"],
-  ["candidates", "Clases + humo"],
-];
-const TOOLS = [
-  ["view", "Vista"],
-  ["distance", "Flechas"],
-  ["polygon", "Área manual"],
+  ["true-color", "True Color", ImageIcon],
+  ["swir", "SWIR", ScanLine],
+  ["candidates", "Clases + humo", Layers3],
 ];
 
 function visibleLayer(layer, showSegmentation) {
-  if (!showSegmentation) return layer === "swir" ? "swir" : "true-color";
-  if (layer === "swir") return "overlay-swir";
   if (layer === "candidates") return "candidates";
-  return "overlay-true-color";
+  if (!showSegmentation) return layer;
+  return layer === "swir" ? "overlay-swir" : "overlay-true-color";
 }
 
-function renderMeasurement(tool, marks, polygonClosed, grid) {
-  if (!grid) return "";
-  const unit = grid.gsd_x_m ? "m" : "px";
-  if (tool === "distance") {
-    if (!marks.length) return "Haz clic en la imagen para marcar el inicio de una flecha.";
-    const segments = [];
-    for (let index = 0; index + 1 < marks.length; index += 2) {
-      segments.push(`Flecha ${index / 2 + 1}: ${formatLength(distanceBetween(marks[index], marks[index + 1], grid), unit)}`);
-    }
-    if (marks.length % 2) segments.push("Añade otro punto para completar la flecha.");
-    return segments.join(" · ");
+function pixelLabel(point, grid) {
+  const x = Math.round(point.x);
+  const y = Math.round(point.y);
+  if (!grid.gsd_x_m) return `Píxel (${x}, ${y})`;
+  return `Píxel (${x}, ${y}) · ${formatNumber(point.x * grid.gsd_x_m, 1)}, ${formatNumber(point.y * grid.gsd_y_m, 1)} m`;
+}
+
+function labelMaskRegions(pixels, width, height, grid) {
+  const size = width * height;
+  const labels = new Uint32Array(size);
+  let foregroundCount = 0;
+  for (let index = 0; index < size; index += 1) {
+    if (pixels[index * 4] >= 128) foregroundCount += 1;
   }
-  if (tool === "polygon") {
-    if (!polygonClosed || marks.length < 3) {
-      return marks.length < 3 ? "Marca al menos tres puntos para delimitar un área." : "Cierra el área para calcular su superficie.";
+  if (!foregroundCount) return { labels, regions: [], width, height };
+
+  const queue = new Int32Array(foregroundCount);
+  const scaleX = grid.gsd_x_m || 1;
+  const scaleY = grid.gsd_y_m || 1;
+  const metricScale = Number.isFinite(grid.gsd_x_m) && grid.gsd_x_m > 0
+    && Number.isFinite(grid.gsd_y_m) && grid.gsd_y_m > 0;
+  const regions = [];
+
+  for (let seed = 0; seed < size; seed += 1) {
+    if (labels[seed] || pixels[seed * 4] < 128) continue;
+    const id = regions.length + 1;
+    let head = 0;
+    let tail = 0;
+    let pixelCount = 0;
+    let horizontalEdges = 0;
+    let verticalEdges = 0;
+    queue[tail++] = seed;
+    labels[seed] = id;
+
+    while (head < tail) {
+      const index = queue[head++];
+      const x = index % width;
+      const y = Math.floor(index / width);
+      pixelCount += 1;
+      if (y === 0 || pixels[(index - width) * 4] < 128) horizontalEdges += 1;
+      if (y === height - 1 || pixels[(index + width) * 4] < 128) horizontalEdges += 1;
+      if (x === 0 || pixels[(index - 1) * 4] < 128) verticalEdges += 1;
+      if (x === width - 1 || pixels[(index + 1) * 4] < 128) verticalEdges += 1;
+
+      for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
+        const neighborY = y + offsetY;
+        if (neighborY < 0 || neighborY >= height) continue;
+        for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
+          if (offsetX === 0 && offsetY === 0) continue;
+          const neighborX = x + offsetX;
+          if (neighborX < 0 || neighborX >= width) continue;
+          const neighbor = neighborY * width + neighborX;
+          if (!labels[neighbor] && pixels[neighbor * 4] >= 128) {
+            labels[neighbor] = id;
+            queue[tail++] = neighbor;
+          }
+        }
+      }
     }
-    return `Área manual: ${formatArea(polygonArea(marks, grid), grid.gsd_x_m ? "m²" : "px²")}`;
+
+    regions.push({
+      id,
+      pixel_count: pixelCount,
+      area: pixelCount * (metricScale ? scaleX * scaleY : 1),
+      area_unit: metricScale ? "m²" : "px²",
+      perimeter: metricScale
+        ? horizontalEdges * scaleX + verticalEdges * scaleY
+        : horizontalEdges + verticalEdges,
+      perimeter_unit: metricScale ? "m" : "px",
+    });
   }
-  return "";
+
+  return { labels, regions, width, height };
 }
 
 export default function ImageViewer({
-  jobId, grid, layer, setLayer, showSegmentation, setShowSegmentation, showMarks, setShowMarks,
-  tool, setTool, marks, setMarks, polygonClosed, setPolygonClosed,
-  loading, errorMessage, onError,
+  jobId, grid, layer, setLayer, showSegmentation, setShowSegmentation,
+  showMarks, setShowMarks, tool, marks, setMarks, distancePreview,
+  setDistancePreview, inspectedPixel, setInspectedPixel, selectedRegion,
+  onRegionSelect, onRegionsReady, errorMessage, onError,
 }) {
   const stageRef = useRef(null);
   const imageRef = useRef(null);
   const canvasRef = useRef(null);
-  const [imageFailed, setImageFailed] = useState(false);
+  const regionLabelsRef = useRef(null);
+  const activePointer = useRef(null);
+  const dragStart = useRef(null);
   const currentLayer = jobId ? visibleLayer(layer, showSegmentation) : null;
   const source = currentLayer && jobId ? `${api.layerUrl(jobId, currentLayer)}?v=${jobId}` : "";
   const hasResult = Boolean(jobId && grid);
-  const marksForDraw = marks;
 
   useEffect(() => {
-    setImageFailed(false);
-  }, [source]);
+    regionLabelsRef.current = null;
+    onRegionsReady([]);
+    if (!hasResult) return undefined;
+    let cancelled = false;
+    const maskImage = new Image();
+    maskImage.onload = () => {
+      if (cancelled) return;
+      const maskCanvas = document.createElement("canvas");
+      maskCanvas.width = grid.ancho_px;
+      maskCanvas.height = grid.alto_px;
+      const maskContext = maskCanvas.getContext("2d", { willReadFrequently: true });
+      maskContext.drawImage(maskImage, 0, 0, maskCanvas.width, maskCanvas.height);
+      const pixels = maskContext.getImageData(0, 0, maskCanvas.width, maskCanvas.height).data;
+      const labeledMask = labelMaskRegions(pixels, maskCanvas.width, maskCanvas.height, grid);
+      regionLabelsRef.current = labeledMask;
+      onRegionsReady(labeledMask.regions);
+    };
+    maskImage.src = api.layerUrl(jobId, "mask");
+    return () => {
+      cancelled = true;
+      regionLabelsRef.current = null;
+    };
+  }, [hasResult, jobId, grid?.ancho_px, grid?.alto_px, grid?.gsd_x_m, grid?.gsd_y_m, onRegionsReady]);
 
   useEffect(() => {
     const image = imageRef.current;
     const canvas = canvasRef.current;
     const stage = stageRef.current;
-    if (!image || !canvas || !stage) return undefined;
+    if (!image || !canvas || !stage || !image.complete || !image.naturalWidth) return undefined;
 
     const draw = () => {
-      if (!image.complete || !image.naturalWidth) return;
       const imageRect = image.getBoundingClientRect();
       const stageRect = stage.getBoundingClientRect();
       const ratio = window.devicePixelRatio || 1;
@@ -80,61 +152,98 @@ export default function ImageViewer({
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
       context.clearRect(0, 0, imageRect.width, imageRect.height);
       if (!showMarks) return;
+
       const scaleX = imageRect.width / image.naturalWidth;
       const scaleY = imageRect.height / image.naturalHeight;
-      const routeColor = "#70e2ef";
-      const areaColor = "#f0bd72";
-      context.strokeStyle = tool === "distance" ? routeColor : areaColor;
-      context.fillStyle = tool === "distance" ? routeColor : areaColor;
-      context.lineWidth = 2.2;
-      context.shadowColor = tool === "distance" ? "rgba(68, 214, 232, .75)" : "rgba(240, 189, 114, .4)";
-      context.shadowBlur = tool === "distance" ? 9 : 4;
-      context.lineCap = "round";
-      context.lineJoin = "round";
+      const toCanvas = (point) => ({ x: point.x * scaleX, y: point.y * scaleY });
+      const drawLine = (start, end, dashed = false) => {
+        const a = toCanvas(start);
+        const b = toCanvas(end);
+        context.beginPath();
+        context.moveTo(a.x, a.y);
+        context.lineTo(b.x, b.y);
+        context.lineCap = "round";
+        context.lineJoin = "round";
+        context.setLineDash(dashed ? [7, 5] : []);
+        context.strokeStyle = "rgba(2, 12, 17, .96)";
+        context.lineWidth = 6;
+        context.stroke();
+        context.save();
+        context.shadowColor = "rgba(80, 238, 236, .78)";
+        context.shadowBlur = 12;
+        context.strokeStyle = "#76f1eb";
+        context.lineWidth = 2.4;
+        context.stroke();
+        context.restore();
+        context.setLineDash([]);
+        const lineLength = Math.hypot(b.x - a.x, b.y - a.y);
+        if (lineLength < 2) return;
+        const angle = Math.atan2(b.y - a.y, b.x - a.x);
+        const headLength = 14;
+        context.beginPath();
+        context.moveTo(b.x, b.y);
+        context.lineTo(b.x - headLength * Math.cos(angle - Math.PI / 7), b.y - headLength * Math.sin(angle - Math.PI / 7));
+        context.lineTo(b.x - headLength * Math.cos(angle + Math.PI / 7), b.y - headLength * Math.sin(angle + Math.PI / 7));
+        context.closePath();
+        context.strokeStyle = "rgba(2, 12, 17, .98)";
+        context.lineWidth = 2.5;
+        context.stroke();
+        context.save();
+        context.shadowColor = "rgba(80, 238, 236, .8)";
+        context.shadowBlur = 10;
+        context.fillStyle = "#76f1eb";
+        context.fill();
+        context.restore();
+      };
 
       if (tool === "distance") {
-        // Cada pareja de clics es una flecha independiente, no un trazo continuo.
-        for (let index = 0; index + 1 < marksForDraw.length; index += 2) {
-          const start = marksForDraw[index];
-          const end = marksForDraw[index + 1];
-          const x1 = start.x * scaleX;
-          const y1 = start.y * scaleY;
-          const x2 = end.x * scaleX;
-          const y2 = end.y * scaleY;
-          const angle = Math.atan2(y2 - y1, x2 - x1);
-          const headLength = 14;
-          context.beginPath();
-          context.moveTo(x1, y1);
-          context.lineTo(x2, y2);
-          context.stroke();
-          context.beginPath();
-          context.moveTo(x2, y2);
-          context.lineTo(x2 - headLength * Math.cos(angle - Math.PI / 7), y2 - headLength * Math.sin(angle - Math.PI / 7));
-          context.lineTo(x2 - headLength * Math.cos(angle + Math.PI / 7), y2 - headLength * Math.sin(angle + Math.PI / 7));
-          context.closePath();
-          context.fill();
+        for (let index = 0; index + 1 < marks.length; index += 2) drawLine(marks[index], marks[index + 1]);
+        if (distancePreview) drawLine(distancePreview.start, distancePreview.end, true);
+      } else if (tool === "area" && selectedRegion && regionLabelsRef.current) {
+        const { labels, width, height } = regionLabelsRef.current;
+        const highlight = document.createElement("canvas");
+        highlight.width = width;
+        highlight.height = height;
+        const highlightContext = highlight.getContext("2d");
+        const overlay = highlightContext.createImageData(width, height);
+        const selectedId = selectedRegion.id;
+        const setPink = (offset, alpha) => {
+          overlay.data[offset] = 255;
+          overlay.data[offset + 1] = 79;
+          overlay.data[offset + 2] = 163;
+          overlay.data[offset + 3] = Math.max(overlay.data[offset + 3], alpha);
+        };
+
+        for (let index = 0; index < labels.length; index += 1) {
+          if (labels[index] !== selectedId) continue;
+          const x = index % width;
+          const y = Math.floor(index / width);
+          const boundary = x === 0 || labels[index - 1] !== selectedId
+            || x === width - 1 || labels[index + 1] !== selectedId
+            || y === 0 || labels[index - width] !== selectedId
+            || y === height - 1 || labels[index + width] !== selectedId;
+          const offset = index * 4;
+          setPink(offset, boundary ? 255 : 48);
+          if (boundary) {
+            if (x > 0) setPink((index - 1) * 4, 255);
+            if (x + 1 < width) setPink((index + 1) * 4, 255);
+            if (y > 0) setPink((index - width) * 4, 255);
+            if (y + 1 < height) setPink((index + width) * 4, 255);
+          }
         }
-      } else if (tool === "polygon" && marksForDraw.length > 1) {
-        context.beginPath();
-        marksForDraw.forEach((point, index) => {
-          const x = point.x * scaleX;
-          const y = point.y * scaleY;
-          if (index === 0) context.moveTo(x, y);
-          else context.lineTo(x, y);
-        });
-        if (polygonClosed && marksForDraw.length > 2) context.closePath();
-        context.stroke();
+        highlightContext.putImageData(overlay, 0, 0);
+        context.drawImage(highlight, 0, 0, imageRect.width, imageRect.height);
       }
-      marksForDraw.forEach((point, index) => {
-        const x = point.x * scaleX;
-        const y = point.y * scaleY;
+
+      const points = tool === "pixel" && inspectedPixel ? [inspectedPixel] : marks;
+      points.forEach((point, index) => {
+        const { x, y } = toCanvas(point);
         context.beginPath();
         context.arc(x, y, 5, 0, Math.PI * 2);
-        context.fillStyle = tool === "distance" ? "#baf8fa" : "#f0bd72";
+        context.fillStyle = "#d94a8b";
         context.fill();
-        context.strokeStyle = tool === "distance" ? "#3dabbc" : "rgba(255,255,255,.92)";
+        context.strokeStyle = "rgba(255,255,255,.95)";
         context.lineWidth = 1.5;
-        context.shadowBlur = 0;
         context.stroke();
         context.fillStyle = "#fff";
         context.font = "600 10px ui-monospace, monospace";
@@ -152,117 +261,135 @@ export default function ImageViewer({
       window.removeEventListener("resize", draw);
       observer?.disconnect();
     };
-  }, [source, showMarks, marksForDraw, tool, polygonClosed, imageFailed]);
+  }, [source, showMarks, marks, distancePreview, tool, inspectedPixel, selectedRegion]);
+
+  const pointAt = (clientX, clientY, clamp = false) => {
+    const image = imageRef.current;
+    if (!image || !grid) return null;
+    const rect = image.getBoundingClientRect();
+    if (!clamp && (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom)) return null;
+    const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+    const y = Math.max(0, Math.min(rect.height, clientY - rect.top));
+    return {
+      x: Math.min(grid.ancho_px - 1, x * grid.ancho_px / rect.width),
+      y: Math.min(grid.alto_px - 1, y * grid.alto_px / rect.height),
+    };
+  };
+
+  const handlePointerDown = (event) => {
+    if (!hasResult || tool !== "distance" || (event.pointerType === "mouse" && event.button !== 0)) return;
+    const point = pointAt(event.clientX, event.clientY);
+    if (!point) return;
+    event.preventDefault();
+    activePointer.current = event.pointerId;
+    dragStart.current = point;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setDistancePreview({ start: point, end: point });
+  };
+
+  const handlePointerMove = (event) => {
+    if (activePointer.current !== event.pointerId || !dragStart.current) return;
+    const end = pointAt(event.clientX, event.clientY, true);
+    if (end) setDistancePreview({ start: dragStart.current, end });
+  };
+
+  const handlePointerUp = (event) => {
+    if (activePointer.current !== event.pointerId || !dragStart.current) return;
+    const start = dragStart.current;
+    const end = pointAt(event.clientX, event.clientY, true);
+    const moved = end && Math.hypot(end.x - start.x, end.y - start.y) >= 2;
+    if (moved) setMarks((current) => [...current, start, end]);
+    activePointer.current = null;
+    dragStart.current = null;
+    setDistancePreview(null);
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  };
+
+  const handlePointerCancel = (event) => {
+    if (activePointer.current !== event.pointerId) return;
+    activePointer.current = null;
+    dragStart.current = null;
+    setDistancePreview(null);
+  };
 
   const handleImageClick = (event) => {
-    if (!hasResult || tool === "view" || !imageRef.current) return;
-    const rect = imageRef.current.getBoundingClientRect();
-    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
-    const point = {
-      x: Math.min(grid.ancho_px - 1, Math.max(0, (event.clientX - rect.left) * grid.ancho_px / rect.width)),
-      y: Math.min(grid.alto_px - 1, Math.max(0, (event.clientY - rect.top) * grid.alto_px / rect.height)),
-    };
-    setMarks((current) => [...current, point]);
-    setPolygonClosed(false);
+    if (!hasResult || (tool !== "pixel" && tool !== "area")) return;
+    const point = pointAt(event.clientX, event.clientY);
+    if (!point) return;
+    if (tool === "area") {
+      const labelMap = regionLabelsRef.current;
+      if (!labelMap) return;
+      const x = Math.max(0, Math.min(labelMap.width - 1, Math.floor(point.x)));
+      const y = Math.max(0, Math.min(labelMap.height - 1, Math.floor(point.y)));
+      const regionId = labelMap.labels[y * labelMap.width + x];
+      onRegionSelect(regionId ? labelMap.regions[regionId - 1] : null);
+    } else if (tool === "pixel") setInspectedPixel(point);
   };
 
-  const undo = () => {
-    setMarks((current) => current.slice(0, -1));
-    setPolygonClosed(false);
-  };
-  const clear = () => {
-    setMarks([]);
-    setPolygonClosed(false);
-  };
-  const closePolygon = () => marks.length >= 3 && setPolygonClosed(true);
-  const measurement = renderMeasurement(tool, marks, polygonClosed, grid);
-  const canClosePolygon = tool === "polygon" && marks.length >= 3 && !polygonClosed;
+  const pixelReadout = tool === "pixel" && inspectedPixel ? pixelLabel(inspectedPixel, grid) : "";
 
   return (
     <>
       <div className="viewer-toolbar">
-        <label className="viewer-select-label">
-          <span>Composición</span>
-          <select className="viewer-select" aria-label="Composición visible" value={layer} disabled={!hasResult} onChange={(event) => {
-            setLayer(event.target.value);
-            if (event.target.value === "candidates") setShowSegmentation(true);
-          }}>
-            {LAYERS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-          </select>
-        </label>
-        <label className="toggle-control">
-          <input
-            type="checkbox"
-            checked={showSegmentation}
-            disabled={!hasResult}
-            onChange={(event) => {
-              setShowSegmentation(event.target.checked);
-              if (!event.target.checked && layer === "candidates") setLayer("true-color");
-            }}
-          />
-          <span className="toggle-track"><span /></span>
-          <span>{layer === "candidates" && showSegmentation ? "Clases + humo" : showSegmentation ? "Con segmentación" : "Original"}</span>
-        </label>
-        <label className="toggle-control">
-          <input type="checkbox" checked={showMarks} disabled={!hasResult} onChange={(event) => setShowMarks(event.target.checked)} />
-          <span className="toggle-track"><span /></span><span>Marcas</span>
-        </label>
+        <div className="layer-control" role="group" aria-label="Composición visible">
+          {LAYERS.map(([id, label, Icon]) => (
+            <Button
+              className={`layer-choice${layer === id ? " is-active" : ""}`}
+              key={id}
+              variant={layer === id ? "soft" : "ghost"}
+              size="1"
+              type="button"
+              aria-pressed={layer === id}
+              disabled={!hasResult}
+              onClick={() => {
+                setLayer(id);
+                if (id === "candidates") setShowSegmentation(true);
+              }}
+            ><Icon size={14} aria-hidden="true" /><span>{label}</span></Button>
+          ))}
+        </div>
+        <div className="overlay-control" role="group" aria-label="Original o segmentación">
+          <Button className={`overlay-choice${!showSegmentation ? " is-active" : ""}`} variant={!showSegmentation ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult} aria-pressed={!showSegmentation} onClick={() => {
+            if (layer === "candidates") setLayer("true-color");
+            setShowSegmentation(false);
+          }}><Eye size={13} aria-hidden="true" />Original</Button>
+          <Button className={`overlay-choice${showSegmentation ? " is-active" : ""}`} variant={showSegmentation ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult || layer === "candidates"} aria-pressed={showSegmentation} onClick={() => setShowSegmentation(true)}><Flame size={13} aria-hidden="true" />Contorno</Button>
+        </div>
+        <Button className={`mark-toggle${showMarks ? " is-active" : ""}`} variant="outline" size="1" type="button" disabled={!hasResult} aria-pressed={showMarks} onClick={() => setShowMarks((visible) => !visible)}>
+          {showMarks ? <EyeOff size={13} aria-hidden="true" /> : <Eye size={13} aria-hidden="true" />}
+          {showMarks ? "Marcas" : "Ver marcas"}
+        </Button>
       </div>
 
-      <div className="image-stage" ref={stageRef} onClick={handleImageClick}>
+      <div
+        className={`image-stage${tool === "distance" ? " is-ruling" : tool === "area" || tool === "pixel" ? " has-tool" : ""}`}
+        ref={stageRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onClick={handleImageClick}
+      >
         {!hasResult ? (
-          <div className={`empty-state${errorMessage ? " is-error" : ""}`}>
-            <span className="empty-mark" aria-hidden="true">{loading ? "◌" : errorMessage ? "!" : "⌁"}</span>
-            <strong>{loading ? "Procesando imágenes…" : errorMessage ? "No se pudo mostrar el análisis" : "Haz la segmentación"}</strong>
-            <span>{loading ? "La máscara y las composiciones estarán aquí cuando termine." : errorMessage || "Elige una escena o sube una pareja True Color + SWIR y pulsa «Iniciar segmentación»."}</span>
+          <div className="empty-state">
+            <span className="empty-mark" aria-hidden="true">⌁</span>
+            <strong>{errorMessage ? "No se pudo mostrar el análisis" : "La imagen aparecerá aquí"}</strong>
+            <span>{errorMessage || "Inicia un análisis para ver la imagen."}</span>
           </div>
         ) : (
           <>
-            {imageFailed ? (
-              <div className="empty-state is-error">
-                <span className="empty-mark" aria-hidden="true">!</span>
-                <strong>No se pudo cargar esta vista</strong>
-                <span>Prueba a cambiar la composición o vuelve a ejecutar el análisis.</span>
-              </div>
-            ) : (
-              <>
-                <img
-                  ref={imageRef}
-                  src={source}
-                  alt={layer === "candidates" ? "Candidatos de superficie y humo probable" : `${layer === "swir" ? "SWIR" : "True Color"}${showSegmentation ? " con segmentación" : " original"}`}
-                  onError={() => {
-                    setImageFailed(true);
-                    onError("No se pudo cargar la imagen resultante.");
-                  }}
-                />
-                <canvas ref={canvasRef} aria-hidden="true" />
-              </>
-            )}
+            <img
+              ref={imageRef}
+              src={source}
+              alt={layer === "candidates" ? "Clases de superficie y humo probable" : `${layer === "swir" ? "SWIR" : "True Color"}${showSegmentation ? " con segmentación" : " original"}`}
+              draggable="false"
+              onError={() => onError("No se pudo cargar la imagen resultante.")}
+            />
+            <canvas ref={canvasRef} aria-hidden="true" />
+            {pixelReadout && <div className="pixel-readout">{pixelReadout}</div>}
           </>
         )}
       </div>
-
-      <div className="measurement-toolbar" aria-label="Herramientas de medición">
-        <label className="measurement-select-label">
-          <span>Herramienta</span>
-          <select className="viewer-select" aria-label="Herramienta de medición" value={tool} disabled={!hasResult} onChange={(event) => {
-            const nextTool = event.target.value;
-            if (nextTool !== tool) {
-              setMarks([]);
-              setPolygonClosed(false);
-            }
-            setTool(nextTool);
-          }}>
-            {TOOLS.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-          </select>
-        </label>
-        <div className="mark-actions">
-          <button className="text-button" type="button" disabled={!hasResult || !marks.length} onClick={undo}>Deshacer</button>
-          {tool === "polygon" && <button className="text-button" type="button" disabled={!canClosePolygon} onClick={closePolygon}>Cerrar área</button>}
-          <button className="text-button" type="button" disabled={!hasResult || !marks.length} onClick={clear}>Limpiar</button>
-        </div>
-      </div>
-      <div className="measurement-result" aria-live="polite">{measurement}</div>
     </>
   );
 }

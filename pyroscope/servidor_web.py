@@ -1,21 +1,24 @@
-"""Servidor HTTP local para la interfaz propia de PyroScope."""
+"""Servidor HTTP local para la interfaz de Lumbre."""
 
 from __future__ import annotations
 
 import base64
 import binascii
+import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import BytesIO
+import ipaddress
 import json
 import mimetypes
 import os
 from pathlib import Path
 import re
-import tempfile
+import secrets
 import threading
 import time
 from typing import Any
 from urllib.parse import urlsplit
+from urllib.request import Request, urlopen
 import uuid
 import webbrowser
 
@@ -28,15 +31,20 @@ from .detectores import listar_detectores_superficie, obtener_detector_superfici
 from .detectores.kmeans import PESOS_SCORE_POR_DEFECTO
 from .agua import UMBRALES_AGUA_POR_DEFECTO
 from .humo import PESOS_CONFIANZA_HUMO_POR_DEFECTO
-from .visualizacion import crear_superposicion, crear_vista_clasificacion
+from .visualizacion import crear_superposicion, crear_vista_clasificacion, colorear_diagnostico
 
 
 _WEB = RAIZ_REPOSITORIO / "web"
 _MAX_BODY_BYTES = 120 * 1024 * 1024
+_MAX_JOBS = 12
 _JOBS: dict[str, dict[str, Any]] = {}
 _JOBS_LOCK = threading.RLock()
 _ANALYSIS_LOCK = threading.Lock()
 _INSTANCIA_LOCK: Any | None = None
+_ID_INSTANCIA: str | None = None
+_TOKEN_INSTANCIA: str | None = None
+_RUTA_ESTADO_INSTANCIA = RAIZ_REPOSITORIO / ".lumbre-instance.json"
+_RUTA_BLOQUE_INSTANCIA = RAIZ_REPOSITORIO / ".lumbre-instance.lock"
 
 
 class _ServidorWebExclusivo(ThreadingHTTPServer):
@@ -52,8 +60,7 @@ class _ServidorWebExclusivo(ThreadingHTTPServer):
 def _adquirir_bloque_instancia() -> bool:
     """Evita que varios clics al lanzador creen servidores y pestañas duplicados."""
     global _INSTANCIA_LOCK
-    ruta = Path(tempfile.gettempdir()) / "pyroscope-local-web.lock"
-    archivo = ruta.open("a+b")
+    archivo = _RUTA_BLOQUE_INSTANCIA.open("a+b")
     archivo.seek(0, os.SEEK_END)
     if archivo.tell() == 0:
         archivo.write(b"\0")
@@ -95,6 +102,147 @@ def _liberar_bloque_instancia() -> None:
         archivo.close()
 
 
+def _es_instancia_lumbre(url: str, id_instancia: str | None = None) -> bool:
+    """Comprueba la identidad de una instancia sin confundir copias distintas."""
+    try:
+        with urlopen(f"{url.rstrip('/')}/api/health", timeout=0.6) as respuesta:
+            estado = json.loads(respuesta.read().decode("utf-8"))
+        if estado.get("app") != "Lumbre":
+            return False
+        if id_instancia is not None and estado.get("instance_id") != id_instancia:
+            return False
+
+        raiz_activa = estado.get("repository_root")
+        if not isinstance(raiz_activa, str):
+            # Las versiones anteriores no publicaban la carpeta. Solo las
+            # aceptamos si su UUID coincide con el estado guardado en ESTA copia.
+            return id_instancia is not None
+
+        return (
+            os.path.normcase(os.path.abspath(raiz_activa))
+            == os.path.normcase(str(RAIZ_REPOSITORIO.resolve()))
+        )
+    except Exception:
+        return False
+
+
+def _buscar_instancia_activa(host: str, puerto: int) -> str | None:
+    try:
+        direccion = ipaddress.ip_address(host)
+        host_local = host if direccion.is_loopback else "127.0.0.1"
+    except ValueError:
+        host_local = "127.0.0.1"
+    host_url = f"[{host_local}]" if ":" in host_local else host_local
+    for candidato in range(puerto, min(puerto + 20, 65536)):
+        url = f"http://{host_url}:{candidato}"
+        if _es_instancia_lumbre(url):
+            return url
+    return None
+
+
+def _leer_estado_instancia() -> dict[str, Any] | None:
+    try:
+        datos = json.loads(_RUTA_ESTADO_INSTANCIA.read_text(encoding="utf-8"))
+        url = str(datos["url"])
+        partes = urlsplit(url)
+        if partes.scheme != "http" or not partes.hostname or not partes.port:
+            return None
+        if not ipaddress.ip_address(partes.hostname).is_loopback:
+            return None
+        if not isinstance(datos.get("token"), str) or not isinstance(
+            datos.get("instance_id"), str
+        ):
+            return None
+        return datos
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return None
+
+
+def _guardar_estado_instancia(url: str) -> None:
+    global _ID_INSTANCIA, _TOKEN_INSTANCIA
+    _ID_INSTANCIA = uuid.uuid4().hex
+    _TOKEN_INSTANCIA = secrets.token_urlsafe(32)
+    estado = {
+        "pid": os.getpid(),
+        "url": url,
+        "instance_id": _ID_INSTANCIA,
+        "token": _TOKEN_INSTANCIA,
+    }
+    temporal = _RUTA_ESTADO_INSTANCIA.with_name(f".lumbre-instance.{os.getpid()}.tmp")
+    temporal.write_text(json.dumps(estado), encoding="utf-8")
+    os.replace(temporal, _RUTA_ESTADO_INSTANCIA)
+
+
+def _borrar_estado_instancia() -> None:
+    if _TOKEN_INSTANCIA is None:
+        return
+    estado = _leer_estado_instancia()
+    if estado and hmac.compare_digest(str(estado.get("token", "")), _TOKEN_INSTANCIA):
+        try:
+            _RUTA_ESTADO_INSTANCIA.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _abrir_navegador(url: str) -> None:
+    try:
+        if webbrowser.open(url, new=2):
+            return
+    except Exception:
+        pass
+    if os.name == "nt":
+        try:
+            os.startfile(url)  # type: ignore[attr-defined]
+            return
+        except OSError:
+            pass
+    print(f"No se pudo abrir el navegador automáticamente. Abre: {url}")
+
+
+def cerrar_servidor_local() -> bool:
+    """Solicita el cierre solo a la instancia local de este repositorio."""
+    estado = _leer_estado_instancia()
+    if estado is None:
+        url_antigua = _buscar_instancia_activa("127.0.0.1", 8501)
+        if url_antigua:
+            print(
+                "Lumbre está abierta, pero no se encontró el estado de cierre de esta copia. "
+                "Se buscará el proceso exacto del proyecto como último recurso."
+            )
+        else:
+            print("Lumbre ya estaba cerrada.")
+            return True
+        return False
+
+    url = str(estado["url"])
+    instance_id = str(estado["instance_id"])
+    if not _es_instancia_lumbre(url, instance_id):
+        print("El servidor no responde; se comprobará el proceso registrado como último recurso.")
+        return False
+
+    solicitud = Request(
+        f"{url.rstrip('/')}/api/shutdown",
+        data=b"",
+        headers={"X-Lumbre-Token": str(estado["token"])},
+        method="POST",
+    )
+    try:
+        with urlopen(solicitud, timeout=2) as respuesta:
+            respuesta.read()
+    except Exception as exc:
+        print(f"No se pudo cerrar Lumbre: {exc}")
+        return False
+
+    limite = time.monotonic() + 5
+    while time.monotonic() < limite:
+        if not _es_instancia_lumbre(url, instance_id):
+            print("Lumbre se ha cerrado.")
+            return True
+        time.sleep(0.15)
+    print("La solicitud de cierre se envió, pero el servidor todavía responde.")
+    return False
+
+
 def _png_bytes(imagen: np.ndarray) -> bytes:
     salida = BytesIO()
     datos = np.asarray(imagen)
@@ -102,6 +250,27 @@ def _png_bytes(imagen: np.ndarray) -> bytes:
         datos = datos.astype(np.uint8) * 255
     Image.fromarray(datos).save(salida, format="PNG")
     return salida.getvalue()
+
+
+def _capas_adicionales(resultado: Any) -> dict[str, bytes]:
+    """Exporta observación y oclusión separadas sin exigir campos nuevos al detector."""
+    capas = {}
+    for nombre, campo in (
+        ("smoke", "mascara_humo"),
+        ("smoke-candidates", "mascara_candidata_bajo_humo"),
+        ("visible-surface", "mascara_superficie_visible"),
+        ("smoke-unknown", "mascara_indeterminada"),
+        ("smoke-spectral", "mascara_bajo_humo_espectral"),
+        ("smoke-continuity", "mascara_bajo_humo_continuidad"),
+    ):
+        datos = getattr(resultado, campo, None)
+        if datos is not None:
+            capas[nombre] = _png_bytes(np.asarray(datos, dtype=bool))
+    for nombre, datos in (getattr(resultado, "diagnosticos_contextuales", None) or {}).items():
+        nombre_seguro = re.sub(r"[^a-z]+", "-", str(nombre).lower()).strip("-")
+        if nombre_seguro and datos is not None:
+            capas[f"diagnostic-{nombre_seguro}"] = _png_bytes(colorear_diagnostico(datos))
+    return capas
 
 
 def _actualizar_trabajo(job_id: str, **cambios: Any) -> None:
@@ -295,7 +464,11 @@ def _iniciar_analisis(job_id: str, true_bytes: bytes, swir_bytes: bytes, ajustes
                 stage="Leyendo y comprobando la pareja de imágenes",
                 progress=3,
             )
-            pareja = preparar_pareja(true_bytes, swir_bytes, ajustes["gsd_m_per_px"])
+            from .interfaz.configuracion import MAX_LADO_ANALISIS, MAX_LADO_CONTEXTUAL
+            pareja = preparar_pareja(
+                true_bytes, swir_bytes, ajustes["gsd_m_per_px"],
+                max_lado=MAX_LADO_CONTEXTUAL if ajustes["detector"].id == "contextual_hibrida" else MAX_LADO_ANALISIS,
+            )
 
             def progreso(etapa: str, porcentaje: int) -> None:
                 _actualizar_trabajo(
@@ -330,12 +503,20 @@ def _iniciar_analisis(job_id: str, true_bytes: bytes, swir_bytes: bytes, ajustes
                 "candidates": _png_bytes(crear_vista_clasificacion(tc, resultado)),
                 "mask": _png_bytes(resultado.mascara),
             }
+            outputs.update(_capas_adicionales(resultado))
             metrics = {
+                "available_layers": list(outputs),
                 "detector": ajustes["detector"].nombre,
                 "coverage_pct": float(resultado.proporcion * 100),
                 "area": float(area),
                 "area_unit": unidad_area,
                 "smoke_pct": float(np.mean(resultado.mascara_humo) * 100),
+                "smoke_covered_candidates_px": int(
+                    np.count_nonzero(resultado.mascara_candidata_bajo_humo)
+                ),
+                "smoke_unknown_px": int(np.count_nonzero(
+                    getattr(resultado, "mascara_indeterminada", None)
+                )),
                 "pixel_count": pixeles,
                 "water_excluded": int(resultado.pixeles_agua_excluidos),
                 "remote_regions_discarded": int(resultado.componentes_remotos_descartados),
@@ -365,13 +546,24 @@ def _iniciar_analisis(job_id: str, true_bytes: bytes, swir_bytes: bytes, ajustes
         )
 
 
-class PyroScopeHandler(BaseHTTPRequestHandler):
+class LumbreHandler(BaseHTTPRequestHandler):
     """Sirve el frontend y la API local de análisis."""
 
-    server_version = "PyroScope/1.0"
+    server_version = "Lumbre/1.0"
 
     def do_GET(self) -> None:  # noqa: N802 - nombre requerido por BaseHTTPRequestHandler
         ruta = urlsplit(self.path).path
+        if ruta == "/api/health":
+            self._json(
+                200,
+                {
+                    "app": "Lumbre",
+                    "instance_id": _ID_INSTANCIA,
+                    "pid": os.getpid(),
+                    "repository_root": str(RAIZ_REPOSITORIO.resolve()),
+                },
+            )
+            return
         if ruta == "/api/scenes":
             escenas = [
                 {"id": escena.nombre, "label": escena.etiqueta, "name": escena.nombre, "date": escena.fecha}
@@ -447,6 +639,22 @@ class PyroScopeHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         ruta = urlsplit(self.path).path
+        if ruta == "/api/shutdown":
+            try:
+                cliente_local = ipaddress.ip_address(self.client_address[0]).is_loopback
+            except ValueError:
+                cliente_local = False
+            token_recibido = self.headers.get("X-Lumbre-Token", "")
+            if (
+                not cliente_local
+                or _TOKEN_INSTANCIA is None
+                or not hmac.compare_digest(token_recibido, _TOKEN_INSTANCIA)
+            ):
+                self._json(403, {"error": "Solicitud de cierre no autorizada."})
+                return
+            self._json(200, {"message": "Cerrando Lumbre."})
+            threading.Thread(target=self.server.shutdown, daemon=True).start()
+            return
         if ruta != "/api/analyze":
             self._json(404, {"error": "Ruta no encontrada."})
             return
@@ -489,8 +697,23 @@ class PyroScopeHandler(BaseHTTPRequestHandler):
                 ]
                 for key in expirados:
                     _JOBS.pop(key, None)
-                if len(_JOBS) >= 12:
-                    raise ValueError("Hay demasiados análisis guardados en esta sesión. Reinicia la aplicación.")
+                if len(_JOBS) >= _MAX_JOBS:
+                    # Las máscaras terminadas conservan imágenes en memoria. Cuando
+                    # se alcanza el cupo, libera primero los resultados más antiguos
+                    # y mantiene intactos todos los trabajos pendientes o activos.
+                    terminados = sorted(
+                        (
+                            (key, item)
+                            for key, item in _JOBS.items()
+                            if item["state"] in ("complete", "error")
+                        ),
+                        key=lambda par: par[1]["updated_at"],
+                    )
+                    while len(_JOBS) >= _MAX_JOBS and terminados:
+                        key, _ = terminados.pop(0)
+                        _JOBS.pop(key, None)
+                if len(_JOBS) >= _MAX_JOBS:
+                    raise ValueError("Hay doce análisis activos o en cola. Espera a que termine alguno antes de iniciar otro.")
                 _JOBS[job_id] = {
                     "id": job_id,
                     "state": "queued",
@@ -501,7 +724,7 @@ class PyroScopeHandler(BaseHTTPRequestHandler):
             worker = threading.Thread(
                 target=_iniciar_analisis,
                 args=(job_id, true_bytes, swir_bytes, ajustes),
-                name=f"pyroscope-{job_id[:8]}",
+                name=f"lumbre-{job_id[:8]}",
                 daemon=True,
             )
             worker.start()
@@ -553,17 +776,77 @@ class PyroScopeHandler(BaseHTTPRequestHandler):
 def ejecutar_servidor(host: str = "127.0.0.1", puerto: int = 8501, abrir_navegador: bool = True) -> bool:
     """Inicia una sola instancia y elige puerto libre si el principal está ocupado.
 
-    Devuelve ``False`` si ya hay una instancia de PyroScope activa.
+    Reutiliza la instancia activa y devuelve ``False`` si ya hay una instancia.
     """
-    if not _adquirir_bloque_instancia():
-        print("PyroScope ya está ejecutándose; no se abrió otra instancia.")
+    url_existente = _buscar_instancia_activa(host, puerto)
+    if url_existente:
+        if abrir_navegador:
+            print(f"Lumbre ya está abierta en {url_existente}/. Abriendo esa instancia.")
+            _abrir_navegador(f"{url_existente}/")
+        else:
+            print(f"Lumbre ya está abierta en {url_existente}/.")
         return False
+
+    if not _adquirir_bloque_instancia():
+        # Puede seguir viva una versión anterior de esta misma carpeta. Si el
+        # archivo de estado y su UUID lo confirman, la cerramos limpiamente para
+        # que el nuevo código Python pueda arrancar sin reutilizar otra copia.
+        estado_local = None
+        url_existente = None
+        limite = time.monotonic() + 4
+        while time.monotonic() < limite:
+            estado = _leer_estado_instancia()
+            if estado and _es_instancia_lumbre(
+                str(estado["url"]), str(estado["instance_id"])
+            ):
+                estado_local = estado
+                break
+            url_existente = _buscar_instancia_activa(host, puerto)
+            if url_existente:
+                break
+            time.sleep(0.15)
+
+        if estado_local:
+            print("He detectado una versión anterior de esta carpeta. Cerrándola para actualizar…")
+            if not cerrar_servidor_local():
+                print(
+                    "No se pudo cerrar la instancia anterior automáticamente. "
+                    "Pulsa Ctrl+C en la ventana negra anterior y vuelve a iniciar."
+                )
+                return False
+
+            limite = time.monotonic() + 5
+            while time.monotonic() < limite:
+                if _adquirir_bloque_instancia():
+                    break
+                time.sleep(0.15)
+            else:
+                print(
+                    "La versión anterior se cerró, pero Windows todavía mantiene "
+                    "el bloqueo. Espera un momento y vuelve a ejecutar el lanzador."
+                )
+                return False
+            print("Instancia anterior cerrada; iniciando la versión actualizada.")
+        elif url_existente:
+            if abrir_navegador:
+                print(f"Lumbre ya está abierta en esta carpeta: {url_existente}/. Abriendo esa instancia.")
+                _abrir_navegador(f"{url_existente}/")
+            else:
+                print(f"Lumbre ya está abierta en esta carpeta: {url_existente}/.")
+            return False
+        else:
+            print(
+                "Otra ejecución mantiene bloqueada esta carpeta, pero no he podido "
+                "verificarla. No se ha cerrado ningún proceso. Pulsa Ctrl+C en la "
+                "ventana negra que esté ejecutando esta misma carpeta y vuelve a iniciar."
+            )
+            return False
 
     servidor = None
     try:
         for candidato in range(puerto, min(puerto + 20, 65536)):
             try:
-                servidor = _ServidorWebExclusivo((host, candidato), PyroScopeHandler)
+                servidor = _ServidorWebExclusivo((host, candidato), LumbreHandler)
                 break
             except OSError:
                 continue
@@ -575,19 +858,23 @@ def ejecutar_servidor(host: str = "127.0.0.1", puerto: int = 8501, abrir_navegad
         servidor.daemon_threads = True
         puerto_real = servidor.server_address[1]
         url = f"http://{host}:{puerto_real}/"
-        print(f"PyroScope disponible en {url}")
+        _guardar_estado_instancia(url.rstrip("/"))
+        print(f"Lumbre disponible en {url}")
         print("Mantén esta ventana abierta mientras usas la aplicación. Ctrl+C detiene el servidor.")
         if abrir_navegador:
-            threading.Timer(0.8, webbrowser.open, args=(url,)).start()
+            temporizador = threading.Timer(0.8, _abrir_navegador, args=(url,))
+            temporizador.daemon = True
+            temporizador.start()
         try:
             servidor.serve_forever()
         except KeyboardInterrupt:
-            print("\nCerrando PyroScope…")
+            print("\nCerrando Lumbre…")
     finally:
         if servidor is not None:
             servidor.server_close()
+        _borrar_estado_instancia()
         _liberar_bloque_instancia()
     return True
 
 
-__all__ = ["ejecutar_servidor"]
+__all__ = ["cerrar_servidor_local", "ejecutar_servidor"]
