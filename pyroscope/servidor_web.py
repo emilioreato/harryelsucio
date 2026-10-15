@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import socket
 import threading
 import time
 from typing import Any
@@ -129,6 +130,15 @@ def _es_instancia_lumbre(url: str, id_instancia: str | None = None) -> bool:
             return False
 
 
+def _instancia_habilita_movil(url: str) -> bool:
+    try:
+        with urlopen(f"{url.rstrip('/')}/api/mobile-access", timeout=0.6) as respuesta:
+            datos = json.loads(respuesta.read().decode("utf-8"))
+        return datos.get("enabled") is True
+    except Exception:
+        return False
+
+
 def _buscar_instancia_activa(host: str, puerto: int) -> str | None:
     try:
         direccion = ipaddress.ip_address(host)
@@ -200,6 +210,34 @@ def _abrir_navegador(url: str) -> None:
         except OSError:
             pass
     print(f"No se pudo abrir el navegador automáticamente. Abre: {url}")
+
+
+def _obtener_ip_lan() -> str | None:
+    """Obtiene la IPv4 de la interfaz que Windows/Linux usaría para salir a la red."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as conexion:
+            # UDP connect solo selecciona la interfaz local; no envía datos.
+            conexion.connect(("8.8.8.8", 80))
+            direccion = conexion.getsockname()[0]
+        if ipaddress.ip_address(direccion).is_private:
+            return direccion
+    except OSError:
+        pass
+
+    # Respaldo para equipos sin ruta predeterminada o con DNS local configurado.
+    try:
+        candidatos = socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET, socket.SOCK_STREAM)
+    except OSError:
+        return None
+    for candidato in candidatos:
+        direccion = candidato[4][0]
+        try:
+            ip = ipaddress.ip_address(direccion)
+        except ValueError:
+            continue
+        if ip.is_private and not ip.is_loopback and not ip.is_link_local:
+            return direccion
+    return None
 
 
 def cerrar_servidor_local() -> bool:
@@ -546,6 +584,17 @@ class LumbreHandler(BaseHTTPRequestHandler):
                 {"app": "Lumbre", "instance_id": _ID_INSTANCIA, "pid": os.getpid()},
             )
             return
+        if ruta == "/api/mobile-access":
+            host, puerto = self.server.server_address[:2]
+            ip_lan = _obtener_ip_lan() if host in ("0.0.0.0", "::") else None
+            self._json(
+                200,
+                {
+                    "enabled": ip_lan is not None,
+                    "url": f"http://{ip_lan}:{puerto}/" if ip_lan else None,
+                },
+            )
+            return
         if ruta == "/api/scenes":
             escenas = [
                 {"id": escena.nombre, "label": escena.etiqueta, "name": escena.nombre, "date": escena.fecha}
@@ -763,6 +812,13 @@ def ejecutar_servidor(host: str = "127.0.0.1", puerto: int = 8501, abrir_navegad
     """
     url_existente = _buscar_instancia_activa(host, puerto)
     if url_existente:
+        if host == "0.0.0.0" and not _instancia_habilita_movil(url_existente):
+            print(
+                "Lumbre ya está abierta en modo local. Ciérrala con Ctrl+C en su ventana "
+                "y vuelve a iniciar encender_movil.bat para mostrar el QR."
+            )
+            _abrir_navegador(f"{url_existente}/")
+            return False
         if abrir_navegador:
             print(f"Lumbre ya está abierta en {url_existente}/. Abriendo esa instancia.")
             _abrir_navegador(f"{url_existente}/")
@@ -785,6 +841,13 @@ def ejecutar_servidor(host: str = "127.0.0.1", puerto: int = 8501, abrir_navegad
                 break
             time.sleep(0.15)
         if url_existente:
+            if host == "0.0.0.0" and not _instancia_habilita_movil(url_existente):
+                print(
+                    "Lumbre ya está abierta en modo local. Ciérrala con Ctrl+C en su ventana "
+                    "y vuelve a iniciar encender_movil.bat para mostrar el QR."
+                )
+                _abrir_navegador(f"{url_existente}/")
+                return False
             if abrir_navegador:
                 print(f"Lumbre ya está abierta en {url_existente}/. Abriendo esa instancia.")
                 _abrir_navegador(f"{url_existente}/")
@@ -809,9 +872,18 @@ def ejecutar_servidor(host: str = "127.0.0.1", puerto: int = 8501, abrir_navegad
 
         servidor.daemon_threads = True
         puerto_real = servidor.server_address[1]
-        url = f"http://{host}:{puerto_real}/"
+        # Mantén la URL de control de la instancia en loopback aunque el
+        # socket escuche en la LAN; el teléfono abre la dirección LAN aparte.
+        host_control = "127.0.0.1" if host == "0.0.0.0" else host
+        url = f"http://{host_control}:{puerto_real}/"
         _guardar_estado_instancia(url.rstrip("/"))
         print(f"Lumbre disponible en {url}")
+        if host == "0.0.0.0":
+            ip_lan = _obtener_ip_lan()
+            if ip_lan:
+                print(f"Acceso móvil: http://{ip_lan}:{puerto_real}/ (misma Wi-Fi).")
+            else:
+                print("Acceso móvil: consulta el QR que se mostrará en Lumbre.")
         print("Mantén esta ventana abierta mientras usas la aplicación. Ctrl+C detiene el servidor.")
         if abrir_navegador:
             temporizador = threading.Timer(0.8, _abrir_navegador, args=(url,))

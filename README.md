@@ -62,6 +62,23 @@ python app.py
 
 En Windows puedes iniciarla con doble clic en [`encender_aplicacion.bat`](encender_aplicacion.bat), situado en la raíz del repositorio. El script usa el Python 3.11 o posterior seleccionado por el lanzador de Windows o disponible en `PATH`; no pide instalar una versión concreta. Si no encuentra Python, muestra un enlace de descarga y los comandos para instalarlo y sus dependencias. El lanzador abre la página local en el navegador. Si Lumbre ya está abierta, vuelve a abrir esa instancia en lugar de iniciar otro servidor. Para cerrarla desde otra ventana, ejecuta [`cerrar_aplicacion.bat`](cerrar_aplicacion.bat); también puedes pulsar `Ctrl+C` en la ventana del servidor. Si el servidor no responde, el cierre busca procesos Python asociados al `app.py` de esta copia y termina solo esos procesos.
 
+## Versión móvil (Android y iOS)
+
+La interfaz móvil es una web app instalable (PWA) que comparte toda la interfaz y las funciones de Lumbre: escenas, carga de imágenes, detectores, parámetros, visor de capas, mediciones, resultados y exportaciones. El análisis científico sigue ejecutándose en el servidor Python del ordenador; el teléfono es el cliente táctil y debe estar conectado al mismo Wi‑Fi.
+
+1. En Windows, inicia [`encender_movil.bat`](encender_movil.bat) con doble clic. Se abrirá Lumbre en el ordenador y aparecerá un código QR. En macOS/Linux o desde una terminal, ejecuta:
+
+   ```powershell
+   python app.py --host 0.0.0.0
+   ```
+
+2. Conecta el móvil a la misma Wi‑Fi y escanea el QR con la cámara. Se abrirá Lumbre en Safari o Chrome; permite el acceso en el firewall del ordenador si Windows lo solicita.
+3. Para dejar un acceso en el teléfono, usa **Compartir → Añadir a pantalla de inicio** en Safari o **Instalar aplicación/Añadir a pantalla de inicio** en Chrome. En una dirección local HTTP, algunos navegadores crean un acceso directo; la instalación PWA completa y su caché sin conexión requieren publicar Lumbre bajo HTTPS.
+
+Si Lumbre ya estaba abierta en modo normal, ciérrala con `Ctrl+C` y vuelve a iniciar `encender_movil.bat` para activar el acceso móvil.
+
+El modo `--host 0.0.0.0` permite conexiones de otros dispositivos de esa red. Úsalo en una Wi‑Fi privada de confianza; no expongas este servidor HTTP a Internet. Para acceso fuera de la red local hace falta alojar la API detrás de HTTPS. Esta rama entrega la app móvil web instalable y reutiliza el backend real; aún no genera paquetes firmados para App Store o Google Play.
+
 Para desarrollar la interfaz React con recarga automática, abre dos terminales: en una inicia `python app.py --no-browser`; en la otra entra en `frontend/` y ejecuta `npm run dev`. Vite sirve la interfaz en `http://127.0.0.1:5173/` y reenvía `/api` al servidor Python local. Si el puerto 8501 está ocupado y Python anuncia otro puerto, configura `LUMBRE_API_TARGET` con esa dirección antes de arrancar Vite.
 
 Se abre en el navegador. Permite elegir una escena precargada o subir una pareja True Color/SWIR. Las parejas precargadas se guardan en `imagenes/<nombre-de-escena>/`, una carpeta por escena con solo un archivo True Color y otro SWIR de la misma adquisición. La aplicación descubre esas carpetas al cargarse; admite JPEG, PNG y TIFF. El panel **Plano de análisis** alterna las composiciones, la superposición y la capa de candidatos/humo; también permite medir distancias y polígonos e inspeccionar píxeles. El panel lateral resume área, perímetro, oclusión por humo y otros datos calculados, y ofrece descargas y notas temporales de campo. El progreso avanza al terminar etapas del algoritmo, no estima el tiempo restante. Las medidas se expresan en píxeles: la interfaz no convierte a m² o ha hasta verificar la escala espacial y georreferenciación de las imágenes. Un JPG no demuestra que conserve la resolución nominal del satélite.

@@ -6,6 +6,12 @@ echo Iniciando Lumbre. Si ya esta abierta, se reutilizara esa instancia y se abr
 echo Deja esta ventana abierta mientras uses la aplicacion. Pulsa Ctrl+C para detenerla.
 echo.
 
+set "LUMBRE_HOST=127.0.0.1"
+set "LUMBRE_BROWSER_OPTION="
+if /I "%~1"=="--lan" (
+    set "LUMBRE_HOST=0.0.0.0"
+)
+
 where py >nul 2>nul
 if not errorlevel 1 (
     rem Usar cualquier Python 3.11+ instalado, sin exigir una version menor fija.
@@ -33,13 +39,13 @@ exit /b 1
 
 :usar_py
 echo Usando el Python 3.11 o posterior seleccionado por el lanzador de Windows.
-py -3 "%~dp0app.py"
+py -3 "%~dp0app.py" --host "%LUMBRE_HOST%" %LUMBRE_BROWSER_OPTION%
 if errorlevel 2 goto ya_activa
 goto final
 
 :usar_python_predeterminado
 echo Usando el Python 3.11 o posterior disponible en PATH.
-"%PYTHON_EXE%" "%~dp0app.py"
+"%PYTHON_EXE%" "%~dp0app.py" --host "%LUMBRE_HOST%" %LUMBRE_BROWSER_OPTION%
 if errorlevel 2 goto ya_activa
 goto final
 

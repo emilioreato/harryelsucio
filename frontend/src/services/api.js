@@ -8,6 +8,7 @@ async function requestJson(url, options) {
 }
 
 export const api = {
+  mobileAccess: () => requestJson("/api/mobile-access"),
   scenes: () => requestJson("/api/scenes"),
   detectors: () => requestJson("/api/detectors"),
   analyze: (request) => requestJson("/api/analyze", {
