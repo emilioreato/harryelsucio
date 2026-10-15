@@ -11,6 +11,7 @@ from .segmentacion import (
     segmentar_superficie_afectada,
 )
 from .humo import ResultadoHumo, detectar_humo_probable
+from .focos import ResultadoFocos, crear_superposicion_focos, detectar_focos_visuales
 from .ontologia import ClaseSemantica, ETIQUETAS_CLASE
 from .segmentacion_swir import clasificar_pixeles_area_afectada_swir
 from .visualizacion import crear_superposicion, crear_vista_clasificacion, superponer_mascara
@@ -26,6 +27,7 @@ __all__ = [
     "ResultadoClasificacionSemantica",
     "ResultadoRegionesEspaciales",
     "ResultadoHumo",
+    "ResultadoFocos",
     "DetectorSuperficie",
     "DETECTORES_SUPERFICIE",
     "ClaseSemantica",
@@ -36,8 +38,10 @@ __all__ = [
     "clasificar_pixeles_area_afectada",
     "clasificar_pixeles_area_afectada_swir",
     "crear_superposicion",
+    "crear_superposicion_focos",
     "crear_vista_clasificacion",
     "detectar_humo_probable",
+    "detectar_focos_visuales",
     "listar_detectores_superficie",
     "obtener_detector_superficie",
     "reducir_par_alineado",

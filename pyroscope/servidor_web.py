@@ -31,6 +31,7 @@ from .interfaz.procesamiento import preparar_pareja, procesar_pareja
 from .detectores import listar_detectores_superficie, obtener_detector_superficie
 from .detectores.kmeans import PESOS_SCORE_POR_DEFECTO
 from .agua import UMBRALES_AGUA_POR_DEFECTO
+from .focos import crear_superposicion_focos, detectar_focos_visuales
 from .humo import PESOS_CONFIANZA_HUMO_POR_DEFECTO
 from .ontologia import ClaseSemantica
 from .visualizacion import crear_superposicion, crear_vista_clasificacion
@@ -518,12 +519,15 @@ def _iniciar_analisis(job_id: str, true_bytes: bytes, swir_bytes: bytes, ajustes
                 longitud, unidad_perimetro = sistema.longitud_de_linea(vertices, cerrar=True)
                 perimetro += longitud
 
+            focos_visuales = detectar_focos_visuales(tc, swir, resultado)
+
             outputs = {
                 "true-color": _png_bytes(tc),
                 "swir": _png_bytes(swir),
                 "overlay-true-color": _png_bytes(crear_superposicion(tc, resultado)),
                 "overlay-swir": _png_bytes(crear_superposicion(swir, resultado)),
                 "candidates": _png_bytes(crear_vista_clasificacion(tc, resultado)),
+                "fire-hotspots": _png_bytes(crear_superposicion_focos(tc, focos_visuales)),
                 "mask": _png_bytes(resultado.mascara),
             }
             metrics = {
@@ -544,6 +548,8 @@ def _iniciar_analisis(job_id: str, true_bytes: bytes, swir_bytes: bytes, ajustes
                         resultado.clase_por_pixel == ClaseSemantica.FUEGO_ACTIVO_POSIBLE
                     )
                 ),
+                "visual_hotspot_candidates_px": int(np.count_nonzero(focos_visuales.mascara)),
+                "visual_hotspot_components": focos_visuales.componentes,
                 "remote_regions_discarded": int(resultado.componentes_remotos_descartados),
                 "grid_width": int(sistema.ancho_px),
                 "grid_height": int(sistema.alto_px),

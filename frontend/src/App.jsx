@@ -92,6 +92,7 @@ function App() {
   const [settingsUsed, setSettingsUsed] = useState(null);
   const [layer, setLayer] = useState("swir");
   const [showSegmentation, setShowSegmentation] = useState(true);
+  const [showFireHotspots, setShowFireHotspots] = useState(false);
   const [showMarks, setShowMarks] = useState(true);
   const [tool, setTool] = useState("view");
   const [marks, setMarks] = useState([]);
@@ -476,6 +477,8 @@ function App() {
               setLayer={setLayer}
               showSegmentation={showSegmentation}
               setShowSegmentation={setShowSegmentation}
+              showFireHotspots={showFireHotspots}
+              setShowFireHotspots={setShowFireHotspots}
               showMarks={showMarks}
               setShowMarks={setShowMarks}
               tool={tool}
@@ -565,8 +568,9 @@ function App() {
               <Card className="metric-card" size="1"><span>Perímetro</span><strong>{formatLength(metrics.perimeter, metrics.perimeter_unit)}</strong></Card>
               <Card className="metric-card" size="1"><span>Humo probable</span><strong>{formatNumber(metrics.smoke_pct, 1)} %</strong></Card>
               {metrics.active_fire_px > 0 && <Card className="metric-card" size="1"><span>Fuego activo posible</span><strong>{formatNumber(metrics.active_fire_px)} px</strong></Card>}
+              <Card className="metric-card" size="1"><span>Focos visuales candidatos</span><strong>{formatNumber(metrics.visual_hotspot_components || 0)}</strong></Card>
             </div>
-            <p className="result-caveat">Resultado orientativo; revisa la máscara. En fucsia: {formatNumber(metrics.smoke_covered_candidates_px)} px con evidencia de superficie afectada bajo humo; es una hipótesis y no se suma al área. El fuego activo se informa aparte cuando el modelo lo clasifica.</p>
+            <p className="result-caveat">Resultado orientativo; revisa la máscara. En fucsia: {formatNumber(metrics.smoke_covered_candidates_px)} px con evidencia de superficie afectada bajo humo; es una hipótesis y no se suma al área. Los focos visuales son candidatos basados en color y contraste del JPG, no temperatura ni confirmación de fuego activo.</p>
           </>}
 
           <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("overlay-true-color", "lumbre_mapa_segmentado.png")}><span>Mapa con contorno</span><span>PNG ↓</span></button>

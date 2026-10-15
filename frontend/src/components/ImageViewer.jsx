@@ -10,7 +10,8 @@ const LAYERS = [
   ["candidates", "Clases + humo", Layers3],
 ];
 
-function visibleLayer(layer, showSegmentation) {
+function visibleLayer(layer, showSegmentation, showFireHotspots) {
+  if (showFireHotspots) return "fire-hotspots";
   if (layer === "candidates") return "candidates";
   if (!showSegmentation) return layer;
   return layer === "swir" ? "overlay-swir" : "overlay-true-color";
@@ -25,6 +26,7 @@ function pixelLabel(point, grid) {
 
 export default function ImageViewer({
   jobId, grid, layer, setLayer, showSegmentation, setShowSegmentation,
+  showFireHotspots, setShowFireHotspots,
   showMarks, setShowMarks, tool, marks, setMarks, distancePreview,
   setDistancePreview, inspectedPixel, setInspectedPixel, polygonClosed,
   setPolygonClosed, errorMessage, onError,
@@ -34,7 +36,7 @@ export default function ImageViewer({
   const canvasRef = useRef(null);
   const activePointer = useRef(null);
   const dragStart = useRef(null);
-  const currentLayer = jobId ? visibleLayer(layer, showSegmentation) : null;
+  const currentLayer = jobId ? visibleLayer(layer, showSegmentation, showFireHotspots) : null;
   const source = currentLayer && jobId ? `${api.layerUrl(jobId, currentLayer)}?v=${jobId}` : "";
   const hasResult = Boolean(jobId && grid);
 
@@ -223,6 +225,9 @@ export default function ImageViewer({
           {showMarks ? <EyeOff size={13} aria-hidden="true" /> : <Eye size={13} aria-hidden="true" />}
           {showMarks ? "Marcas" : "Ver marcas"}
         </Button>
+        <Button className={`mark-toggle${showFireHotspots ? " is-active" : ""}`} variant="outline" size="1" type="button" disabled={!hasResult} aria-pressed={showFireHotspots} onClick={() => setShowFireHotspots((visible) => !visible)}>
+          <Flame size={13} aria-hidden="true" />{showFireHotspots ? "Focos: sí" : "Focos: no"}
+        </Button>
       </div>
 
       <div
@@ -245,7 +250,7 @@ export default function ImageViewer({
             <img
               ref={imageRef}
               src={source}
-              alt={layer === "candidates" ? "Clases de superficie y humo probable" : `${layer === "swir" ? "SWIR" : "True Color"}${showSegmentation ? " con segmentación" : " original"}`}
+              alt={showFireHotspots ? "Composición True Color con focos visuales candidatos resaltados" : layer === "candidates" ? "Clases de superficie y humo probable" : `${layer === "swir" ? "SWIR" : "True Color"}${showSegmentation ? " con segmentación" : " original"}`}
               draggable="false"
               onError={() => onError("No se pudo cargar la imagen resultante.")}
             />

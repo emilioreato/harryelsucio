@@ -91,6 +91,8 @@ La aplicación estima humo probable con ambas composiciones alineadas: usa el n�
 
 El filtro espacial prioriza por defecto el componente candidato más grande y puede descartar candidatos alejados. Si la escena puede contener focos independientes, activa **Conservar regiones desconectadas**; así se mantienen los componentes que superan el tamaño mínimo. Las coberturas mostradas son fracciones de píxeles candidatos, no una medida de precisión ni una estimación de fuego activo.
 
+El botón **Focos: sí/no** añade una capa independiente con candidatos cálidos de alto contraste local coincidentes en True Color y SWIR, con agua y humo probables vetados. Sirve para inspección visual; los JPG no permiten inferir temperatura y los resultados no confirman actividad térmica. El método y las fuentes satelitales oficiales están en [`DOCUMENTACION/Ideas/focos_visuales_candidatos.md`](DOCUMENTACION/Ideas/focos_visuales_candidatos.md).
+
 ### Random Forest supervisado
 
 El detector Random Forest aparece tras entrenar un modelo con máscaras revisadas por escena. Las instrucciones, IDs de clase y estructura del conjunto están en la [guía de entrenamiento](<training Random Forest/README.md>). El entrenamiento reserva escenas completas para evaluación, usa RGB renderizado y textura local, y mantiene separados fuego activo, área quemada, humo, agua, nube o bruma, suelo y vegetación. Las capturas de referencia no sustituyen máscaras alineadas; no se trata como validado hasta evaluar escenas independientes.
