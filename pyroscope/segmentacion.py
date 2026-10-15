@@ -137,7 +137,10 @@ def segmentar_superficie_afectada(
         pixeles_agua_excluidos=regiones.pixeles_agua_excluidos,
         distancia_maxima_px=regiones.distancia_maxima_px,
         componentes_remotos_descartados=regiones.componentes_remotos_descartados,
-        mascara_indeterminada=(estimacion.mascara_indeterminada if estimacion is not None else None),
+        mascara_indeterminada=(
+            estimacion.mascara_indeterminada if estimacion is not None
+            else clasificacion.mascara_humo & ~clasificacion.mascara_candidata_bajo_humo
+        ),
         mascara_bajo_humo_espectral=(estimacion.mascara_espectral if estimacion is not None else None),
         mascara_bajo_humo_continuidad=(estimacion.mascara_continuidad if estimacion is not None else None),
         diagnosticos_contextuales=diagnosticos,

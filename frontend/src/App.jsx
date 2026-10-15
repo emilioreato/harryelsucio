@@ -142,6 +142,7 @@ function App() {
   const activeLabel = source === "upload" ? "Pareja cargada" : selectedScene?.label || "Selecciona una escena";
   const canRun = connection.ready && !running && (source === "upload" || scenes.length > 0);
   const hasResult = Boolean(result && result.state === "complete");
+  const diagnosticLayer = layer.startsWith("smoke-");
   const grid = result?.grid || null;
   const metrics = result?.metrics || null;
   const diagnosticLayers = (metrics?.available_layers || []).filter((name) => name.startsWith("diagnostic-"));
@@ -433,8 +434,10 @@ function App() {
             <ImageViewer
               jobId={hasResult ? jobId : null}
               grid={hasResult ? grid : null}
+              availableLayers={metrics?.available_layers || []}
               layer={layer}
               setLayer={setLayer}
+              setTool={setTool}
               showSegmentation={showSegmentation}
               setShowSegmentation={setShowSegmentation}
               showMarks={showMarks}
@@ -465,7 +468,7 @@ function App() {
             <p className="panel-kicker">HERRAMIENTAS</p>
             <div className="tool-grid" role="group" aria-label="Seleccionar herramienta">
               {TOOL_OPTIONS.map(({ id, label, Icon }) => (
-                <Button key={id} className={`tool-button${tool === id ? " is-active" : ""}`} variant={tool === id ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult || (id === "distance" && !hasMetricScale) || (id === "area" && !regionCount)} title={id === "distance" && hasResult && !hasMetricScale ? "Introduce un GSD y vuelve a analizar para medir en metros." : undefined} aria-pressed={tool === id} onClick={() => selectTool(id)}>
+                <Button key={id} className={`tool-button${tool === id ? " is-active" : ""}`} variant={tool === id ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult || diagnosticLayer || (id === "distance" && !hasMetricScale) || (id === "area" && !regionCount)} title={diagnosticLayer ? "Las mediciones se habilitan sobre las capas visible y SWIR." : id === "distance" && hasResult && !hasMetricScale ? "Introduce un GSD y vuelve a analizar para medir en metros." : undefined} aria-pressed={tool === id} onClick={() => selectTool(id)}>
                   <Icon size={14} aria-hidden="true" /><span>{label}</span>
                 </Button>
               ))}
@@ -532,7 +535,7 @@ function App() {
               <Card className="metric-card" size="1"><span>Perímetro</span><strong>{formatLength(metrics.perimeter, metrics.perimeter_unit)}</strong></Card>
               <Card className="metric-card" size="1"><span>Humo probable</span><strong>{formatNumber(metrics.smoke_pct, 1)} %</strong></Card>
             </div>
-            <p className="result-caveat">Rojo y borde amarillo: zona afectada candidata, incluida la hipótesis bajo humo. Azul transparente encima: humo probable. De la zona roja, {formatNumber(metrics.smoke_covered_candidates_px)} px son inferidos bajo humo y no se suman al área observada. Terreno desconocido bajo humo{metrics.smoke_unknown_px != null ? `: ${formatNumber(metrics.smoke_unknown_px)} px` : ""}; consulta las capas independientes. No detecta fuego activo.</p>
+            <p className="result-caveat">Rojo y borde amarillo: superficie candidata observada fuera del velo detectado. Azul transparente: humo o pérdida posible de visibilidad. La hipótesis espectral bajo humo ({formatNumber(metrics.smoke_covered_candidates_px)} px) está separada y no se suma al área observada; inspecciónala en su propia capa. Terreno cubierto sin evidencia suficiente{metrics.smoke_unknown_px != null ? `: ${formatNumber(metrics.smoke_unknown_px)} px` : ""}. El análisis no confirma fuego activo.</p>
           </>}
 
           <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("overlay-true-color", "lumbre_mapa_segmentado.png")}><span>Mapa con contorno</span><span>PNG ↓</span></button>

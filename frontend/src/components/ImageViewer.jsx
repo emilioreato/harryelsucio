@@ -1,16 +1,26 @@
 import { useEffect, useRef } from "react";
 import { Button } from "@radix-ui/themes";
-import { Eye, EyeOff, Flame, Image as ImageIcon, Layers3, ScanLine } from "lucide-react";
+import { CloudFog, Eye, EyeOff, Flame, Image as ImageIcon, Layers3, ScanLine } from "lucide-react";
 import { api } from "../services/api.js";
 import { formatNumber } from "../domain/measurements.js";
 
 const LAYERS = [
   ["true-color", "True Color", ImageIcon],
   ["swir", "SWIR", ScanLine],
-  ["candidates", "Clases + humo", Layers3],
+  ["candidates", "Superficie", Layers3],
+  ["smoke-overlay", "Humo / velo", CloudFog],
+  ["smoke-candidates-overlay", "Bajo humo", Flame],
+  ["smoke-unknown-overlay", "No interpretable", EyeOff],
 ];
 
+const INDEPENDENT_LAYERS = new Set([
+  "smoke-overlay",
+  "smoke-candidates-overlay",
+  "smoke-unknown-overlay",
+]);
+
 function visibleLayer(layer, showSegmentation) {
+  if (INDEPENDENT_LAYERS.has(layer)) return layer;
   if (layer === "candidates") return "candidates";
   if (!showSegmentation) return layer;
   return layer === "swir" ? "overlay-swir" : "overlay-true-color";
@@ -92,7 +102,8 @@ function labelMaskRegions(pixels, width, height, grid) {
 }
 
 export default function ImageViewer({
-  jobId, grid, layer, setLayer, showSegmentation, setShowSegmentation,
+  jobId, grid, layer, setLayer, setTool, showSegmentation, setShowSegmentation,
+  availableLayers = [],
   showMarks, setShowMarks, tool, marks, setMarks, distancePreview,
   setDistancePreview, inspectedPixel, setInspectedPixel, selectedRegion,
   onRegionSelect, onRegionsReady, errorMessage, onError,
@@ -344,22 +355,27 @@ export default function ImageViewer({
               size="1"
               type="button"
               aria-pressed={layer === id}
-              disabled={!hasResult}
+              disabled={!hasResult || (INDEPENDENT_LAYERS.has(id) && !availableLayers.includes(id))}
               onClick={() => {
                 setLayer(id);
                 if (id === "candidates") setShowSegmentation(true);
+                if (INDEPENDENT_LAYERS.has(id)) {
+                  setShowSegmentation(false);
+                  setTool("view");
+                  setShowMarks(false);
+                }
               }}
             ><Icon size={14} aria-hidden="true" /><span>{label}</span></Button>
           ))}
         </div>
         <div className="overlay-control" role="group" aria-label="Original o segmentación">
-          <Button className={`overlay-choice${!showSegmentation ? " is-active" : ""}`} variant={!showSegmentation ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult} aria-pressed={!showSegmentation} onClick={() => {
+          <Button className={`overlay-choice${!showSegmentation ? " is-active" : ""}`} variant={!showSegmentation ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult || INDEPENDENT_LAYERS.has(layer)} aria-pressed={!showSegmentation} onClick={() => {
             if (layer === "candidates") setLayer("true-color");
             setShowSegmentation(false);
-          }}><Eye size={13} aria-hidden="true" />Original</Button>
-          <Button className={`overlay-choice${showSegmentation ? " is-active" : ""}`} variant={showSegmentation ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult || layer === "candidates"} aria-pressed={showSegmentation} onClick={() => setShowSegmentation(true)}><Flame size={13} aria-hidden="true" />Contorno</Button>
+        }}><Eye size={13} aria-hidden="true" />Original</Button>
+          <Button className={`overlay-choice${showSegmentation ? " is-active" : ""}`} variant={showSegmentation ? "soft" : "ghost"} size="1" type="button" disabled={!hasResult || layer === "candidates" || INDEPENDENT_LAYERS.has(layer)} aria-pressed={showSegmentation} onClick={() => setShowSegmentation(true)}><Flame size={13} aria-hidden="true" />Contorno</Button>
         </div>
-        <Button className={`mark-toggle${showMarks ? " is-active" : ""}`} variant="outline" size="1" type="button" disabled={!hasResult} aria-pressed={showMarks} onClick={() => setShowMarks((visible) => !visible)}>
+        <Button className={`mark-toggle${showMarks ? " is-active" : ""}`} variant="outline" size="1" type="button" disabled={!hasResult || INDEPENDENT_LAYERS.has(layer)} aria-pressed={showMarks} onClick={() => setShowMarks((visible) => !visible)}>
           {showMarks ? <EyeOff size={13} aria-hidden="true" /> : <Eye size={13} aria-hidden="true" />}
           {showMarks ? "Marcas" : "Ver marcas"}
         </Button>
@@ -385,7 +401,11 @@ export default function ImageViewer({
             <img
               ref={imageRef}
               src={source}
-              alt={layer === "candidates" ? "Clases de superficie y humo probable" : `${layer === "swir" ? "SWIR" : "True Color"}${showSegmentation ? " con segmentación" : " original"}`}
+              alt={layer === "smoke-overlay" ? "Capa independiente de humo y pérdida de visibilidad"
+                : layer === "smoke-candidates-overlay" ? "Hipótesis espectral independiente bajo el humo"
+                  : layer === "smoke-unknown-overlay" ? "Zonas cubiertas sin evidencia suficiente para clasificar"
+                    : layer === "candidates" ? "Superficie afectada candidata observada y humo en capas separadas"
+                      : `${layer === "swir" ? "SWIR" : "True Color"}${showSegmentation ? " con segmentación" : " original"}`}
               draggable="false"
               onError={() => onError("No se pudo cargar la imagen resultante.")}
             />
@@ -395,7 +415,7 @@ export default function ImageViewer({
         )}
         <div className="stage-hud stage-hud-top" aria-hidden="true">
           <span><i className="stage-hud-dot" />PRODUCTO ANALIZADO</span>
-          <span>{layer === "true-color" ? "TRUE COLOR" : layer === "swir" ? "SWIR" : "CLASES + HUMO"}</span>
+          <span>{LAYERS.find(([id]) => id === layer)?.[1]?.toUpperCase() || "TRUE COLOR"}</span>
         </div>
         <div className="stage-hud stage-hud-bottom" aria-hidden="true">
           <span>{tool === "distance" ? "REGLA ACTIVA" : tool === "area" ? "SELECCIÓN DE REGIÓN" : tool === "pixel" ? "LECTURA DE PÍXEL" : "VISOR SATELITAL"}</span>

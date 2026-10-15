@@ -14,7 +14,9 @@ def crear_superposicion(
     if imagen_base.shape[:2] != resultado.mascara.shape:
         raise ValueError("La imagen y la máscara deben tener las mismas dimensiones.")
 
-    superficie = resultado.mascara | resultado.mascara_candidata_bajo_humo
+    # El trazado principal representa observación despejada. La hipótesis bajo
+    # humo se exporta y visualiza en su propia capa, nunca como fuego observado.
+    superficie = resultado.mascara
     salida = superponer_mascara(imagen_base, superficie)
     contornos, _ = cv2.findContours(superficie.astype(np.uint8), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
     if contornos:
@@ -33,11 +35,22 @@ def crear_vista_clasificacion(
 
     salida = superponer_mascara(
         true_color,
-        resultado.mascara_clasificada | resultado.mascara_candidata_bajo_humo,
+        resultado.mascara_clasificada,
         color=(245, 65, 35),
         opacidad=0.36,
     )
     return _superponer_oclusiones(salida, resultado)
+
+
+def crear_vista_capa(
+    imagen_base: np.ndarray,
+    mascara: np.ndarray,
+    *,
+    color: tuple[int, int, int],
+    opacidad: float = 0.42,
+) -> np.ndarray:
+    """Superpone una máscara diagnóstica en su propia vista RGB."""
+    return superponer_mascara(imagen_base, mascara, color=color, opacidad=opacidad)
 
 
 def _superponer_oclusiones(imagen: np.ndarray, resultado: ResultadoAreaAfectada) -> np.ndarray:

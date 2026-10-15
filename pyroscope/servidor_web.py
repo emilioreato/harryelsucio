@@ -31,7 +31,12 @@ from .detectores import listar_detectores_superficie, obtener_detector_superfici
 from .detectores.kmeans import PESOS_SCORE_POR_DEFECTO
 from .agua import UMBRALES_AGUA_POR_DEFECTO
 from .humo import PESOS_CONFIANZA_HUMO_POR_DEFECTO
-from .visualizacion import crear_superposicion, crear_vista_clasificacion, colorear_diagnostico
+from .visualizacion import (
+    crear_superposicion,
+    crear_vista_clasificacion,
+    crear_vista_capa,
+    colorear_diagnostico,
+)
 
 
 _WEB = RAIZ_REPOSITORIO / "web"
@@ -501,8 +506,20 @@ def _iniciar_analisis(job_id: str, true_bytes: bytes, swir_bytes: bytes, ajustes
                 "overlay-true-color": _png_bytes(crear_superposicion(tc, resultado)),
                 "overlay-swir": _png_bytes(crear_superposicion(swir, resultado)),
                 "candidates": _png_bytes(crear_vista_clasificacion(tc, resultado)),
+                "smoke-overlay": _png_bytes(crear_vista_capa(
+                    tc, resultado.mascara_humo, color=(75, 188, 221), opacidad=0.48,
+                )),
+                "smoke-candidates-overlay": _png_bytes(crear_vista_capa(
+                    tc, resultado.mascara_candidata_bajo_humo,
+                    color=(239, 180, 78), opacidad=0.55,
+                )),
                 "mask": _png_bytes(resultado.mascara),
             }
+            mascara_indeterminada = getattr(resultado, "mascara_indeterminada", None)
+            if mascara_indeterminada is not None:
+                outputs["smoke-unknown-overlay"] = _png_bytes(crear_vista_capa(
+                    tc, mascara_indeterminada, color=(173, 183, 176), opacidad=0.52,
+                ))
             outputs.update(_capas_adicionales(resultado))
             metrics = {
                 "available_layers": list(outputs),

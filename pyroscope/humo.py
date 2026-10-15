@@ -40,11 +40,11 @@ def detectar_humo_probable(
 ) -> ResultadoHumo:
     """Estima humo con SWIR y amplía la máscara por el velo visible contiguo.
 
-    El núcleo se detecta con la firma cian SWIR, luminosidad y neutralidad en
-    True Color. Después se extiende sobre píxeles claros, neutros y de bajo
-    contraste local y cercanos a ese núcleo. Esto recupera partes grises o
-    tenues del penacho que no conservan una firma cian intensa sin extender la
-    máscara a campos claros conectados por una cadena de píxeles ambiguos.
+    El núcleo se detecta con la firma cian SWIR y señales de True Color. En
+    paralelo, componentes grises/neutros, luminosos y de bajo contraste local
+    pueden formar una capa de velo posible aunque no toquen un núcleo SWIR.
+    Estas zonas se apartan del clasificador de superficie y se muestran como
+    oclusión probable, no como fuego observado.
 
     La máscara sigue siendo una hipótesis visual sobre JPEG renderizados: no
     afirma qué cobertura hay debajo ni distingue humo de nubes/veladuras con
@@ -139,76 +139,77 @@ def detectar_humo_probable(
         if stats_nucleo[etiqueta, cv2.CC_STAT_AREA] >= minimo_pixeles:
             nucleo |= etiquetas_nucleo == etiqueta
 
-    mascara = nucleo.copy()
-    confianza = confianza_cromatica.copy()
+    # Busca velos grises directamente en True Color. Antes esta vía solo se
+    # ejecutaba cuando SWIR ya había encontrado un núcleo cian, por lo que un
+    # penacho neutro o de baja visibilidad podía pasar al clasificador de suelo.
+    gris = cv2.cvtColor(true_color, cv2.COLOR_RGB2GRAY).astype(np.float32) / 255.0
+    lado_ventana = max(9, round(min(alto, ancho) * 0.0225))
+    if lado_ventana % 2 == 0:
+        lado_ventana += 1
+    media_local = cv2.boxFilter(
+        gris, cv2.CV_32F, (lado_ventana, lado_ventana), normalize=True
+    )
+    media_cuadrado_local = cv2.boxFilter(
+        gris * gris, cv2.CV_32F, (lado_ventana, lado_ventana), normalize=True
+    )
+    contraste_local = np.sqrt(
+        np.maximum(0.0, media_cuadrado_local - media_local * media_local)
+    )
+
+    umbral_contraste_bajo, umbral_contraste_alto = np.quantile(
+        contraste_local, [0.20, 0.70]
+    )
+    evidencia_suavidad = np.clip(
+        (umbral_contraste_alto - contraste_local)
+        / max(float(umbral_contraste_alto - umbral_contraste_bajo), 1e-3),
+        0,
+        1,
+    )
+    confianza_velo = (
+        0.30 * evidencia_luminosidad
+        + 0.35 * evidencia_neutralidad
+        + 0.35 * evidencia_suavidad
+    ).astype(np.float32)
+    umbral_textura = float(np.quantile(contraste_local, 0.30))
+    umbral_luminosidad_velo = max(0.18, float(np.quantile(luminosidad_tc, 0.35)))
+    umbral_neutralidad_velo = max(0.72, float(np.quantile(neutralidad_tc, 0.70)))
+    candidata_velo = (
+        (luminosidad_tc >= umbral_luminosidad_velo)
+        & (neutralidad_tc >= umbral_neutralidad_velo)
+        & (contraste_local <= umbral_textura)
+        & (confianza_velo >= umbral_confianza)
+    )
+
+    # Las zonas grises/suaves suficientemente grandes cuentan como oclusión
+    # posible aunque no tengan firma cian SWIR. Conservarlas aparte impide que
+    # el clasificador las contabilice como superficie observada.
+    candidata_unida = cv2.morphologyEx(
+        (nucleo | candidata_velo).astype(np.uint8),
+        cv2.MORPH_CLOSE,
+        np.ones((5, 5), dtype=np.uint8),
+    )
+    cantidad, etiquetas, stats, _ = cv2.connectedComponentsWithStats(
+        candidata_unida, connectivity=8
+    )
+    mascara = np.zeros((alto, ancho), dtype=bool)
+    for etiqueta in range(1, cantidad):
+        if stats[etiqueta, cv2.CC_STAT_AREA] >= minimo_pixeles:
+            mascara |= etiquetas == etiqueta
+
+    # Si hay núcleo SWIR, limita su expansión gris para no arrastrar superficies
+    # neutras lejanas conectadas por una cadena débil de píxeles.
     if np.any(nucleo):
-        # El humo atenúa detalle fino en True Color. Se mide contraste local
-        # normalizado por la escala de la imagen, sin confundir un único color
-        # gris con humo: la expansión debe tocar el núcleo SWIR ya detectado.
-        gris = cv2.cvtColor(true_color, cv2.COLOR_RGB2GRAY).astype(np.float32) / 255.0
-        lado_ventana = max(9, round(min(alto, ancho) * 0.0225))
-        if lado_ventana % 2 == 0:
-            lado_ventana += 1
-        media_local = cv2.boxFilter(
-            gris, cv2.CV_32F, (lado_ventana, lado_ventana), normalize=True
-        )
-        media_cuadrado_local = cv2.boxFilter(
-            gris * gris, cv2.CV_32F, (lado_ventana, lado_ventana), normalize=True
-        )
-        contraste_local = np.sqrt(
-            np.maximum(0.0, media_cuadrado_local - media_local * media_local)
-        )
-
-        umbral_contraste_bajo, umbral_contraste_alto = np.quantile(
-            contraste_local, [0.20, 0.70]
-        )
-        evidencia_suavidad = np.clip(
-            (umbral_contraste_alto - contraste_local)
-            / max(float(umbral_contraste_alto - umbral_contraste_bajo), 1e-3),
-            0,
-            1,
-        )
-        confianza_velo = (
-            0.30 * evidencia_luminosidad
-            + 0.35 * evidencia_neutralidad
-            + 0.35 * evidencia_suavidad
-        ).astype(np.float32)
-        umbral_textura_estricto = float(np.quantile(contraste_local, 0.15))
-        candidata_velo = (
-            (luminosidad_tc >= umbral_luminosidad)
-            & (neutralidad_tc >= float(np.quantile(neutralidad_tc, 0.75)))
-            & (contraste_local <= umbral_textura_estricto)
-            & (confianza_velo >= umbral_confianza)
-        )
-
-        # El cierre pequeño conecta huecos del velo. La distancia máxima evita
-        # que una cadena larga de píxeles ambiguos arrastre campos remotos.
-        candidata_unida = cv2.morphologyEx(
-            (nucleo | candidata_velo).astype(np.uint8),
-            cv2.MORPH_CLOSE,
-            np.ones((5, 5), dtype=np.uint8),
-        )
-        cantidad, etiquetas, stats, _ = cv2.connectedComponentsWithStats(
-            candidata_unida, connectivity=8
-        )
-        componentes_nucleo = np.unique(etiquetas[nucleo])
-        componentes_nucleo = componentes_nucleo[componentes_nucleo != 0]
-        conectada_al_nucleo = np.zeros((alto, ancho), dtype=bool)
-        for etiqueta in componentes_nucleo:
-            if stats[etiqueta, cv2.CC_STAT_AREA] >= minimo_pixeles:
-                conectada_al_nucleo |= etiquetas == etiqueta
         distancia_al_nucleo = cv2.distanceTransform(
             (~nucleo).astype(np.uint8), cv2.DIST_L2, 5
         )
         distancia_maxima = max(1, round(min(alto, ancho) * 0.20))
-        mascara = nucleo | (
-            conectada_al_nucleo & (distancia_al_nucleo <= distancia_maxima)
-        )
-        ampliar_confianza = mascara & ~nucleo
-        confianza[ampliar_confianza] = np.maximum(
-            confianza_cromatica[ampliar_confianza],
-            confianza_velo[ampliar_confianza],
-        )
+        mascara &= (nucleo | (distancia_al_nucleo <= distancia_maxima)
+                    | (candidata_velo & ~nucleo))
+    confianza = confianza_cromatica.copy()
+    ampliar_confianza = mascara & ~nucleo
+    confianza[ampliar_confianza] = np.maximum(
+        confianza_cromatica[ampliar_confianza], confianza_velo[ampliar_confianza]
+    )
 
     return ResultadoHumo(
         mascara_probable=mascara,
