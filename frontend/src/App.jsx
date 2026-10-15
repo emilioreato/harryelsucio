@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
+import QRCode from "qrcode";
 import AdvancedSettings from "./components/AdvancedSettings.jsx";
 import ImageViewer from "./components/ImageViewer.jsx";
 import { api, fileToBase64 } from "./services/api.js";
 import { Button, Card } from "@radix-ui/themes";
-import { Activity, Crosshair, MousePointer2, Play, Ruler, ScanLine, SlidersHorizontal } from "lucide-react";
+import { Activity, Copy, Crosshair, MousePointer2, Play, Ruler, ScanLine, SlidersHorizontal } from "lucide-react";
 import { distanceBetween, formatArea, formatLength, formatNumber } from "./domain/measurements.js";
 
 const DEFAULT_KMEANS_WEIGHTS = {
@@ -107,6 +108,54 @@ function App() {
   const [selectedRegion, setSelectedRegion] = useState(null);
   const [regionCount, setRegionCount] = useState(0);
   const [inspectedPixel, setInspectedPixel] = useState(null);
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
+  const [mobileAccess, setMobileAccess] = useState(null);
+  const [mobileQr, setMobileQr] = useState("");
+  const [mobileLinkCopied, setMobileLinkCopied] = useState(false);
+
+  const desktopMobileSetup = Boolean(
+    mobileAccess?.enabled && ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname),
+  );
+
+  useEffect(() => {
+    let active = true;
+    api.mobileAccess().then((access) => {
+      if (active) setMobileAccess(access);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    if (!desktopMobileSetup || !mobileAccess?.url) {
+      setMobileQr("");
+      return () => { active = false; };
+    }
+    QRCode.toDataURL(mobileAccess.url, { width: 176, margin: 1, errorCorrectionLevel: "M" })
+      .then((dataUrl) => { if (active) setMobileQr(dataUrl); })
+      .catch(() => { if (active) setMobileQr(""); });
+    return () => { active = false; };
+  }, [desktopMobileSetup, mobileAccess?.url]);
+
+  useEffect(() => {
+    const rememberInstallPrompt = (event) => {
+      event.preventDefault();
+      setInstallPrompt(event);
+    };
+    window.addEventListener("beforeinstallprompt", rememberInstallPrompt);
+    return () => window.removeEventListener("beforeinstallprompt", rememberInstallPrompt);
+  }, []);
+
+  const installMobileApp = async () => {
+    if (!installPrompt) {
+      setShowInstallHelp((visible) => !visible);
+      return;
+    }
+    await installPrompt.prompt();
+    await installPrompt.userChoice;
+    setInstallPrompt(null);
+  };
 
   useEffect(() => {
     let active = true;
@@ -322,8 +371,19 @@ function App() {
     : "Al terminar, aquí se muestran el detector y la rejilla usada.";
   return (
     <>
+      <header className="mobile-appbar">
+        <a className="mobile-brand" href="#mobile-setup" aria-label="Lumbre, ir al análisis">
+          <span className="brand-pixel-flame" aria-hidden="true" />
+          <span><strong>LUMBRE</strong><small>FIELD ANALYSIS</small></span>
+        </a>
+        <button className="install-button" type="button" onClick={installMobileApp}>Instalar app</button>
+      </header>
+      {showInstallHelp && <div className="install-help" role="status">
+        <span>iPhone/iPad: Compartir → Añadir a pantalla de inicio. Android: menú del navegador → Instalar aplicación o Añadir a pantalla de inicio.</span>
+        <button type="button" aria-label="Cerrar ayuda" onClick={() => setShowInstallHelp(false)}>×</button>
+      </div>}
       <main className="workspace">
-        <aside className="control-panel" aria-label="Configuración del análisis">
+        <aside className="control-panel" id="mobile-setup" aria-label="Configuración del análisis">
           <div className="panel-heading">
             <h1><SlidersHorizontal size={15} aria-hidden="true" />Análisis</h1>
             <span className={`connection-pill${connection.ready ? " is-ready" : error ? " is-error" : ""}`}>
@@ -337,6 +397,21 @@ function App() {
               <span style={{ width: `${progress.value}%` }} />
             </div>
           </section>
+          {desktopMobileSetup && <details className="phone-access">
+            <summary>Abrir Lumbre en el móvil</summary>
+            <p>Conecta el móvil a la misma Wi‑Fi y escanea este código con la cámara.</p>
+            {mobileQr ? <img className="phone-access-qr" src={mobileQr} alt="Código QR para abrir Lumbre en el móvil" /> : <p>Preparando el código…</p>}
+            <code className="phone-access-url">{mobileAccess.url}</code>
+            <button className="phone-access-copy" type="button" onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(mobileAccess.url);
+                setMobileLinkCopied(true);
+                window.setTimeout(() => setMobileLinkCopied(false), 1800);
+              } catch {
+                setMobileLinkCopied(false);
+              }
+            }}><Copy size={14} aria-hidden="true" />{mobileLinkCopied ? "Enlace copiado" : "Copiar enlace"}</button>
+          </details>}
 
           <form onSubmit={runAnalysis}>
             <div className="source-switch" role="tablist" aria-label="Origen de las imágenes">
@@ -416,7 +491,7 @@ function App() {
           </form>
         </aside>
 
-        <section className="analysis-column" aria-label="Visor del análisis">
+        <section className="analysis-column" id="mobile-map" aria-label="Visor del análisis">
           <div className="viewer-card">
             <ImageViewer
               jobId={hasResult ? jobId : null}
@@ -445,7 +520,7 @@ function App() {
           </div>
         </section>
 
-        <aside className="results-column interaction-panel" aria-label="Herramientas y resultados">
+        <aside className="results-column interaction-panel" id="mobile-results" aria-label="Herramientas y resultados">
           <div className="results-heading"><h2>Medir y analizar</h2></div>
           <section className="measurement-panel" aria-label="Herramientas de medición">
             <p className="panel-kicker">HERRAMIENTAS</p>
@@ -549,6 +624,11 @@ function App() {
           </details>}
         </aside>
       </main>
+      <nav className="mobile-dock" aria-label="Secciones">
+        <a href="#mobile-setup"><SlidersHorizontal size={18} aria-hidden="true" /><span>Analizar</span></a>
+        <a href="#mobile-map"><ScanLine size={18} aria-hidden="true" /><span>Mapa</span></a>
+        <a href="#mobile-results"><Activity size={18} aria-hidden="true" /><span>Resultados</span></a>
+      </nav>
     </>
   );
 }
