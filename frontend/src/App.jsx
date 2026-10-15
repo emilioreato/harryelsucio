@@ -206,6 +206,9 @@ function App() {
         const trueFile = form.elements.namedItem("true-color-file")?.files?.[0];
         const swirFile = form.elements.namedItem("swir-file")?.files?.[0];
         if (!trueFile || !swirFile) throw new Error("Carga las dos imágenes: True Color y SWIR.");
+        if (trueFile.size + swirFile.size > 88 * 1024 * 1024) {
+          throw new Error("Las dos imágenes superan el límite de carga recomendado (88 MB en total). Reduce su tamaño e inténtalo de nuevo.");
+        }
         request = {
           source: "upload",
           true_color: await fileToBase64(trueFile),
@@ -220,6 +223,7 @@ function App() {
       setResult(null);
       setMarks([]);
       setPolygonClosed(false);
+      setTool("view");
       setRunning(true);
       analysisStarted = true;
       setConnection({ ready: true, label: "El motor Python está procesando" });
@@ -274,7 +278,8 @@ function App() {
     try {
       saveBlob(await api.downloadLayer(jobId, name), filename);
     } catch (cause) {
-      setError(cause.message);
+      setError(cause instanceof Error ? cause.message : String(cause));
+      if (cause instanceof TypeError) setConnection({ ready: false, label: "Conexión interrumpida" });
     }
   };
 
@@ -345,9 +350,9 @@ function App() {
               <section className="source-content">
                 <label className="field-label" htmlFor="scene-select">Escena precargada</label>
                 <select className="field-control" id="scene-select" value={sceneId} onChange={(event) => setSceneId(event.target.value)}>
-                  {scenes.length ? scenes.map((scene) => <option value={scene.id} key={scene.id}>{scene.label}</option>) : <option value="">Buscando imágenes…</option>}
+                  {scenes.length ? scenes.map((scene) => <option value={scene.id} key={scene.id}>{scene.label}</option>) : <option value="">{connection.ready ? "No hay escenas disponibles" : "Buscando imágenes…"}</option>}
                 </select>
-                <p className="field-help">Cada escena incluye True Color y SWIR de la misma adquisición.</p>
+                <p className="field-help">{connection.ready && !scenes.length ? "No hay escenas precargadas. Puedes subir una pareja True Color + SWIR en la pestaña «Subir pareja»." : "Cada escena incluye True Color y SWIR de la misma adquisición."}</p>
               </section>
             ) : (
               <section className="source-content">
