@@ -15,3 +15,5 @@ frontend/.vite/
 
 # Salidas temporales de experimentos y logs locales
 tmp_pyroscope/
+tmp_algorithm_review/
+/tmp/

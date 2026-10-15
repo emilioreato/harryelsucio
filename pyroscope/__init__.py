@@ -1,4 +1,4 @@
-"""API inicial de PyroScope para analizar superficie afectada por incendios."""
+"""API de análisis satelital de incendios y superficie afectada."""
 
 from .imagenes import abrir_rgb, reducir_par_alineado, validar_par_alineado
 from .coordenadas import CapaImagen, SistemaCoordenadasImagen

@@ -74,17 +74,12 @@ export default function AdvancedSettings({ value, onChange, onReset, method }) {
 
   return (
     <details className="details-panel developer-settings">
-      <summary>Herramientas de desarrollo</summary>
+      <summary>Ajustes avanzados</summary>
       <div className="developer-content">
-        <p className="field-help">
-          Ajustes experimentales. Los scores ayudan a comparar hipótesis; no son probabilidades calibradas.
-        </p>
-
         {method === "fusion_ponderada" && (
           <details className="tuning-group">
             <summary>Ponderación entre algoritmos</summary>
             <div className="tuning-content">
-              <p className="field-help">Los pesos se normalizan por su suma. El umbral indica cuánto voto hace falta.</p>
               <Slider label="Peso K-Means" value={value.fusion_kmeans_weight} onChange={(n) => updateTop("fusion_kmeans_weight", n)} />
               <Slider label="Peso SWIR + histéresis" value={value.fusion_swir_weight} onChange={(n) => updateTop("fusion_swir_weight", n)} />
               <Slider label="Voto mínimo" value={value.fusion_threshold} onChange={(n) => updateTop("fusion_threshold", n)} />
@@ -107,9 +102,6 @@ export default function AdvancedSettings({ value, onChange, onReset, method }) {
                   onChange={(n) => updateGroup("kmeans_weights", key, n ?? defaultValue)}
                 />
               ))}
-              <p className="field-help tuning-note">
-                Positivo favorece esa señal en el score; negativo la penaliza. Se normalizan por escena.
-              </p>
             </div>
           </details>
         )}
@@ -130,9 +122,6 @@ export default function AdvancedSettings({ value, onChange, onReset, method }) {
                   onChange={(n) => updateGroup("swir_thresholds", key, n)}
                 />
               ))}
-              <p className="field-help tuning-note">
-                Vacío adapta el umbral a la sensibilidad y al histograma. Una semilla mayor exige una señal más intensa.
-              </p>
             </div>
           </details>
         )}
@@ -140,7 +129,6 @@ export default function AdvancedSettings({ value, onChange, onReset, method }) {
         <details className="tuning-group">
           <summary>Detección de humo</summary>
           <div className="tuning-content">
-            <p className="field-help">Los pesos combinan cian SWIR, luminosidad y neutralidad en True Color.</p>
             <Slider label="Firma cian SWIR" value={value.smoke_weights.cyan} onChange={(n) => updateGroup("smoke_weights", "cyan", n)} />
             <Slider label="Luminosidad True Color" value={value.smoke_weights.luminance} onChange={(n) => updateGroup("smoke_weights", "luminance", n)} />
             <Slider label="Neutralidad True Color" value={value.smoke_weights.neutrality} onChange={(n) => updateGroup("smoke_weights", "neutrality", n)} />
@@ -149,7 +137,7 @@ export default function AdvancedSettings({ value, onChange, onReset, method }) {
         </details>
 
         <details className="tuning-group">
-          <summary>Veto de agua entre las dos vistas</summary>
+          <summary>Excluir agua</summary>
           <div className="tuning-content tuning-grid">
             {WATER_FIELDS.map(([key, label]) => (
               <NumericField
@@ -162,9 +150,6 @@ export default function AdvancedSettings({ value, onChange, onReset, method }) {
                 onChange={(n) => updateGroup("water_thresholds", key, n ?? 0.5)}
               />
             ))}
-            <p className="field-help tuning-note">
-              El veto exige oscuridad concordante en ambas imágenes y ausencia de rojo SWIR. Percentiles bajos son más restrictivos.
-            </p>
           </div>
         </details>
 

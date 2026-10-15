@@ -12,22 +12,13 @@ Sentinel-2 MSI mide radiación reflejada en trece bandas, no temperatura de llam
 
 Esos números describen las bandas del sensor, **no se pueden recuperar con certeza de estos JPEG**. Un color rojo en la composición SWIR es un color elegido para visualizar valores de canal; no es luz roja que el sensor haya medido en esa longitud de onda. Sentinel-2 no tiene banda térmica, y esta aplicación no deduce temperatura ni fuego activo.
 
-## Diseño modular
+## Diseño
 
-- `app.py` inicia el servidor web local; `web/` contiene la página propia en HTML, CSS y JavaScript.
-- `pyroscope/servidor_web.py` publica la página y la API HTTP, ejecuta análisis en el backend y entrega el progreso, las capas y las exportaciones.
-- `pyroscope/interfaz/configuracion.py` descubre parejas de imágenes; `procesamiento.py` las lee, valida y llama al análisis.
-- `pyroscope/imagenes.py` lee imágenes RGB, valida que la pareja comparta dimensiones y reduce ambas con el mismo factor.
-- `pyroscope/caracteristicas.py` calcula las señales por píxel de las dos composiciones.
-- `pyroscope/humo.py` detecta un núcleo con la firma cromática SWIR y lo amplía sobre velo claro, neutro y muy liso de True Color, limitado por conexión y distancia al núcleo.
-- `pyroscope/ontologia.py` declara los nombres de clase que comparten el motor y las interfaces.
-- `pyroscope/segmentacion.py` resuelve el detector y coordina clasificación semántica con la formación espacial de regiones; devuelve máscaras, clases, contornos y métricas (`ResultadoAreaAfectada`).
-- `pyroscope/detectores/` contiene un módulo por clasificador de superficie. `registro.py` declara sus identificadores, descripciones, opciones y funciones; la interfaz ofrece los métodos registrados sin duplicar esa lista.
-- `pyroscope/modelos_segmentacion.py` define los contratos de salida compartidos por los detectores y el pipeline. Todo detector nuevo debe devolver `ResultadoClasificacionSemantica` y dejar el agrupado espacial al pipeline común.
-- `pyroscope/geometria_segmentacion.py` limpia candidatos, agrupa componentes y produce perímetros; no decide qué significa el color.
-- `pyroscope/segmentacion_swir.py` se conserva como ruta de importación de compatibilidad. El código vigente está en `pyroscope/detectores/swir_histeresis.py`.
-- `pyroscope/coordenadas.py` define la rejilla de píxeles compartida por imágenes, medidas y capas auxiliares; convierte entre píxeles y coordenadas locales métricas con GSD, o entre píxeles y coordenadas geográficas con transformación affine y CRS.
-- `pyroscope/visualizacion.py` pinta la máscara y el perímetro sobre True Color.
+- La interfaz permite seleccionar una escena o cargar una pareja de imágenes, configurar el análisis y revisar el progreso.
+- El backend valida y alinea la pareja, calcula señales, clasifica píxeles y forma regiones espaciales.
+- Los resultados incluyen máscara, contorno, medidas y exportaciones. Las capas conservan la misma rejilla de píxeles.
+- El detector de humo se aplica antes de clasificar el terreno y marca zonas de visibilidad dudosa.
+- Los detectores de superficie se pueden intercambiar; la formación de regiones y las mediciones usan contratos compartidos.
 
 Al ampliar la aplicación, conserva el recorrido `entrada → procesamiento → mediciones/resultados` y las reglas del motor fuera de la página web. Añade un detector registrable para otra estrategia semántica; reserva un contrato y una etapa propios para la futura detección de fuego activo, porque no es la misma salida que la superficie afectada.
 
@@ -72,9 +63,9 @@ No se fijan umbrales de reflectancia: los histogramas de un JPEG dependen de la 
 
 Cada punto, máscara y futura capa auxiliar vive en `SistemaCoordenadasImagen`: una rejilla con anchura/altura, origen en la esquina superior izquierda y ejes de píxel hacia la derecha y hacia abajo. `CapaImagen` exige que sus datos tengan las mismas dimensiones. Antes de combinar datos meteorológicos o cartográficos habrá que alinearlos o remuestrearlos a esta rejilla; igualdad de dimensiones por sí sola no demuestra que dos fuentes estén geográficamente alineadas. Con una imagen georreferenciada, `coordenadas_crs_a_pixel` permite proyectar puntos de otra fuente al CRS de la imagen y llevarlos a la misma rejilla.
 
-La interfaz web permite hacer clic en la imagen para medir tramos y polígonos. Si se conoce el GSD de la pareja que se cargó, convierte distancias y áreas a escala local: distancia = distancia en píxeles × GSD; área = número de píxeles × GSD horizontal × GSD vertical. Al reducir la imagen para procesarla, el código ajusta automáticamente el GSD a la rejilla reducida. Sin GSD, se conservan píxeles y píxeles cuadrados.
+La interfaz web permite hacer clic en la imagen para medir tramos y polígonos. Actualmente informa distancias, perímetros y áreas en píxeles; no ofrece una conversión manual a metros. El backend conserva soporte para GSD cuando una integración aporte una escala verificada, y ajusta ese GSD a la rejilla reducida durante el procesamiento.
 
-GSD (*Ground Sampling Distance*) es la distancia sobre el terreno entre centros de píxeles adyacentes. No debe adivinarse a partir del tamaño de un JPEG: depende del producto, la banda y el remuestreo aplicado al exportar. Sentinel-2 tiene bandas con resolución espacial nominal de 10, 20 y 60 m; las bandas SWIR B11/B12 son de 20 m, mientras que las bandas visibles B2/B3/B4 son de 10 m. Algunas entregas remuestrean varias bandas a una resolución de salida común. Por eso se introducirá el GSD real de la rejilla alineada que se está midiendo, no un valor genérico del satélite.
+GSD (*Ground Sampling Distance*) es la distancia sobre el terreno entre centros de píxeles adyacentes. No debe adivinarse a partir del tamaño de un JPEG: depende del producto, la banda y el remuestreo aplicado al exportar. Sentinel-2 tiene bandas con resolución espacial nominal de 10, 20 y 60 m; las bandas SWIR B11/B12 son de 20 m, mientras que las bandas visibles B2/B3/B4 son de 10 m. Algunas entregas remuestrean varias bandas a una resolución de salida común. La aplicación muestra estas conversiones como referencia, pero las superficies quedan en píxeles hasta verificar el producto y la rejilla que se está midiendo.
 
 El GSD habilita distancias y áreas métricas **locales**, pero no determina dónde está la imagen en la Tierra. Para asociar puntos o capas con viento, humedad o temperatura geolocalizados se necesitan además el CRS y la transformación entre píxel y coordenada geográfica (por ejemplo, una transformación affine de GeoTIFF). El JSON exportado conserva el sistema y las marcas en coordenadas de imagen para que puedan vincularse posteriormente.
 
@@ -103,4 +94,4 @@ Desde la raíz del repositorio:
 python app.py
 ```
 
-Selecciona una de las escenas de ejemplo o carga tu propia pareja True Color/SWIR. Comprueba el perímetro sobre ambas composiciones y ajusta la sensibilidad antes de guardar la superposición. Para medir, usa las herramientas de clic de la web; al introducir el GSD correcto se mostrarán distancias, perímetros y áreas métricas. La aplicación no inventa geolocalización si faltan CRS y transformación.
+Selecciona una de las escenas de ejemplo o carga tu propia pareja True Color/SWIR. Comprueba el perímetro sobre ambas composiciones y ajusta la sensibilidad antes de guardar la superposición. Para medir, usa las herramientas de clic de la web; las mediciones se mostrarán en píxeles mientras no se hayan validado la escala y la georreferenciación. La aplicación no inventa superficie terrestre ni geolocalización si faltan CRS y transformación.

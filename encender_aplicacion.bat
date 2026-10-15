@@ -2,7 +2,7 @@
 setlocal
 cd /d "%~dp0"
 
-echo Iniciando PyroScope. Se abrira la pagina propia de la aplicacion.
+echo Iniciando Lumbre. Se abrira la pagina de analisis satelital.
 echo Deja esta ventana abierta mientras uses la aplicacion. Pulsa Ctrl+C para detenerla.
 echo.
 
@@ -45,12 +45,12 @@ if errorlevel 2 goto ya_activa
 goto final
 
 :ya_activa
-echo PyroScope ya esta abierto. No se inicio otra ventana de servidor.
+echo Lumbre ya esta abierto. No se inicio otra ventana de servidor.
 endlocal
 exit /b 0
 
 :final
 echo.
-echo PyroScope se ha detenido.
+echo Lumbre se ha detenido.
 pause
 endlocal

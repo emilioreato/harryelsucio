@@ -1,6 +1,6 @@
 # Algoritmos orientativos para segmentar fuego, humo y agua
 
-**PyroScope · Propuesta técnica inicial · 15/10/2026**
+**Lumbre · Propuesta técnica inicial · 15/10/2026**
 
 ## 1. Objetivo y alcance
 

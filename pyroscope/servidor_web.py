@@ -1,4 +1,4 @@
-"""Servidor HTTP local para la interfaz propia de PyroScope."""
+"""Servidor HTTP local para la interfaz de Lumbre."""
 
 from __future__ import annotations
 
@@ -374,10 +374,10 @@ def _iniciar_analisis(job_id: str, true_bytes: bytes, swir_bytes: bytes, ajustes
         )
 
 
-class PyroScopeHandler(BaseHTTPRequestHandler):
+class LumbreHandler(BaseHTTPRequestHandler):
     """Sirve el frontend y la API local de análisis."""
 
-    server_version = "PyroScope/1.0"
+    server_version = "Lumbre/1.0"
 
     def do_GET(self) -> None:  # noqa: N802 - nombre requerido por BaseHTTPRequestHandler
         ruta = urlsplit(self.path).path
@@ -510,7 +510,7 @@ class PyroScopeHandler(BaseHTTPRequestHandler):
             worker = threading.Thread(
                 target=_iniciar_analisis,
                 args=(job_id, true_bytes, swir_bytes, ajustes),
-                name=f"pyroscope-{job_id[:8]}",
+                name=f"lumbre-{job_id[:8]}",
                 daemon=True,
             )
             worker.start()
@@ -562,17 +562,17 @@ class PyroScopeHandler(BaseHTTPRequestHandler):
 def ejecutar_servidor(host: str = "127.0.0.1", puerto: int = 8501, abrir_navegador: bool = True) -> bool:
     """Inicia una sola instancia y elige puerto libre si el principal está ocupado.
 
-    Devuelve ``False`` si ya hay una instancia de PyroScope activa.
+    Devuelve ``False`` si ya hay una instancia de Lumbre activa.
     """
     if not _adquirir_bloque_instancia():
-        print("PyroScope ya está ejecutándose; no se abrió otra instancia.")
+        print("Lumbre ya está ejecutándose; no se abrió otra instancia.")
         return False
 
     servidor = None
     try:
         for candidato in range(puerto, min(puerto + 20, 65536)):
             try:
-                servidor = _ServidorWebExclusivo((host, candidato), PyroScopeHandler)
+                servidor = _ServidorWebExclusivo((host, candidato), LumbreHandler)
                 break
             except OSError:
                 continue
@@ -584,14 +584,14 @@ def ejecutar_servidor(host: str = "127.0.0.1", puerto: int = 8501, abrir_navegad
         servidor.daemon_threads = True
         puerto_real = servidor.server_address[1]
         url = f"http://{host}:{puerto_real}/"
-        print(f"PyroScope disponible en {url}")
+        print(f"Lumbre disponible en {url}")
         print("Mantén esta ventana abierta mientras usas la aplicación. Ctrl+C detiene el servidor.")
         if abrir_navegador:
             threading.Timer(0.8, webbrowser.open, args=(url,)).start()
         try:
             servidor.serve_forever()
         except KeyboardInterrupt:
-            print("\nCerrando PyroScope…")
+            print("\nCerrando Lumbre…")
     finally:
         if servidor is not None:
             servidor.server_close()

@@ -1,4 +1,4 @@
-"""Punto de entrada de la web PyroScope y su backend Python."""
+"""Punto de entrada de Lumbre y su backend Python."""
 
 import argparse
 
@@ -6,7 +6,7 @@ from pyroscope.servidor_web import ejecutar_servidor
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Inicia la aplicación local PyroScope.")
+    parser = argparse.ArgumentParser(description="Inicia Lumbre, la aplicación local de análisis satelital.")
     parser.add_argument("--port", type=int, default=8501, help="Puerto HTTP local (por defecto: 8501).")
     parser.add_argument("--no-browser", action="store_true", help="No abrir automáticamente una pestaña.")
     arguments = parser.parse_args()

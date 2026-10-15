@@ -1,63 +1,40 @@
 import { useEffect, useRef } from "react";
 import { api } from "../services/api.js";
-import { formatNumber, formatArea, formatLength, distanceBetween, polygonArea, polylineLength } from "../domain/measurements.js";
+import { formatNumber } from "../domain/measurements.js";
 
 const LAYERS = [
   ["true-color", "True Color"],
   ["swir", "SWIR"],
   ["candidates", "Clases + humo"],
 ];
-const TOOLS = [
-  ["view", "Vista"],
-  ["distance", "Distancia"],
-  ["polygon", "Polígono"],
-  ["pixel", "Píxel"],
-];
 
 function visibleLayer(layer, showSegmentation) {
-  if (!showSegmentation) return layer === "swir" ? "swir" : "true-color";
-  if (layer === "swir") return "overlay-swir";
   if (layer === "candidates") return "candidates";
-  return "overlay-true-color";
+  if (!showSegmentation) return layer;
+  return layer === "swir" ? "overlay-swir" : "overlay-true-color";
 }
 
-function renderMeasurement(tool, marks, inspectedPixel, polygonClosed, grid) {
-  if (!grid) return "";
-  const unit = grid.gsd_x_m ? "m" : "px";
-  if (tool === "pixel" && inspectedPixel) {
-    const x = inspectedPixel.x * (grid.gsd_x_m || 1);
-    const y = inspectedPixel.y * (grid.gsd_y_m || 1);
-    return `Píxel (${Math.round(inspectedPixel.x)}, ${Math.round(inspectedPixel.y)})${grid.gsd_x_m ? ` · ${formatNumber(x, 1)}, ${formatNumber(y, 1)} m` : ""}`;
-  }
-  if (tool === "distance") {
-    const segments = [];
-    for (let index = 0; index + 1 < marks.length; index += 2) {
-      segments.push(`Tramo ${index / 2 + 1}: ${formatLength(distanceBetween(marks[index], marks[index + 1], grid), unit)}`);
-    }
-    if (marks.length % 2) segments.push("Añade otro punto para completar el tramo.");
-    return segments.join(" · ");
-  }
-  if (tool === "polygon") {
-    if (!polygonClosed || marks.length < 3) {
-      return marks.length < 3 ? "Marca al menos tres vértices." : "Cierra el polígono para calcular área y perímetro.";
-    }
-    return `Área manual: ${formatArea(polygonArea(marks, grid), grid.gsd_x_m ? "m²" : "px²")} · Perímetro: ${formatLength(polylineLength(marks, grid, true), unit)}`;
-  }
-  return "";
+function pixelLabel(point, grid) {
+  const x = Math.round(point.x);
+  const y = Math.round(point.y);
+  if (!grid.gsd_x_m) return `Píxel (${x}, ${y})`;
+  return `Píxel (${x}, ${y}) · ${formatNumber(point.x * grid.gsd_x_m, 1)}, ${formatNumber(point.y * grid.gsd_y_m, 1)} m`;
 }
 
 export default function ImageViewer({
-  jobId, grid, layer, setLayer, showSegmentation, setShowSegmentation, showMarks, setShowMarks,
-  tool, setTool, marks, setMarks, inspectedPixel, setInspectedPixel, polygonClosed, setPolygonClosed,
-  errorMessage, onError,
+  jobId, grid, layer, setLayer, showSegmentation, setShowSegmentation,
+  showMarks, setShowMarks, tool, marks, setMarks, distancePreview,
+  setDistancePreview, inspectedPixel, setInspectedPixel, polygonClosed,
+  setPolygonClosed, errorMessage, onError,
 }) {
   const stageRef = useRef(null);
   const imageRef = useRef(null);
   const canvasRef = useRef(null);
+  const activePointer = useRef(null);
+  const dragStart = useRef(null);
   const currentLayer = jobId ? visibleLayer(layer, showSegmentation) : null;
   const source = currentLayer && jobId ? `${api.layerUrl(jobId, currentLayer)}?v=${jobId}` : "";
   const hasResult = Boolean(jobId && grid);
-  const marksForDraw = tool === "pixel" && inspectedPixel ? [inspectedPixel] : marks;
 
   useEffect(() => {
     const image = imageRef.current;
@@ -79,24 +56,42 @@ export default function ImageViewer({
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
       context.clearRect(0, 0, imageRect.width, imageRect.height);
       if (!showMarks) return;
+
       const scaleX = imageRect.width / image.naturalWidth;
       const scaleY = imageRect.height / image.naturalHeight;
-      if (marksForDraw.length > 1) {
+      const toCanvas = (point) => ({ x: point.x * scaleX, y: point.y * scaleY });
+      const drawLine = (start, end, dashed = false) => {
+        const a = toCanvas(start);
+        const b = toCanvas(end);
         context.beginPath();
-        marksForDraw.forEach((point, index) => {
-          const x = point.x * scaleX;
-          const y = point.y * scaleY;
-          if (index === 0) context.moveTo(x, y);
-          else context.lineTo(x, y);
+        context.moveTo(a.x, a.y);
+        context.lineTo(b.x, b.y);
+        context.setLineDash(dashed ? [7, 5] : []);
+        context.strokeStyle = "#f6dc49";
+        context.lineWidth = 2;
+        context.stroke();
+        context.setLineDash([]);
+      };
+
+      if (tool === "distance") {
+        for (let index = 0; index + 1 < marks.length; index += 2) drawLine(marks[index], marks[index + 1]);
+        if (distancePreview) drawLine(distancePreview.start, distancePreview.end, true);
+      } else if (tool === "polygon" && marks.length > 1) {
+        context.beginPath();
+        marks.forEach((point, index) => {
+          const p = toCanvas(point);
+          if (index === 0) context.moveTo(p.x, p.y);
+          else context.lineTo(p.x, p.y);
         });
-        if (tool === "polygon" && polygonClosed && marksForDraw.length > 2) context.closePath();
+        if (polygonClosed && marks.length > 2) context.closePath();
         context.strokeStyle = "#f6dc49";
         context.lineWidth = 2;
         context.stroke();
       }
-      marksForDraw.forEach((point, index) => {
-        const x = point.x * scaleX;
-        const y = point.y * scaleY;
+
+      const points = tool === "pixel" && inspectedPixel ? [inspectedPixel] : marks;
+      points.forEach((point, index) => {
+        const { x, y } = toCanvas(point);
         context.beginPath();
         context.arc(x, y, 5, 0, Math.PI * 2);
         context.fillStyle = "#d94a8b";
@@ -120,16 +115,61 @@ export default function ImageViewer({
       window.removeEventListener("resize", draw);
       observer?.disconnect();
     };
-  }, [source, showMarks, marksForDraw, tool, polygonClosed]);
+  }, [source, showMarks, marks, distancePreview, tool, polygonClosed, inspectedPixel]);
+
+  const pointAt = (clientX, clientY, clamp = false) => {
+    const image = imageRef.current;
+    if (!image || !grid) return null;
+    const rect = image.getBoundingClientRect();
+    if (!clamp && (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom)) return null;
+    const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+    const y = Math.max(0, Math.min(rect.height, clientY - rect.top));
+    return {
+      x: Math.min(grid.ancho_px - 1, x * grid.ancho_px / rect.width),
+      y: Math.min(grid.alto_px - 1, y * grid.alto_px / rect.height),
+    };
+  };
+
+  const handlePointerDown = (event) => {
+    if (!hasResult || tool !== "distance" || (event.pointerType === "mouse" && event.button !== 0)) return;
+    const point = pointAt(event.clientX, event.clientY);
+    if (!point) return;
+    event.preventDefault();
+    activePointer.current = event.pointerId;
+    dragStart.current = point;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setDistancePreview({ start: point, end: point });
+  };
+
+  const handlePointerMove = (event) => {
+    if (activePointer.current !== event.pointerId || !dragStart.current) return;
+    const end = pointAt(event.clientX, event.clientY, true);
+    if (end) setDistancePreview({ start: dragStart.current, end });
+  };
+
+  const handlePointerUp = (event) => {
+    if (activePointer.current !== event.pointerId || !dragStart.current) return;
+    const start = dragStart.current;
+    const end = pointAt(event.clientX, event.clientY, true);
+    const moved = end && Math.hypot(end.x - start.x, end.y - start.y) >= 2;
+    if (moved) setMarks((current) => [...current, start, end]);
+    activePointer.current = null;
+    dragStart.current = null;
+    setDistancePreview(null);
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  };
+
+  const handlePointerCancel = (event) => {
+    if (activePointer.current !== event.pointerId) return;
+    activePointer.current = null;
+    dragStart.current = null;
+    setDistancePreview(null);
+  };
 
   const handleImageClick = (event) => {
-    if (!hasResult || tool === "view" || !imageRef.current) return;
-    const rect = imageRef.current.getBoundingClientRect();
-    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return;
-    const point = {
-      x: Math.min(grid.ancho_px - 1, Math.max(0, (event.clientX - rect.left) * grid.ancho_px / rect.width)),
-      y: Math.min(grid.alto_px - 1, Math.max(0, (event.clientY - rect.top) * grid.alto_px / rect.height)),
-    };
+    if (!hasResult || (tool !== "pixel" && tool !== "polygon")) return;
+    const point = pointAt(event.clientX, event.clientY);
+    if (!point) return;
     if (tool === "pixel") setInspectedPixel(point);
     else {
       setMarks((current) => [...current, point]);
@@ -137,21 +177,7 @@ export default function ImageViewer({
     }
   };
 
-  const undo = () => {
-    if (tool === "pixel") setInspectedPixel(null);
-    else {
-      setMarks((current) => current.slice(0, -1));
-      setPolygonClosed(false);
-    }
-  };
-  const clear = () => {
-    setMarks([]);
-    setInspectedPixel(null);
-    setPolygonClosed(false);
-  };
-  const closePolygon = () => marks.length >= 3 && setPolygonClosed(true);
-  const measurement = renderMeasurement(tool, marks, inspectedPixel, polygonClosed, grid);
-  const canClosePolygon = tool === "polygon" && marks.length >= 3 && !polygonClosed;
+  const pixelReadout = tool === "pixel" && inspectedPixel ? pixelLabel(inspectedPixel, grid) : "";
 
   return (
     <>
@@ -171,70 +197,47 @@ export default function ImageViewer({
             >{label}</button>
           ))}
         </div>
-        <label className="toggle-control">
-          <input
-            type="checkbox"
-            checked={showSegmentation}
-            disabled={!hasResult}
-            onChange={(event) => {
-              setShowSegmentation(event.target.checked);
-              if (!event.target.checked && layer === "candidates") setLayer("true-color");
-            }}
-          />
-          <span className="toggle-track"><span /></span>
-          <span>{layer === "candidates" && showSegmentation ? "Clases + humo" : showSegmentation ? "Con segmentación" : "Original"}</span>
-        </label>
-        <label className="toggle-control">
-          <input type="checkbox" checked={showMarks} disabled={!hasResult} onChange={(event) => setShowMarks(event.target.checked)} />
-          <span className="toggle-track"><span /></span><span>Marcas</span>
-        </label>
+        <div className="overlay-control" role="group" aria-label="Original o segmentación">
+          <button className={`overlay-choice${!showSegmentation ? " is-active" : ""}`} type="button" disabled={!hasResult} aria-pressed={!showSegmentation} onClick={() => {
+            if (layer === "candidates") setLayer("true-color");
+            setShowSegmentation(false);
+          }}>Original</button>
+          <button className={`overlay-choice${showSegmentation ? " is-active" : ""}`} type="button" disabled={!hasResult || layer === "candidates"} aria-pressed={showSegmentation} onClick={() => setShowSegmentation(true)}>Contorno</button>
+        </div>
+        <button className={`mark-toggle${showMarks ? " is-active" : ""}`} type="button" disabled={!hasResult} aria-pressed={showMarks} onClick={() => setShowMarks((visible) => !visible)}>
+          {showMarks ? "Ocultar marcas" : "Ver marcas"}
+        </button>
       </div>
 
-      <div className="image-stage" ref={stageRef} onClick={handleImageClick}>
+      <div
+        className={`image-stage${tool === "distance" ? " is-ruling" : tool === "polygon" || tool === "pixel" ? " has-tool" : ""}`}
+        ref={stageRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onClick={handleImageClick}
+      >
         {!hasResult ? (
           <div className="empty-state">
             <span className="empty-mark" aria-hidden="true">⌁</span>
             <strong>{errorMessage ? "No se pudo mostrar el análisis" : "La imagen aparecerá aquí"}</strong>
-            <span>{errorMessage || "Elige una escena y ejecuta la segmentación."}</span>
+            <span>{errorMessage || "Inicia un análisis para ver la imagen."}</span>
           </div>
         ) : (
           <>
             <img
               ref={imageRef}
               src={source}
-              alt={layer === "candidates" ? "Candidatos de superficie y humo probable" : `${layer === "swir" ? "SWIR" : "True Color"}${showSegmentation ? " con segmentación" : " original"}`}
+              alt={layer === "candidates" ? "Clases de superficie y humo probable" : `${layer === "swir" ? "SWIR" : "True Color"}${showSegmentation ? " con segmentación" : " original"}`}
+              draggable="false"
               onError={() => onError("No se pudo cargar la imagen resultante.")}
             />
             <canvas ref={canvasRef} aria-hidden="true" />
-            {tool === "pixel" && inspectedPixel && (
-              <div className="pixel-readout">{renderMeasurement(tool, marks, inspectedPixel, polygonClosed, grid)}</div>
-            )}
+            {pixelReadout && <div className="pixel-readout">{pixelReadout}</div>}
           </>
         )}
       </div>
-
-      <div className="measurement-toolbar" aria-label="Herramientas de medición">
-        <div className="tool-group" role="group" aria-label="Herramienta">
-          {TOOLS.map(([id, label]) => (
-            <button
-              key={id}
-              className={`tool-button${tool === id ? " is-active" : ""}`}
-              type="button"
-              disabled={!hasResult}
-              onClick={() => {
-                setTool(id);
-                if (id === "pixel") setInspectedPixel(null);
-              }}
-            >{label}</button>
-          ))}
-        </div>
-        <div className="mark-actions">
-          <button className="text-button" type="button" disabled={!hasResult || (!marks.length && !inspectedPixel)} onClick={undo}>Deshacer</button>
-          <button className="text-button" type="button" disabled={!canClosePolygon} onClick={closePolygon}>Cerrar área</button>
-          <button className="text-button" type="button" disabled={!hasResult || (!marks.length && !inspectedPixel)} onClick={clear}>Borrar marcas</button>
-        </div>
-      </div>
-      <div className="measurement-result" aria-live="polite">{measurement}</div>
     </>
   );
 }

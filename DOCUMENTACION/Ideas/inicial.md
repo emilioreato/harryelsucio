@@ -1,8 +1,8 @@
-# PyroScope — Fundamentos conceptuales
+# Lumbre — Fundamentos conceptuales
 
 **Hackatón 2026 · Documento de orientación técnica y de producto · 15/10/2026**
 
-> **Propósito:** conservar las concepciones que guían el diseño antes de implementar. No es una especificación cerrada, un modelo físico validado ni una predicción operativa de incendios. Complementa el manual de PyroScope, pero algunas decisiones de ese manual deberán revisarse.
+> **Propósito:** conservar las concepciones que guían el diseño antes de implementar. No es una especificación cerrada, un modelo físico validado ni una predicción operativa de incendios. Complementa la documentación funcional; algunas decisiones deberán revisarse.
 
 ## 1. Qué problema resolvemos
 
@@ -101,7 +101,7 @@ A partir de la escena y sus metadatos:
 
 Para evaluar detección, utilizar ejemplos etiquetados y, cuando exista referencia, métricas como **IoU, precision, recall y F1**. Una puntuación calculada a partir de los propios colores usados por el algoritmo no demuestra por sí misma su precisión.
 
-## 6. Riesgos detectados en el manual actual de PyroScope
+## 6. Riesgos detectados en la documentación funcional
 
 - La mezcla ponderada de canales y su normalización generan una **puntuación heurística**, no una probabilidad estadística calibrada.
 - El `resize` directo de SWIR a True Color puede crear **falsas coincidencias geográficas**.
