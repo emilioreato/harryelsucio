@@ -128,12 +128,15 @@ def previsualizar_resultado(
     contornos: tuple[np.ndarray, ...],
 ) -> np.ndarray:
     salida, mascaras = _preparar(imagen, mascara, bajo_humo, humo)
-    _pintar(salida, mascaras[0] | mascaras[1], (245, 65, 35), 0.32)
+    # Primero se dibuja el velo; después, las dos evidencias de superficie
+    # permanecen legibles e independientes en la vista final del pipeline.
+    _pintar(salida, mascaras[2], (35, 145, 225), 0.22)
+    _pintar(salida, mascaras[0], (225, 45, 35), 0.50)
+    _pintar(salida, mascaras[1], (220, 35, 190), 0.46)
     clases_reducidas = _reducir_etiquetas(clases, salida.shape[:2])
     _pintar(salida, clases_reducidas == ClaseSemantica.AGUA_POSIBLE, (25, 105, 255), 0.5)
     _pintar(salida, clases_reducidas == ClaseSemantica.FUEGO_ACTIVO_POSIBLE, (255, 245, 0), 0.78)
     _pintar(salida, clases_reducidas == ClaseSemantica.NUBE_BRUMA, (170, 175, 185), 0.28)
-    _pintar(salida, mascaras[2], (0, 165, 255), 0.28)
     if contornos:
         alto, ancho = imagen.shape[:2]
         escala = np.asarray([salida.shape[1] / ancho, salida.shape[0] / alto], dtype=np.float32)
@@ -143,6 +146,12 @@ def previsualizar_resultado(
         )
         grosor = max(1, round(max(salida.shape[:2]) / 900))
         cv2.drawContours(salida, list(contornos_reducidos), -1, (255, 238, 60), grosor)
+    if np.any(mascaras[1]):
+        borde_inferido = cv2.morphologyEx(
+            mascaras[1].astype(np.uint8), cv2.MORPH_GRADIENT, np.ones((3, 3), np.uint8)
+        ).astype(bool)
+        yy, xx = np.indices(mascaras[1].shape)
+        salida[borde_inferido & ((xx + yy) % 8 < 4)] = (255, 45, 220)
     return salida
 
 
