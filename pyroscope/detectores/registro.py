@@ -48,9 +48,8 @@ DETECTORES_SUPERFICIE: tuple[DetectorSuperficie, ...] = (
         id="swir_histeresis",
         nombre="Contraste SWIR + histéresis (V2)",
         descripcion=(
-            "Busca semillas de contraste SWIR alto y las expande por regiones "
-            "contiguas; True Color aporta el verdor y ambas vistas confirman "
-            "oscuridad compatible con agua."
+            "Prioriza las señales rojas de SWIR, incluso bajo humo; True Color "
+            "ayuda a localizar la oclusión y ambas vistas aportan contexto de agua."
         ),
         usa_numero_clases=False,
         clasificar=clasificar_pixeles_area_afectada_swir,

@@ -17,6 +17,7 @@ def segmentar_regiones_espaciales(
     on_progress: ProgresoSegmentacion | None = None,
     conservar_regiones_separadas: bool = False,
     preservar_geometria: bool = False,
+    mascara_roja_swir: np.ndarray | None = None,
 ) -> ResultadoRegionesEspaciales:
     """Convierte candidatos semánticos en regiones espaciales depuradas.
 
@@ -27,10 +28,16 @@ def segmentar_regiones_espaciales(
     mascara = clasificacion.mascara_candidata
     mascara_agua = clasificacion.mascara_agua
     mascara_humo = clasificacion.mascara_humo
+    protegida = (
+        np.zeros(mascara.shape, dtype=bool)
+        if mascara_roja_swir is None
+        else np.asarray(mascara_roja_swir, dtype=bool)
+    )
     if (
         mascara.ndim != 2
         or mascara_agua.shape != mascara.shape
         or mascara_humo.shape != mascara.shape
+        or protegida.shape != mascara.shape
     ):
         raise ValueError("Las máscaras semánticas deben ser rejillas 2D del mismo tamaño.")
     if not 0 <= area_minima_pct <= 10:
@@ -48,10 +55,13 @@ def segmentar_regiones_espaciales(
         mascara_u8 = cv2.morphologyEx(
             mascara_u8, cv2.MORPH_OPEN, np.ones((3, 3), dtype=np.uint8)
         )
+    # La firma roja procede directamente de SWIR y sobrevive al velo visible.
+    mascara_u8[protegida] = 255
     pixeles_agua_excluidos = int(np.count_nonzero(mascara_u8[mascara_agua]))
-    pixeles_humo_excluidos = int(np.count_nonzero(mascara_u8[mascara_humo]))
+    humo_sin_rojo_swir = mascara_humo & ~protegida
+    pixeles_humo_excluidos = int(np.count_nonzero(mascara_u8[humo_sin_rojo_swir]))
     mascara_u8[mascara_agua] = 0
-    mascara_u8[mascara_humo] = 0
+    mascara_u8[humo_sin_rojo_swir] = 0
 
     cantidad, etiquetas_cc, stats, _ = cv2.connectedComponentsWithStats(
         mascara_u8, connectivity=8
@@ -69,6 +79,8 @@ def segmentar_regiones_espaciales(
     elif cantidad > 1:
         ancla = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
         mascara_ancla = etiquetas_cc == ancla
+        componentes_rojos = set(np.unique(etiquetas_cc[protegida]).tolist())
+        componentes_rojos.discard(0)
         distancia_al_ancla = cv2.distanceTransform(
             (~mascara_ancla).astype(np.uint8), cv2.DIST_L2, cv2.DIST_MASK_5
         )
@@ -78,7 +90,7 @@ def segmentar_regiones_espaciales(
                 continue
             componente = etiquetas_cc == etiqueta
             separacion = float(distancia_al_ancla[componente].min())
-            if separacion > distancia_maxima_px:
+            if separacion > distancia_maxima_px and etiqueta not in componentes_rojos:
                 componentes_remotos_descartados += 1
                 continue
             # La proximidad decide sobre el componente entero; no es un recorte.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import cv2
 import numpy as np
 
 from .coordenadas import SistemaCoordenadasImagen
@@ -16,7 +17,33 @@ from .modelos_segmentacion import (
     ResultadoClasificacionSemantica,
     ResultadoRegionesEspaciales,
 )
+from .ontologia import ClaseSemantica
 from .progreso import ProgresoSegmentacion, informar_progreso
+
+
+def _detectar_rojo_swir(swir: np.ndarray, area_minima_pct: float) -> np.ndarray:
+    """Marca componentes rojos SWIR que superen el tamaño mínimo elegido."""
+    if not np.isfinite(area_minima_pct) or not 0 <= area_minima_pct <= 10:
+        raise ValueError("El área mínima debe estar entre 0 y 10 por ciento.")
+    hsv = cv2.cvtColor(swir, cv2.COLOR_RGB2HSV)
+    tono, saturacion, valor = cv2.split(hsv)
+    roja = (
+        ((tono <= 18) | (tono >= 171))
+        & (saturacion >= 48)
+        & (valor >= 24)
+    )
+    roja = cv2.morphologyEx(
+        roja.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((3, 3), dtype=np.uint8)
+    )
+    minimo_pixeles = max(16, round(roja.size * area_minima_pct / 100.0))
+    cantidad, etiquetas, estadisticas, _ = cv2.connectedComponentsWithStats(
+        roja, connectivity=8
+    )
+    aceptada = np.zeros(roja.shape, dtype=bool)
+    for etiqueta in range(1, cantidad):
+        if estadisticas[etiqueta, cv2.CC_STAT_AREA] >= minimo_pixeles:
+            aceptada |= etiquetas == etiqueta
+    return aceptada
 
 
 def segmentar_superficie_afectada(
@@ -30,7 +57,7 @@ def segmentar_superficie_afectada(
     sistema_coordenadas: SistemaCoordenadasImagen | None = None,
     semilla: int = 42,
     on_progress: ProgresoSegmentacion | None = None,
-    metodo: str = "kmeans",
+    metodo: str = "swir_histeresis",
     conservar_regiones_separadas: bool = False,
     ajustes_avanzados: dict[str, object] | None = None,
 ) -> ResultadoAreaAfectada:
@@ -93,6 +120,28 @@ def segmentar_superficie_afectada(
         )
         diagnosticos = contexto.diagnosticos
         clasificacion = replace(clasificacion, mascara_candidata=contexto.mascara)
+
+    # Una señal roja SWIR no se elimina porque True Color detecte humo encima.
+    # Se conserva en la máscara principal y se etiqueta además bajo el humo.
+    mascara_roja_swir = _detectar_rojo_swir(swir, area_minima_pct)
+    if np.any(mascara_roja_swir):
+        mascara_agua = clasificacion.mascara_agua & ~mascara_roja_swir
+        mascara_candidata = clasificacion.mascara_candidata | mascara_roja_swir
+        mascara_bajo_humo = (
+            clasificacion.mascara_candidata_bajo_humo
+            | (mascara_roja_swir & clasificacion.mascara_humo)
+        )
+        clases = clasificacion.clase_por_pixel.copy()
+        clases[mascara_agua] = ClaseSemantica.AGUA_POSIBLE
+        clases[clasificacion.mascara_humo] = ClaseSemantica.HUMO_PROBABLE
+        clases[mascara_roja_swir] = ClaseSemantica.SUPERFICIE_AFECTADA_CANDIDATA
+        clasificacion = replace(
+            clasificacion,
+            mascara_candidata=mascara_candidata,
+            mascara_candidata_bajo_humo=mascara_bajo_humo,
+            mascara_agua=mascara_agua,
+            clase_por_pixel=clases,
+        )
     regiones = segmentar_regiones_espaciales(
         clasificacion,
         area_minima_pct=area_minima_pct,
@@ -100,6 +149,7 @@ def segmentar_superficie_afectada(
         on_progress=on_progress,
         conservar_regiones_separadas=conservar_regiones_separadas or es_contextual,
         preservar_geometria=es_contextual,
+        mascara_roja_swir=mascara_roja_swir,
     )
     if es_contextual:
         from .estimacion_bajo_humo import estimar_bajo_humo
@@ -123,8 +173,11 @@ def segmentar_superficie_afectada(
         sistema_coordenadas=sistema_coordenadas,
         mascara=regiones.mascara,
         mascara_clasificada=clasificacion.mascara_candidata,
-        mascara_candidata_bajo_humo=(estimacion.mascara_candidata if estimacion is not None
-                                    else clasificacion.mascara_candidata_bajo_humo),
+        mascara_candidata_bajo_humo=(
+            (estimacion.mascara_candidata if estimacion is not None
+             else np.zeros_like(clasificacion.mascara_candidata_bajo_humo))
+            | clasificacion.mascara_candidata_bajo_humo
+        ),
         mascara_humo=clasificacion.mascara_humo,
         confianza_humo=clasificacion.confianza_humo,
         clase_por_pixel=clasificacion.clase_por_pixel,

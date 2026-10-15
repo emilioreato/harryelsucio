@@ -299,7 +299,7 @@ def _resumen_trabajo(trabajo: dict[str, Any]) -> dict[str, Any]:
 
 
 def _validar_ajustes(datos: dict[str, Any]) -> dict[str, Any]:
-    metodo = str(datos.get("method", "kmeans"))
+    metodo = str(datos.get("method", "swir_histeresis"))
     detector = obtener_detector_superficie(metodo)
 
     def entero(clave: str, minimo: int, maximo: int, defecto: int) -> int:

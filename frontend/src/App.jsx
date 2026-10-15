@@ -83,7 +83,7 @@ function App() {
   const [connection, setConnection] = useState({ ready: false, label: "Conectando…" });
   const [source, setSource] = useState("preloaded");
   const [sceneId, setSceneId] = useState("");
-  const [method, setMethod] = useState("kmeans");
+  const [method, setMethod] = useState("swir_histeresis");
   const [sensitivity, setSensitivity] = useState(5);
   const [numClasses, setNumClasses] = useState(7);
   const [minimumArea, setMinimumArea] = useState("0.15");
@@ -535,7 +535,7 @@ function App() {
               <Card className="metric-card" size="1"><span>Perímetro</span><strong>{formatLength(metrics.perimeter, metrics.perimeter_unit)}</strong></Card>
               <Card className="metric-card" size="1"><span>Humo probable</span><strong>{formatNumber(metrics.smoke_pct, 1)} %</strong></Card>
             </div>
-            <p className="result-caveat">Rojo y borde amarillo: superficie candidata observada fuera del velo detectado. Azul transparente: humo o pérdida posible de visibilidad. La hipótesis espectral bajo humo ({formatNumber(metrics.smoke_covered_candidates_px)} px) está separada y no se suma al área observada; inspecciónala en su propia capa. Terreno cubierto sin evidencia suficiente{metrics.smoke_unknown_px != null ? `: ${formatNumber(metrics.smoke_unknown_px)} px` : ""}. El análisis no confirma fuego activo.</p>
+            <p className="result-caveat">Relleno rojo y borde amarillo: señal roja SWIR candidata, incluidos los componentes que atraviesan humo si superan el área mínima. Azul transparente: humo probable según la pareja SWIR / True Color. Candidatos dentro del humo: {formatNumber(metrics.smoke_covered_candidates_px)} px; aparecen también en la capa «Bajo humo» y se incluyen en la máscara si conservan señal roja SWIR. El resultado indica superficie afectada candidata, no confirma fuego activo.</p>
           </>}
 
           <button className="export-button" type="button" disabled={!hasResult} onClick={() => downloadLayer("overlay-true-color", "lumbre_mapa_segmentado.png")}><span>Mapa con contorno</span><span>PNG ↓</span></button>
