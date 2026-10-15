@@ -53,13 +53,13 @@ python -m pytest
 
 El último comando ejecuta las pruebas disponibles. Si todavía no hay tests, pytest lo indicará con su código de salida habitual; eso no sustituye a crear pruebas cuando el proyecto empiece a tener código.
 
-Cuando exista el punto de entrada de la aplicación Streamlit, ejecútalo desde la raíz con:
+La primera versión de la aplicación, centrada en el reto básico, se ejecuta desde la raíz así:
 
 ```powershell
-python -m streamlit run ruta\a\la\aplicacion.py
+python -m streamlit run app.py
 ```
 
-Sustituye la ruta por el archivo de entrada real; el repositorio aún no contiene una aplicación Streamlit.
+Permite elegir una escena de ejemplo o cargar una pareja alineada True Color/SWIR. El diseño de módulos, algoritmo y sus supuestos se explican en [`DOCUMENTACION/Ideas/segmentacion_basica.md`](DOCUMENTACION/Ideas/segmentacion_basica.md).
 
 ### Servicios de datos externos
 
