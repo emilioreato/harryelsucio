@@ -6,7 +6,7 @@ Aplicación de análisis satelital para revisar incendios, humo y superficie afe
 
 ### Programas
 
-- **Python 3.12 (64 bits)**, recomendado; Python 3.11 también es válido. En Windows, instala Python desde [python.org](https://www.python.org/downloads/windows/) y activa la opción para añadir Python al `PATH`. No hace falta Conda, crear entornos virtuales ni usar Docker.
+- **Python 3.11 o posterior (64 bits)**. No se requiere una versión menor concreta. En Windows, instala la versión actual desde [python.org](https://www.python.org/downloads/) y activa **Add python.exe to PATH**. No hace falta Conda, crear entornos virtuales ni usar Docker.
 - **Visual Studio Code**, junto con **Git for Windows** ([descarga oficial](https://git-scm.com/download/win)).
 - **QGIS LTR**, para inspeccionar rásteres, CRS, bandas, relieve y superposiciones ([descarga oficial para Windows](https://qgis.org/download/)). No es necesario configurar el Python interno de QGIS ni usarlo para ejecutar este proyecto.
 
@@ -22,10 +22,10 @@ Abre una terminal de PowerShell en la carpeta del repositorio y ejecuta:
 python -m pip install -r requirements.txt
 ```
 
-Si `python` no encuentra Python o selecciona otra versión, usa el lanzador de Windows con la versión explícita:
+En Windows, si `python` no apunta al intérprete que quieres, usa el lanzador para elegir el Python 3 instalado:
 
 ```powershell
-py -3.12 -m pip install -r requirements.txt
+py -3 -m pip install -r requirements.txt
 ```
 
 Esto instala las bibliotecas en el Python indicado. En Windows, si pip informa de falta de permisos para la instalación global, prueba:
@@ -34,13 +34,13 @@ Esto instala las bibliotecas en el Python indicado. En Windows, si pip informa d
 python -m pip install --user -r requirements.txt
 ```
 
-No mezcles `python` y `py -3.12` entre instalación y ejecución: deben apuntar al mismo intérprete.
+Instala y ejecuta con el mismo intérprete: usa `python` en ambos casos, o `py -3` en ambos.
 
 ### Elegir Python en VS Code
 
 1. Abre la carpeta del repositorio en VS Code.
 2. Pulsa `Ctrl+Mayús+P` y ejecuta **Python: Select Interpreter**.
-3. Elige Python 3.12, o Python 3.11 si esa es la versión usada para instalar los paquetes. Si no aparece, selecciona **Enter interpreter path** e indica la ruta de `python.exe`.
+3. Elige el mismo Python 3.11 o posterior usado para instalar los paquetes. Si no aparece, selecciona **Enter interpreter path** e indica la ruta de `python.exe`.
 4. Abre una terminal nueva en VS Code y ejecuta `python -c "import sys; print(sys.executable)"` para confirmar qué intérprete está usando.
 
 ### Comprobar la instalación
@@ -60,7 +60,7 @@ La primera versión de la aplicación, centrada en el reto básico, se ejecuta d
 python app.py
 ```
 
-En Windows puedes iniciarla con doble clic en [`encender_aplicacion.bat`](encender_aplicacion.bat), situado en la raíz del repositorio. El script prueba que cada runtime realmente se puede ejecutar y usa Python 3.12, 3.11 o el `python` disponible en `PATH`, en ese orden. Si Windows tiene el Python Install Manager pero no un runtime, ejecuta `py install 3.12`, instala las dependencias con `py -3.12 -m pip install -r requirements.txt` y vuelve a iniciar la aplicación. El lanzador abre la página local en el navegador. Si Lumbre ya está abierta, vuelve a abrir esa instancia en lugar de iniciar otro servidor. Para cerrarla desde otra ventana, ejecuta [`cerrar_aplicacion.bat`](cerrar_aplicacion.bat); también puedes pulsar `Ctrl+C` en la ventana del servidor. Si el servidor no responde, el cierre busca procesos Python asociados al `app.py` de esta copia y termina solo esos procesos.
+En Windows puedes iniciarla con doble clic en [`encender_aplicacion.bat`](encender_aplicacion.bat), situado en la raíz del repositorio. El script usa el Python 3.11 o posterior seleccionado por el lanzador de Windows o disponible en `PATH`; no pide instalar una versión concreta. Si no encuentra Python, muestra un enlace de descarga y los comandos para instalarlo y sus dependencias. El lanzador abre la página local en el navegador. Si Lumbre ya está abierta, vuelve a abrir esa instancia en lugar de iniciar otro servidor. Para cerrarla desde otra ventana, ejecuta [`cerrar_aplicacion.bat`](cerrar_aplicacion.bat); también puedes pulsar `Ctrl+C` en la ventana del servidor. Si el servidor no responde, el cierre busca procesos Python asociados al `app.py` de esta copia y termina solo esos procesos.
 
 Para desarrollar la interfaz React con recarga automática, abre dos terminales: en una inicia `python app.py --no-browser`; en la otra entra en `frontend/` y ejecuta `npm run dev`. Vite sirve la interfaz en `http://127.0.0.1:5173/` y reenvía `/api` al servidor Python local. Si el puerto 8501 está ocupado y Python anuncia otro puerto, configura `LUMBRE_API_TARGET` con esa dirección antes de arrancar Vite.
 

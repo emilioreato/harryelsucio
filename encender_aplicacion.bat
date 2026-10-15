@@ -8,47 +8,37 @@ echo.
 
 where py >nul 2>nul
 if not errorlevel 1 (
-    rem Comprobar que el runtime puede ejecutar codigo; --version puede pasar
-    rem aunque el Python Install Manager no tenga esa version instalada.
-    py -3.12 -c "import sys; sys.exit(0)" >nul 2>nul
-    if not errorlevel 1 goto usar_python312
-
-    py -3.11 -c "import sys; sys.exit(0)" >nul 2>nul
-    if not errorlevel 1 goto usar_python311
+    rem Usar cualquier Python 3.11+ instalado, sin exigir una version menor fija.
+    py -3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>nul
+    if not errorlevel 1 goto usar_py
 )
 
 for /f "delims=" %%P in ('where python 2^>nul') do (
-    "%%P" -c "import sys; sys.exit(0)" >nul 2>nul
+    "%%P" -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>nul
     if not errorlevel 1 (
         set "PYTHON_EXE=%%P"
         goto usar_python_predeterminado
     )
 )
 
-echo No se encontro un runtime de Python que pueda ejecutarse.
-echo Si aparece el comando "py", instala un runtime con:
-echo   py install 3.12
-echo Despues instala las dependencias desde esta carpeta con:
-echo   py -3.12 -m pip install -r requirements.txt
-echo Tambien puedes instalar Python 3.12 o 3.11 desde python.org y volver a ejecutar este archivo.
+echo No se encontro Python 3.11 o posterior que pueda ejecutarse.
+echo Instala la version actual de Python desde:
+echo   https://www.python.org/downloads/
+echo En Windows, activa "Add python.exe to PATH" durante la instalacion.
+echo Despues abre esta ventana de nuevo e instala las dependencias desde esta carpeta:
+echo   python -m pip install -r requirements.txt
 echo.
 pause
 exit /b 1
 
-:usar_python312
-echo Usando Python 3.12.
-py -3.12 "%~dp0app.py"
-if errorlevel 2 goto ya_activa
-goto final
-
-:usar_python311
-echo Usando Python 3.11.
-py -3.11 "%~dp0app.py"
+:usar_py
+echo Usando el Python 3.11 o posterior seleccionado por el lanzador de Windows.
+py -3 "%~dp0app.py"
 if errorlevel 2 goto ya_activa
 goto final
 
 :usar_python_predeterminado
-echo Usando el Python disponible en PATH.
+echo Usando el Python 3.11 o posterior disponible en PATH.
 "%PYTHON_EXE%" "%~dp0app.py"
 if errorlevel 2 goto ya_activa
 goto final

@@ -4,15 +4,12 @@ cd /d "%~dp0"
 
 where py >nul 2>nul
 if not errorlevel 1 (
-    py -3.12 -c "import sys; sys.exit(0)" >nul 2>nul
-    if not errorlevel 1 goto usar_python312
-
-    py -3.11 -c "import sys; sys.exit(0)" >nul 2>nul
-    if not errorlevel 1 goto usar_python311
+    py -3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>nul
+    if not errorlevel 1 goto usar_py
 )
 
 for /f "delims=" %%P in ('where python 2^>nul') do (
-    "%%P" -c "import sys; sys.exit(0)" >nul 2>nul
+    "%%P" -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>nul
     if not errorlevel 1 (
         set "PYTHON_EXE=%%P"
         goto usar_python_predeterminado
@@ -22,16 +19,12 @@ for /f "delims=" %%P in ('where python 2^>nul') do (
 echo No se encontro un runtime de Python ejecutable. Se intentara cerrar procesos identificables de Lumbre.
 goto cierre_procesos
 
-:usar_python312
-py -3.12 "%~dp0app.py" --close
-goto resultado
-
-:usar_python311
-py -3.11 "%~dp0app.py" --close
+:usar_py
+py -3 "%~dp0app.py" --close
 goto resultado
 
 :usar_python_predeterminado
-echo Usando el Python disponible en PATH.
+echo Usando el Python 3.11 o posterior disponible en PATH.
 "%PYTHON_EXE%" "%~dp0app.py" --close
 
 :resultado
