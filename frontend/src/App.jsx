@@ -63,6 +63,7 @@ function App() {
   const [scenes, setScenes] = useState([]);
   const [detectors, setDetectors] = useState([]);
   const [connection, setConnection] = useState({ ready: false, label: "Conectando con el motor local…" });
+  const [reconnecting, setReconnecting] = useState(false);
   const [source, setSource] = useState("preloaded");
   const [sceneId, setSceneId] = useState("");
   const [method, setMethod] = useState("kmeans");
@@ -110,6 +111,32 @@ function App() {
     return () => { active = false; };
   }, []);
 
+  const retryConnection = async () => {
+    if (reconnecting) return;
+    setReconnecting(true);
+    setConnection({ ready: false, label: "Comprobando motor local…" });
+    try {
+      const [sceneResponse, detectorResponse] = await Promise.all([api.scenes(), api.detectors()]);
+      const availableScenes = sceneResponse.scenes || [];
+      const availableDetectors = detectorResponse.detectors || [];
+      setScenes(availableScenes);
+      setDetectors(availableDetectors);
+      setSceneId((current) => availableScenes.some((item) => item.id === current)
+        ? current
+        : availableScenes[0]?.id || "");
+      setMethod((current) => availableDetectors.some((item) => item.id === current)
+        ? current
+        : availableDetectors[0]?.id || "kmeans");
+      setConnection({ ready: true, label: "Motor Python conectado" });
+      setError("");
+    } catch (cause) {
+      setConnection({ ready: false, label: "No se pudo conectar con el motor local" });
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setReconnecting(false);
+    }
+  };
+
   const selectedScene = scenes.find((item) => item.id === sceneId);
   const selectedDetector = detectors.find((item) => item.id === method);
   const activeLabel = source === "upload" ? "Pareja cargada" : selectedScene?.label || "Selecciona una escena";
@@ -138,7 +165,9 @@ function App() {
     const growRed = advanced.swir_thresholds.grow_red ?? (0.94 - (sensitivityNumber - 1) * 0.01);
     const seedRG = advanced.swir_thresholds.seed_red_green ?? (0.82 - (sensitivityNumber - 1) * 0.005);
     const growRG = advanced.swir_thresholds.grow_red_green ?? (0.68 - (sensitivityNumber - 1) * 0.012);
-    if (growRed > seedRed || growRG > seedRG) throw new Error("El percentil de crecimiento SWIR debe ser menor o igual al de semilla.");
+    if (["swir_histeresis", "fusion_ponderada"].includes(method) && (growRed > seedRed || growRG > seedRG)) {
+      throw new Error("El percentil de crecimiento SWIR debe ser menor o igual al de semilla.");
+    }
     if (Object.values(advanced.smoke_weights).some((value) => value < 0 || value > 1)
         || Object.values(advanced.smoke_weights).every((value) => value === 0)) {
       throw new Error("Los pesos del score de humo deben estar entre 0 y 1 y alguno debe ser positivo.");
@@ -376,6 +405,11 @@ function App() {
 
             <AdvancedSettings value={advanced} onChange={setAdvanced} onReset={() => setAdvanced(defaultAdvancedSettings())} method={method} />
 
+            {!connection.ready && !["Conectando con el motor local…", "Comprobando motor local…"].includes(connection.label) && (
+              <button className="text-button connection-retry" type="button" disabled={reconnecting} onClick={retryConnection}>
+                {reconnecting ? "Comprobando conexión…" : "Reintentar conexión"}
+              </button>
+            )}
             <button className="run-button" id="run-analysis" type="submit" disabled={!canRun}>
               <span className="run-icon" aria-hidden="true">▶</span><span>{running ? "Analizando…" : "Iniciar segmentación"}</span>
             </button>
@@ -423,7 +457,7 @@ function App() {
           {metrics && <>
             <div className="metrics-grid">
               <article className="metric-card metric-primary"><span>Superficie candidata</span><strong>{formatNumber(metrics.coverage_pct, 1)} %</strong></article>
-              <article className="metric-card"><span>Área</span><strong>{formatArea(metrics.area, metrics.area_unit)}</strong></article>
+              <article className="metric-card"><span>Área candidata</span><strong>{formatArea(metrics.area, metrics.area_unit)}</strong></article>
               <article className="metric-card"><span>Humo probable</span><strong>{formatNumber(metrics.smoke_pct, 1)} %</strong></article>
             </div>
             <p className="result-caveat">Hipótesis automática; requiere revisión humana. Humo y cubiertas oscuras pueden causar zonas indeterminadas o falsos positivos.</p>
