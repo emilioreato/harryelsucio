@@ -1,6 +1,6 @@
 # harryelsucio
 
-Proyecto harryelsucio para PyroScope, el reto de Indra. La orientación técnica y los supuestos iniciales están en [`DOCUMENTACION/Ideas/inicial.md`](DOCUMENTACION/Ideas/inicial.md).
+Proyecto harryelsucio para el análisis y la segmentación de imágenes satelitales de incendios. La orientación técnica y los supuestos iniciales están en [`DOCUMENTACION/Ideas/inicial.md`](DOCUMENTACION/Ideas/inicial.md).
 
 ## Preparación del entorno de desarrollo
 
