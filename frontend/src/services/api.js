@@ -4,7 +4,13 @@ async function requestJson(url, options = {}) {
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, { ...fetchOptions, signal: controller.signal });
-    const payload = await response.json().catch(() => ({}));
+    let payload = {};
+    try {
+      payload = await response.json();
+    } catch (cause) {
+      if (cause?.name === "AbortError") throw cause;
+      if (response.ok) throw new Error("El motor devolvió una respuesta que no se pudo interpretar.");
+    }
     if (!response.ok) {
       throw new Error(payload.error || `Error HTTP ${response.status}`);
     }
