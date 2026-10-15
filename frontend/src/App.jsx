@@ -365,21 +365,28 @@ function App() {
               <input className="range-control" id="num-classes" type="range" min="4" max="10" value={numClasses} onChange={(event) => setNumClasses(Number(event.target.value))} />
             </>}
 
-            <div className="compact-fields">
-              <div>
-                <label className="field-label" htmlFor="minimum-area">Área mínima (%)</label>
-                <input className="field-control" id="minimum-area" type="number" min="0.01" max="1" step="0.01" value={minimumArea} onChange={(event) => setMinimumArea(event.target.value)} />
+            <details className="details-panel parameter-settings">
+              <summary>Parámetros y escala</summary>
+              <div className="parameter-content">
+                <div className="compact-fields">
+                  <div>
+                    <label className="field-label" htmlFor="minimum-area">Área mínima (%)</label>
+                    <input className="field-control" id="minimum-area" type="number" min="0.01" max="1" step="0.01" value={minimumArea} onChange={(event) => setMinimumArea(event.target.value)} />
+                  </div>
+                  <div>
+                    <label className="field-label" htmlFor="max-distance">Radio máximo (%)</label>
+                    <input className="field-control" id="max-distance" type="number" min="3" max="20" step="1" value={maxDistance} disabled={keepSeparate} onChange={(event) => setMaxDistance(event.target.value)} />
+                  </div>
+                </div>
+                <label className="check-row" htmlFor="keep-separate">
+                  <input id="keep-separate" type="checkbox" checked={keepSeparate} onChange={(event) => setKeepSeparate(event.target.checked)} />
+                  <span>Conservar focos separados</span>
+                </label>
+                <div className="section-rule measurement-rule"><span>CALIBRACIÓN</span></div>
+                <label className="field-label" htmlFor="gsd">GSD · metros por píxel <span className="optional">opcional</span></label>
+                <input className="field-control" id="gsd" type="number" min="0.000001" step="any" inputMode="decimal" placeholder="Sin escala: medidas en píxeles" value={gsd} onChange={(event) => setGsd(event.target.value)} />
               </div>
-              <div>
-                <label className="field-label" htmlFor="max-distance">Radio máximo (%)</label>
-                <input className="field-control" id="max-distance" type="number" min="3" max="20" step="1" value={maxDistance} disabled={keepSeparate} onChange={(event) => setMaxDistance(event.target.value)} />
-              </div>
-            </div>
-
-            <label className="check-row" htmlFor="keep-separate">
-              <input id="keep-separate" type="checkbox" checked={keepSeparate} onChange={(event) => setKeepSeparate(event.target.checked)} />
-              <span>Conservar focos separados</span>
-            </label>
+            </details>
 
             <AdvancedSettings value={advanced} onChange={setAdvanced} onReset={() => setAdvanced(defaultAdvancedSettings())} method={method} />
 
