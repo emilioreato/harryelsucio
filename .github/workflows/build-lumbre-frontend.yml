@@ -9,7 +9,7 @@ on:
       - ".github/workflows/build-lumbre-frontend.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: lumbre-frontend-build
@@ -22,7 +22,7 @@ jobs:
       - name: Check out main
         uses: actions/checkout@v4
         with:
-          persist-credentials: true
+          persist-credentials: false
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -41,15 +41,16 @@ jobs:
       - name: Build static web bundle
         working-directory: frontend
         run: npm run build
-      - name: Commit generated assets when changed
+      - name: Verify generated web bundle
         shell: bash
         run: |
-          git add web
-          if git diff --cached --quiet; then
-            echo "The generated web bundle is already up to date."
-            exit 0
+          if ! git diff --quiet --ignore-space-at-eol -- web; then
+            echo "::error::El bundle de web/ no coincide con el frontend. Ejecuta npm run build y confirma los artefactos generados."
+            git diff --stat -- web
+            exit 1
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+actions@users.noreply.github.com"
-          git commit -m "Build Lumbre frontend bundle [skip ci]"
-          git push
+          if [[ -n "$(git ls-files --others --exclude-standard -- web)" ]]; then
+            echo "::error::El build generó archivos nuevos en web/ que todavía no están confirmados."
+            git ls-files --others --exclude-standard -- web
+            exit 1
+          fi

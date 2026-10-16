@@ -25,7 +25,7 @@ if not exist "%ROOT%\requirements.txt" (
   exit /b 1
 )
 
-set "PYTHON_CHECK=import os, struct, sys; compatible = (sys.implementation.name == 'cpython' and sys.version_info >= (3, 11) and sys.version_info.releaselevel == 'final' and struct.calcsize('P') == 8 and sys.prefix == sys.base_prefix and not os.environ.get('CONDA_PREFIX') and not os.path.isdir(os.path.join(sys.prefix, 'conda-meta'))); sys.exit(0 if compatible else 1)"
+set "PYTHON_CHECK=import os, struct, sys, sysconfig; compatible = (sys.implementation.name == 'cpython' and (3, 11) <= sys.version_info[:2] < (3, 15) and sys.version_info.releaselevel == 'final' and struct.calcsize('P') == 8 and sysconfig.get_config_var('Py_GIL_DISABLED') != 1 and sys.prefix == sys.base_prefix and not os.environ.get('CONDA_PREFIX') and not os.path.isdir(os.path.join(sys.prefix, 'conda-meta'))); sys.exit(0 if compatible else 1)"
 set "PYTHON="
 where py >nul 2>&1
 if not errorlevel 1 (
@@ -47,7 +47,7 @@ if not defined PYTHON (
 )
 if not defined PYTHON (
   echo ERROR: Windows no encuentra CPython estable de 64 bits compatible.
-  echo Se requiere Python 3.11 o posterior, fuera de Conda/venv.
+  echo Se requiere CPython estandar de 64 bits, version estable 3.11-3.14, fuera de Conda/venv.
   echo Ejecuta 01_instalar_lumbre.bat para ver el diagnostico.
   echo.
   pause

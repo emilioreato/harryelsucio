@@ -1,5 +1,4 @@
-# Dependencias de Lumbre y sus pruebas; CPython estable de 64 bits, Python 3.11 o posterior.
-# Pytest se incluye en este archivo unico para ejecutar las pruebas del proyecto.
+# Dependencias de ejecucion; CPython estandar de 64 bits, Python 3.11 a 3.14.
 numpy>=1.26,<3
 scipy>=1.11,<2
 opencv-python>=4.9,<5
@@ -8,4 +7,3 @@ scikit-learn>=1.4,<2
 Pillow>=10,<13
 pyproj>=3.6,<4
 joblib>=1.3,<2
-pytest>=8,<10

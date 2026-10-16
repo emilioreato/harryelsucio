@@ -9,6 +9,8 @@ from .ontologia import ClaseSemantica
 
 
 MAX_LADO_PREVISUALIZACION = 900
+_COLOR_HUMO = (30, 120, 221)
+_COLOR_BORDE_HUMO = (19, 93, 168)
 
 
 def previsualizar_imagen(imagen: np.ndarray) -> np.ndarray:
@@ -32,7 +34,7 @@ def previsualizar_clasificacion(
     salida, mascaras = _preparar(imagen, candidata, humo, agua, bajo_humo)
     _pintar(salida, mascaras[0], (245, 65, 35), 0.45)
     _pintar(salida, mascaras[3], (220, 55, 175), 0.58)
-    _pintar(salida, mascaras[1], (0, 165, 255), 0.35)
+    _pintar_humo(salida, mascaras[1], 0.39)
     _pintar(salida, mascaras[2], (25, 105, 255), 0.52)
     return salida
 
@@ -114,7 +116,7 @@ def previsualizar_bajo_humo(
     indeterminada: np.ndarray,
 ) -> np.ndarray:
     salida, mascaras = _preparar(imagen, humo, hipotesis, indeterminada)
-    _pintar(salida, mascaras[0], (0, 165, 255), 0.32)
+    _pintar_humo(salida, mascaras[0], 0.36)
     _pintar(salida, mascaras[1], (220, 55, 175), 0.68)
     _pintar(salida, mascaras[2], (168, 175, 185), 0.4)
     return salida
@@ -131,7 +133,7 @@ def previsualizar_resultado(
     salida, mascaras = _preparar(imagen, mascara, bajo_humo, humo)
     # Primero se dibuja el velo; después, las dos evidencias de superficie
     # permanecen legibles e independientes en la vista final del pipeline.
-    _pintar(salida, mascaras[2], (35, 145, 225), 0.22)
+    _pintar_humo(salida, mascaras[2], 0.25)
     _pintar(salida, mascaras[0], (225, 45, 35), 0.50)
     _pintar(salida, mascaras[1], (220, 35, 190), 0.46)
     clases_reducidas = _reducir_etiquetas(clases, salida.shape[:2])
@@ -199,3 +201,21 @@ def _pintar(imagen: np.ndarray, mascara: np.ndarray, color: tuple[int, int, int]
             imagen[mascara].astype(np.float32) * (1.0 - opacidad)
             + np.asarray(color, dtype=np.float32) * opacidad
         ).astype(np.uint8)
+
+
+def _pintar_humo(imagen: np.ndarray, mascara: np.ndarray, opacidad: float) -> None:
+    """Mantiene uniforme el azul del humo en las miniaturas del pipeline."""
+    _pintar(imagen, mascara, _COLOR_HUMO, opacidad)
+    if not np.any(mascara):
+        return
+    interior = mascara.copy()
+    interior[1:, :] &= mascara[:-1, :]
+    interior[:-1, :] &= mascara[1:, :]
+    interior[:, 1:] &= mascara[:, :-1]
+    interior[:, :-1] &= mascara[:, 1:]
+    borde = mascara & ~interior
+    borde[0, :] |= mascara[0, :]
+    borde[-1, :] |= mascara[-1, :]
+    borde[:, 0] |= mascara[:, 0]
+    borde[:, -1] |= mascara[:, -1]
+    _pintar(imagen, borde, _COLOR_BORDE_HUMO, 0.42)

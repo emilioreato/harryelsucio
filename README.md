@@ -6,7 +6,7 @@ Nació en la **III Malackathon 2026 de la Universidad de Málaga**, para el reto
 
 ![Entrada True Color de Niebla y salida del detector por capas sobre esa misma escena](DOCUMENTACION/media_readme/01_comparacion_niebla.jpg)
 
-*Niebla, Huelva · 08/08/2026. La entrada de la izquierda y la salida de la derecha corresponden a la misma escena y ejecución. Rojo: superficie candidata; azul: humo probable; amarillo: contorno. Es una salida experimental, no una medida de precisión.*
+*Niebla, Huelva · 08/08/2026. La entrada y la salida corresponden a la misma escena y ejecución. Rojo: superficie candidata; azul: humo probable; borde azul oscuro: límite de esa máscara; amarillo: contorno de superficie. Es una salida experimental, no una medida de precisión.*
 
 ## Qué permite hacer
 
@@ -23,7 +23,7 @@ El análisis mantiene por separado la superficie visible, el humo probable y los
 
 ![Composición SWIR de entrada y capas reales de humo probable y superficie candidata bajo la oclusión](DOCUMENTACION/media_readme/02_humo_y_capas_niebla.jpg)
 
-*Niebla, Huelva · 08/08/2026. Azul: humo probable; naranja: superficie candidata bajo la oclusión. Son capas experimentales, pueden incluir bruma o nube y no confirman una superficie afectada.*
+*Niebla, Huelva · 08/08/2026. Azul: humo probable con un borde fino más oscuro; naranja: superficie candidata bajo la oclusión. Son capas experimentales, pueden incluir bruma o nube y no confirman una superficie afectada.*
 
 ### Un flujo de trabajo en una sola ventana
 
@@ -41,20 +41,29 @@ El botón **Guardar resultado** permite descargar el mapa o la máscara. **Expor
 
 ## Instalación e inicio
 
-Se necesita **CPython estable de 64 bits, versión 3.11 o posterior**.
+Se necesita **CPython estándar de 64 bits, versión 3.11, 3.12, 3.13 o 3.14**. El instalador comprueba que la versión tenga ruedas binarias compatibles con las dependencias del proyecto.
 
-En Windows, instala Python desde [python.org](https://www.python.org/downloads/windows/) si hace falta; activa **Python Launcher** y **Add Python to PATH**. Desde la raíz del repositorio:
+En Windows, instala [Python Install Manager](https://www.python.org/downloads/windows/) desde python.org o Microsoft Store. Si aún no tienes un runtime, abre una terminal y ejecuta <code>py install 3.14</code>. Desde la raíz del repositorio:
 
 1. Ejecuta <code>01_instalar_lumbre.bat</code> una vez.
 2. Ejecuta <code>02_iniciar_lumbre.bat</code> para abrir la aplicación.
 3. Ejecuta <code>04_cerrar_lumbre.bat</code> para cerrar Lumbre cuando termines.
 
-<code>03_acceso_movil.bat</code> configura el acceso opcional desde el teléfono. La aplicación funciona en el ordenador sin ese paso. El instalador detecta un Python compatible e instala las dependencias del único <code>requirements.txt</code>; no modifica PATH ni requiere permisos de administrador.
+<code>03_acceso_movil.bat</code> configura el acceso opcional desde el teléfono. Actívalo, cierra y vuelve a iniciar Lumbre, y conecta ambos dispositivos a la misma Wi-Fi privada. Si Windows pregunta, permite el acceso solo en redes privadas. En macOS o Linux, inicia con <code>python3 -m lumbre --host 0.0.0.0</code>. Esto no configura el router; el acceso está pensado para una red Wi-Fi privada, no para publicar la aplicación en Internet. La aplicación funciona en el ordenador sin habilitar el acceso móvil.
 
-En macOS o Linux, desde la raíz:
+El instalador detecta un Python compatible e instala las dependencias de ejecución del único <code>requirements.txt</code>; no modifica PATH ni requiere permisos de administrador.
+
+En macOS o Linux, usa un CPython compatible y, desde la raíz, instala las dependencias para tu usuario:
 
     python3 -m pip install --user -r requirements.txt
     python3 -m lumbre
+
+Si la distribución bloquea instalaciones con <code>pip --user</code> por proteger su Python del sistema, crea un entorno local y úsalo para iniciar Lumbre:
+
+    python3 -m venv .venv
+    source .venv/bin/activate
+    python -m pip install -r requirements.txt
+    python -m lumbre
 
 El paquete web está incluido. Node.js solo hace falta para desarrollar la interfaz. Para cerrar Lumbre, pulsa Ctrl+C en la ventana del servidor.
 
@@ -65,7 +74,10 @@ Elige una escena precargada o carga una pareja True Color/SWIR de la misma adqui
 Para ejecutar las pruebas disponibles:
 
     python -m pip install --user -r requirements.txt
+    python -m pip install --user "pytest>=8,<10"
     python -m pytest -c tests/pytest.ini tests
+
+Si usas el entorno <code>.venv</code>, omite <code>--user</code> en los dos comandos de instalación.
 
 Las pruebas que generen archivos deben escribirlos en <code>tmp_path</code>. Para inspeccionar una salida manual entre procesos, usa <code>.tmp/pruebas/&lt;nombre&gt;/</code>; no uses <code>resultados/</code>. Conserva a largo plazo solo resultados elegidos, dentro de <code>resultados/guardados/&lt;nombre&gt;/</code>, con su procedencia y parámetros.
 

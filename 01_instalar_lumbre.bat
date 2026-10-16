@@ -29,7 +29,7 @@ if errorlevel 1 (
 )
 echo.
 
-set "PYTHON_CHECK=import os, struct, sys; compatible = (sys.implementation.name == 'cpython' and sys.version_info >= (3, 11) and sys.version_info.releaselevel == 'final' and struct.calcsize('P') == 8 and sys.prefix == sys.base_prefix and not os.environ.get('CONDA_PREFIX') and not os.path.isdir(os.path.join(sys.prefix, 'conda-meta'))); sys.exit(0 if compatible else 1)"
+set "PYTHON_CHECK=import os, struct, sys, sysconfig; compatible = (sys.implementation.name == 'cpython' and (3, 11) <= sys.version_info[:2] < (3, 15) and sys.version_info.releaselevel == 'final' and struct.calcsize('P') == 8 and sysconfig.get_config_var('Py_GIL_DISABLED') != 1 and sys.prefix == sys.base_prefix and not os.environ.get('CONDA_PREFIX') and not os.path.isdir(os.path.join(sys.prefix, 'conda-meta'))); sys.exit(0 if compatible else 1)"
 set "PYTHON="
 where py >nul 2>&1
 if not errorlevel 1 (
@@ -95,9 +95,9 @@ goto error_final
 
 :error_python
 echo ERROR: No encontre CPython estable de 64 bits compatible en PATH.
-echo Se requiere CPython estable 3.11 o posterior, de 64 bits y fuera de Conda/venv.
-echo Instala Python desde https://www.python.org/downloads/windows/,
-echo marca Python Launcher y Add Python to PATH, y vuelve a ejecutar este archivo.
+echo Se requiere CPython estandar estable 3.11-3.14, de 64 bits y fuera de Conda/venv.
+echo Instala Python Install Manager desde https://www.python.org/downloads/windows/,
+echo ejecuta "py install 3.14" en una terminal y vuelve a ejecutar este archivo.
 goto error_final
 
 :error_pip
@@ -108,7 +108,7 @@ goto error_final
 :error_instalacion
 echo ERROR: pip no pudo instalar las dependencias.
 echo Revisa el mensaje anterior, la conexion, el proxy o el antivirus.
-echo Si no hay una rueda compatible para tu Python, usa una version estable 3.11-3.14.
+echo Se requiere CPython estandar de 64 bits, version estable 3.11-3.14, fuera de Conda/venv.
 goto error_final
 
 :error_imports

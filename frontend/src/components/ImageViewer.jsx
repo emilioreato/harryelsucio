@@ -445,7 +445,8 @@ export default function ImageViewer({
             const x = pixel % width;
             const y = Math.floor(pixel / width);
             if (inside(visible, pixel)) putLayer(pixel, [230, 38, 30], 0.50);
-            if (inside(smoke, pixel)) putLayer(pixel, [35, 145, 235], 0.27);
+            if (inside(smoke, pixel)) putLayer(pixel, [30, 120, 221], 0.30);
+            if (edge(smoke, pixel, x, y)) putLayer(pixel, [19, 93, 168], 0.42);
             if (showSegmentation && edge(visible, pixel, x, y)) {
               putLayer(pixel, [255, 230, 30], 1);
             }

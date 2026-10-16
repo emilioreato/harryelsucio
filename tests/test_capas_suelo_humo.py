@@ -16,7 +16,7 @@ def test_superficie_visible_e_inferida_se_dibujan_en_capas_distintas():
     resultado = SimpleNamespace(mascara=visible, mascara_candidata_bajo_humo=inferida,
         mascara_humo=inferida, mascara_indeterminada=np.zeros_like(visible), contornos=())
     salida = crear_superposicion(base, resultado)
-    humo_azul = superponer_mascara(base, inferida, color=(35, 145, 225), opacidad=.22)
+    humo_azul = superponer_mascara(base, inferida, color=(30, 120, 221), opacidad=.25)
     suelo_inferido = superponer_mascara(
         humo_azul, inferida, color=(220, 35, 190), opacidad=.48
     )
@@ -31,6 +31,26 @@ def test_superficie_visible_e_inferida_se_dibujan_en_capas_distintas():
     assert tuple(salida[20, 28]) == (255, 45, 220)
     assert np.array_equal(salida[20, 27], superficie_roja[20, 27])
     assert visible.sum() == 480
+
+
+def test_humo_probable_usa_un_borde_azul_mas_oscuro():
+    base = np.full((30, 40, 3), 150, np.uint8)
+    humo = np.zeros((30, 40), bool)
+    humo[5:25, 8:32] = True
+    resultado = SimpleNamespace(
+        mascara=np.zeros_like(humo),
+        mascara_candidata_bajo_humo=np.zeros_like(humo),
+        mascara_humo=humo,
+        contornos=(),
+    )
+
+    salida = crear_superposicion(base, resultado)
+    interior_azul = superponer_mascara(
+        base, humo, color=(30, 120, 221), opacidad=.25
+    )
+
+    assert np.array_equal(salida[15, 20], interior_azul[15, 20])
+    assert salida[15, 8, 1] < salida[15, 20, 1]
 
 
 def test_true_color_amplia_velo_sin_propagarse_por_vegetacion():

@@ -19,6 +19,7 @@ __pycache__/
 # Frontend React/Vite
 frontend/node_modules/
 frontend/.vite/
+.venv/
 
 # Salidas temporales de pruebas e inspección manual
 /.tmp/

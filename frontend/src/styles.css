@@ -492,7 +492,7 @@ body { color: var(--ink); background: #071019; }
 }
 .mark-toggle.rt-Button { border-color: rgba(120, 207, 215, .22); color: #c0d4d8; background: rgba(255, 255, 255, .035); }
 .layer-choice--burned.rt-Button.is-active { border-color: rgba(255, 128, 118, .88); color: #ffe9e6; background: rgba(225, 65, 54, .25); box-shadow: inset 0 0 0 1px rgba(255, 128, 118, .25); }
-.layer-choice--smoke.rt-Button.is-active { border-color: rgba(101, 190, 255, .9); color: #e4f5ff; background: rgba(52, 143, 214, .27); box-shadow: inset 0 0 0 1px rgba(101, 190, 255, .25); }
+.layer-choice--smoke.rt-Button.is-active { border-color: rgba(73, 148, 232, .92); color: #e7f2ff; background: rgba(30, 120, 221, .3); box-shadow: inset 0 0 0 1px rgba(73, 148, 232, .25); }
 .layer-choice--under-smoke.rt-Button.is-active { border-color: rgba(239, 116, 224, .9); color: #ffe9fd; background: rgba(191, 59, 174, .27); box-shadow: inset 0 0 0 1px rgba(239, 116, 224, .25); }
 .overlay-toggle.rt-Button.is-active { border-color: rgba(255, 220, 112, .88); color: #fff5ce; background: rgba(190, 138, 36, .22); box-shadow: inset 0 0 0 1px rgba(255, 220, 112, .22); }
 .mark-toggle.rt-Button.is-active { border-color: rgba(255, 112, 187, .88); color: #ffe5f1; background: rgba(201, 54, 126, .23); box-shadow: inset 0 0 0 1px rgba(255, 112, 187, .22); }
@@ -847,6 +847,8 @@ body { color: var(--ink); background: #071019; }
   padding-inline: 5px;
   font-size: 9px;
 }
+.viewer-toolbar__tools > .overlay-toggle.rt-Button,
+.viewer-toolbar__tools > .mark-toggle.rt-Button { align-self: center; }
 
 @media (min-width: 901px) {
   .viewer-toolbar {

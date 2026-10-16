@@ -7,6 +7,10 @@ from .segmentacion import ResultadoAreaAfectada
 from .ontologia import ClaseSemantica
 
 
+_COLOR_HUMO = (30, 120, 221)
+_COLOR_BORDE_HUMO = (19, 93, 168)
+
+
 def crear_superposicion(
     imagen_base: np.ndarray,
     resultado: ResultadoAreaAfectada,
@@ -18,18 +22,14 @@ def crear_superposicion(
     if unir_superficie:
         union = resultado.mascara_superficie_estimada
         salida = superponer_mascara(imagen_base, union, color=(225, 45, 35), opacidad=.56)
-        salida = superponer_mascara(salida, resultado.mascara_humo,
-                                   color=(35, 145, 225), opacidad=.22)
+        salida = _superponer_humo(salida, resultado.mascara_humo)
         contornos, _ = cv2.findContours(union.astype(np.uint8), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         cv2.drawContours(salida, contornos, -1, (255, 238, 60), max(1, round(max(union.shape) / 1200)))
         return salida
 
     # El orden de pintado mantiene legibles ambas evidencias. Las tres máscaras
     # también se exportan por separado: este PNG combinado es solo una vista.
-    salida = superponer_mascara(
-        imagen_base, resultado.mascara_humo,
-        color=(35, 145, 225), opacidad=0.22,
-    )
+    salida = _superponer_humo(imagen_base, resultado.mascara_humo)
     salida = superponer_mascara(
         salida, resultado.mascara,
         color=(225, 45, 35), opacidad=0.56,
@@ -63,10 +63,7 @@ def crear_vista_clasificacion(
     if unir_superficie:
         return crear_superposicion(true_color, resultado, unir_superficie=True)
 
-    salida = superponer_mascara(
-        true_color, resultado.mascara_humo,
-        color=(35, 145, 225), opacidad=0.22,
-    )
+    salida = _superponer_humo(true_color, resultado.mascara_humo)
     salida = superponer_mascara(
         salida, resultado.mascara_clasificada,
         color=(225, 45, 35), opacidad=0.46,
@@ -158,6 +155,23 @@ def superponer_mascara(
         + opacidad * np.asarray(color, dtype=np.float32)
     ).astype(np.uint8)
     return salida
+
+
+def _superponer_humo(imagen_rgb: np.ndarray, mascara: np.ndarray) -> np.ndarray:
+    """Dibuja el humo probable con el mismo azul y borde que el visor."""
+    salida = superponer_mascara(imagen_rgb, mascara, color=_COLOR_HUMO, opacidad=.25)
+    binaria = np.asarray(mascara, dtype=bool)
+    interior = binaria.copy()
+    interior[1:, :] &= binaria[:-1, :]
+    interior[:-1, :] &= binaria[1:, :]
+    interior[:, 1:] &= binaria[:, :-1]
+    interior[:, :-1] &= binaria[:, 1:]
+    borde = binaria & ~interior
+    borde[0, :] |= binaria[0, :]
+    borde[-1, :] |= binaria[-1, :]
+    borde[:, 0] |= binaria[:, 0]
+    borde[:, -1] |= binaria[:, -1]
+    return superponer_mascara(salida, borde, color=_COLOR_BORDE_HUMO, opacidad=.42)
 
 
 def _superponer_borde_inferido(imagen_rgb: np.ndarray, mascara: np.ndarray) -> None:
