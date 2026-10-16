@@ -27,7 +27,7 @@ _CAPAS_VISTA = {
 _DESCRIPCIONES_CAPA = {
     "estimated-surface": "Unión final de superficie visible, evidencia SWIR bajo humo y continuidad local respaldada por SWIR; zona quemada estimada, no confirmada.",
     "surface-continuity": "Continuidad inferida en huecos y separaciones pequeños con respaldo SWIR; no se suma al área observada.",
-    "diagnostic-under-smoke-cyan-evidence": "Candidatos por contraste residual SWIR bajo cian, antes de los filtros de conexión y distancia; no son superficie confirmada.",
+    "diagnostic-under-smoke-cyan-evidence": "Contraste residual SWIR bajo cian: solo diagnóstico; no alimenta la clasificación de superficie.",
     "diagnostic-smoke-contextual-veil": "Velo atmosférico conectado añadido antes de evaluar la superficie bajo humo, independientemente de la máscara quemada.",
     "true-color": "Entrada True Color preparada en la rejilla común del análisis.",
     "swir": "Entrada SWIR preparada en la rejilla común del análisis.",

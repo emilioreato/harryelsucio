@@ -310,7 +310,7 @@ export default function ImageViewer({
   const currentLayer = jobId ? visibleLayer(layer) : null;
   const source = currentLayer && jobId ? `${api.layerUrl(jobId, currentLayer)}?v=${jobId}` : "";
   const hasResult = Boolean(jobId && grid);
-  const supportsSeparateOverlays = layer === "true-color" || layer === "swir" || layer === "candidates";
+  const supportsSeparateOverlays = hasResult;
   const availableLayers = hasWildfiresReference
     ? [...LAYERS, ["reference-wildfires", "Wildfires · ref.", Layers3]]
     : LAYERS;
@@ -829,7 +829,7 @@ export default function ImageViewer({
             variant="ghost"
             size="1"
             type="button"
-            disabled={!hasResult || layer === "reference-wildfires"}
+            disabled={!hasResult}
             aria-pressed={showSegmentation}
             aria-label={`${showSegmentation ? "Ocultar" : "Mostrar"} el contorno de la zona quemada estimada.`}
             title="Alternar el contorno de la detección unificada."

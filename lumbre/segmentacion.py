@@ -414,30 +414,6 @@ def segmentar_superficie_afectada(
         union_previa = regiones.mascara | estimacion.mascara_candidata
         union_refinada = refinar_superficie_local(swir, union_previa, clasificacion.mascara_agua)
         continuidad_superficie = union_refinada & ~union_previa
-        if not conservar_regiones_separadas:
-            from .refinamiento_basico import seleccionar_soporte_regional
-            visible = regiones.mascara
-            anclas_claras = np.zeros((alto, ancho), bool)
-            if visible.any():
-                anclas_claras = (visible & (caracteristicas[..., 0] >= max(
-                    .30, float(np.quantile(caracteristicas[..., 0][visible], .75))))
-                    & (caracteristicas[..., 6] >= max(
-                        .15, float(np.quantile(caracteristicas[..., 6][visible], .75))))
-                    & (caracteristicas[..., 3] <= float(np.quantile(
-                        caracteristicas[..., 3][visible], .50)))
-                    & (caracteristicas[..., 2] <= .10))
-            union_refinada, incierta = seleccionar_soporte_regional(union_refinada, anclas_claras)
-            visible = regiones.mascara & union_refinada
-            import cv2
-            contornos, _ = cv2.findContours(visible.astype(np.uint8), cv2.RETR_LIST,
-                                            cv2.CHAIN_APPROX_SIMPLE)
-            regiones = replace(regiones, mascara=visible, contornos=tuple(contornos),
-                                proporcion=float(visible.mean()))
-            estimacion = replace(estimacion,
-                mascara_espectral=estimacion.mascara_espectral & union_refinada,
-                mascara_continuidad=estimacion.mascara_continuidad & union_refinada)
-            continuidad_superficie &= union_refinada
-            diagnosticos["surface-uncertain-regions"] = incierta
         humo_previo = clasificacion.mascara_humo
         humo_refinado = refinar_humo_sobre_superficie(
             true_color, swir, humo_previo, union_refinada, clasificacion.mascara_agua,

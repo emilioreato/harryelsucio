@@ -50,32 +50,6 @@ def refinar_superficie_local(swir, superficie, agua):
     return superficie | (propuestas & compatible)
 
 
-def seleccionar_soporte_regional(superficie, anclas_claras):
-    """Separa extensiones débiles unidas por cuellos más finos que la región.
-
-    Una conexión de pocos píxeles no confirma una lóbulo completo. Se conserva
-    el cuerpo principal y otras regiones con anclas claras propias. Lo demás
-    queda como candidato incierto, no se etiqueta como terreno sano.
-    """
-    superficie = np.asarray(superficie, dtype=bool)
-    anclas = _mascara(anclas_claras, superficie.shape)
-    if not superficie.any():
-        return superficie.copy(), np.zeros_like(superficie)
-    radio = max(1, min(4, round(min(superficie.shape) * .0025)))
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * radio + 1,) * 2)
-    interiores = cv2.morphologyEx(superficie.astype(np.uint8), cv2.MORPH_OPEN, kernel)
-    n, etiquetas, stats, _ = cv2.connectedComponentsWithStats(interiores, connectivity=8)
-    if n <= 1:
-        return np.zeros_like(superficie), superficie.copy()
-    respaldo = np.bincount(etiquetas[anclas], minlength=n)
-    conservar = respaldo >= 16
-    conservar[1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))] = True
-    conservar[0] = False
-    soporte = cv2.dilate(conservar[etiquetas].astype(np.uint8), kernel).astype(bool)
-    coherente = superficie & soporte
-    return coherente, superficie & ~coherente
-
-
 def refinar_velo_contextual(true_color, swir, humo, agua):
     """Velo conectado sobre cualquier terreno, antes de evaluar suelo ocluido.
 

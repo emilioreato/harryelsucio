@@ -3,26 +3,18 @@ import pytest
 
 from lumbre.refinamiento_basico import (
     refinar_humo_sobre_superficie, refinar_superficie_local, refinar_velo_contextual,
-    seleccionar_soporte_regional,
 )
 
 
-def test_un_corredor_fino_no_confirma_otra_region_sin_anclas_propias():
+def test_refinamiento_conserva_cicatrices_separadas_y_ramas_delgadas():
     superficie = np.zeros((160, 200), bool)
     superficie[20:100, 20:100] = True
     superficie[40:75, 140:175] = True
-    superficie[54:56, 100:140] = True  # Conexión insuficiente entre dos cuerpos.
-    superficie[115:145, 140:170] = True  # Otra cicatriz con evidencia propia.
-    anclas = np.zeros_like(superficie)
-    anclas[40:60, 40:60] = True
-    anclas[120:140, 145:165] = True
-    principal, incierta = seleccionar_soporte_regional(superficie, anclas)
-    assert principal[30:90, 30:90].all()
-    assert not principal[45:70, 145:170].any()
-    assert incierta[45:70, 145:170].all()
-    assert principal[120:140, 145:165].all()
-    assert np.array_equal(principal | incierta, superficie)
-    assert not (principal & incierta).any()
+    superficie[54:56, 100:140] = True
+    superficie[115:145, 140:170] = True
+    swir = np.full((160, 200, 3), (160, 60, 30), np.uint8)
+    refinada = refinar_superficie_local(swir, superficie, np.zeros_like(superficie))
+    assert refinada[superficie].all()
 
 
 def test_velo_sobre_suelo_sano_no_necesita_mascara_quemada():
