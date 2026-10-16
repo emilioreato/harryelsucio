@@ -43,7 +43,8 @@ def previsualizar_slic(imagen: np.ndarray, etiquetas: np.ndarray) -> np.ndarray:
     bordes = np.zeros(ids.shape, dtype=bool)
     bordes[:, 1:] |= ids[:, 1:] != ids[:, :-1]
     bordes[1:, :] |= ids[1:, :] != ids[:-1, :]
-    bordes = cv2.dilate(bordes.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
+    # Una sola fila/columna por límite mantiene visibles los mosaicos SLIC;
+    # dilatar aquí cubría demasiada superficie en escenas con muchos superpíxeles.
     salida[bordes] = (70, 235, 215)
     return salida
 

@@ -1,6 +1,6 @@
 # Documentación
 
-La documentación conserva el contexto del reto de Indra Espacio en el III Malackathon 2026 y la evolución de Lumbre. Consulta la [historia del proyecto](historia_del_proyecto.md); la cronología de las jornadas se completará con el relato del equipo.
+La documentación conserva el contexto del reto de Indra Espacio en el III Malackathon 2026 y la evolución de Lumbre. La [historia del proyecto](historia_del_proyecto.md) es un relato retrospectivo del equipo: explica el origen, las decisiones tomadas durante la maratón, el alcance alcanzado y las ideas futuras.
 
 - [`Ideas/README.md`](Ideas/README.md): índice de fundamentos, propuestas, decisiones y estado.
 - [`Ideas/segmentacion_contextual_evaluacion.md`](Ideas/segmentacion_contextual_evaluacion.md): informe detallado de una evaluación experimental fechada; sus métricas no son validación con etiquetas reales.

@@ -1,98 +1,107 @@
-# Maracatón 2026
+# Lumbre · análisis satelital de incendios
 
-Lumbre es una aplicación local para revisar escenas satelitales de incendios. Analiza una pareja de composiciones True Color y SWIR, muestra capas de diagnóstico y permite exportar resultados. El backend procesa las imágenes en el ordenador; la interfaz funciona en el navegador.
+Prototipo local para explorar escenas satelitales con composiciones **True Color** y **SWIR**. Propone capas de superficie afectada y humo probable, permite revisar la imagen, medir, anotar y exportar un paquete con la evidencia del análisis.
 
-## Origen del proyecto
+Nació en la **III Malackathon 2026 de la Universidad de Málaga**, para el reto de Indra Espacio. Éramos cuatro estudiantes de primer curso: tres de Ciberseguridad e Inteligencia Artificial y uno de Informática. [La historia del proyecto](DOCUMENTACION/historia_del_proyecto.md) conserva cómo evolucionó el trabajo y qué quedó fuera del prototipo.
 
-Lumbre nació como prototipo para el reto de **Indra Espacio** en el III Malackathon 2026, desarrollado por cuatro estudiantes de primer curso de la UMA. La [historia del proyecto](DOCUMENTACION/historia_del_proyecto.md) reúne el objetivo, la composición del equipo y la evolución técnica; completaremos allí la cronología cuando quede recogido el relato de las jornadas.
+![Entrada True Color de Niebla y salida del detector por capas sobre esa misma escena](DOCUMENTACION/media_readme/01_comparacion_niebla.jpg)
+
+*Niebla, Huelva · 08/08/2026. La entrada de la izquierda y la salida de la derecha corresponden a la misma escena y ejecución. Rojo: superficie candidata; azul: humo probable; amarillo: contorno. Es una salida experimental, no una medida de precisión.*
+
+## Qué permite hacer
+
+- Abrir escenas de muestra o cargar una pareja de imágenes propias.
+- Analizar las composiciones True Color y SWIR y cambiar entre las capas disponibles: superficie candidata, máscara, humo probable, zona candidata bajo humo y clases semánticas.
+- Comparar contornos y revisar las zonas en el visor central.
+- Medir distancias y áreas cuando se dispone de una escala GSD adecuada.
+- Anotar con trazos, líneas, flechas, formas y texto para registrar observaciones.
+- Descargar un mapa o una máscara, o exportar un paquete ZIP para analizarlo después con otra herramienta o con IA.
+
+### Humo y superficie bajo la oclusión
+
+El análisis mantiene por separado la superficie visible, el humo probable y los píxeles que podrían corresponder a superficie bajo humo. Esa separación ayuda a revisar la escena; no convierte una hipótesis en una observación confirmada.
+
+![Composición SWIR de entrada y capas reales de humo probable y superficie candidata bajo la oclusión](DOCUMENTACION/media_readme/02_humo_y_capas_niebla.jpg)
+
+*Niebla, Huelva · 08/08/2026. Azul: humo probable; naranja: superficie candidata bajo la oclusión. Son capas experimentales, pueden incluir bruma o nube y no confirman una superficie afectada.*
+
+### Un flujo de trabajo en una sola ventana
+
+Las entradas y parámetros están a la izquierda, el visor de capas en el centro y las herramientas de revisión y exportación a la derecha.
+
+![Esquema del flujo actual de la interfaz de Lumbre: entradas, visor central y herramientas](DOCUMENTACION/media_readme/03_flujo_interfaz.jpg)
+
+*Esquema del flujo y de la disposición actual; no es una captura de pantalla.*
+
+## Guardar y exportar
+
+Las capas de cada ejecución se mantienen en memoria y se descartan al cerrar Lumbre. No se escriben imágenes automáticamente en resultados: se conserva lo que la persona descarga.
+
+El botón **Guardar resultado** permite descargar el mapa o la máscara. **Exportar paquete** genera un ZIP con las entradas preparadas en la rejilla del análisis, las capas y máscaras disponibles, bordes, parámetros, métricas, un mapa anotado y las anotaciones en JSON y SVG. El manifiesto registra la escena y la escala disponible, y deja explícitas las limitaciones de alineación y georreferenciación.
 
 ## Instalación e inicio
 
-Se necesita CPython estable de 64 bits, versión 3.11 o posterior. Python 3.14 es una opción actual; el lanzador no queda atado a Python 3.12. Los paquetes se instalan desde ruedas binarias compatibles, sin exigir compiladores. El instalador rechaza versiones preliminares y entornos Conda/venv para evitar instalar en un Python distinto del que luego usa la app.
+Se necesita **CPython estable de 64 bits, versión 3.11 o posterior**.
 
-En Windows, instala Python desde [python.org](https://www.python.org/downloads/windows/) si aún no está instalado; activa **Python Launcher** y **Add Python to PATH**. Desde la raíz del repositorio, ejecuta `01_instalar_lumbre.bat` una vez y luego `02_iniciar_lumbre.bat` para abrir la aplicación. `03_acceso_movil.bat` configura el acceso opcional desde el teléfono y `04_cerrar_lumbre.bat` cierra Lumbre. El instalador detecta un Python compatible, comprueba pip e instala las dependencias desde el único `requirements.txt` en el perfil del usuario. No modifica PATH ni requiere permisos de administrador. Si falla, conserva la ventana abierta con el error.
+En Windows, instala Python desde [python.org](https://www.python.org/downloads/windows/) si hace falta; activa **Python Launcher** y **Add Python to PATH**. Desde la raíz del repositorio:
 
-En macOS o Linux, desde la raíz del repositorio:
+1. Ejecuta <code>01_instalar_lumbre.bat</code> una vez.
+2. Ejecuta <code>02_iniciar_lumbre.bat</code> para abrir la aplicación.
+3. Ejecuta <code>04_cerrar_lumbre.bat</code> para cerrar Lumbre cuando termines.
 
-```sh
-python3 -m pip install --user -r requirements.txt
-python3 -m lumbre
-```
+<code>03_acceso_movil.bat</code> configura el acceso opcional desde el teléfono. La aplicación funciona en el ordenador sin ese paso. El instalador detecta un Python compatible e instala las dependencias del único <code>requirements.txt</code>; no modifica PATH ni requiere permisos de administrador.
 
-El paquete web ya está incluido; Node.js solo hace falta para desarrollar la interfaz. Para cerrar Lumbre, usa `04_cerrar_lumbre.bat` en Windows o pulsa `Ctrl+C` en la ventana del servidor.
+En macOS o Linux, desde la raíz:
 
-## Uso
+    python3 -m pip install --user -r requirements.txt
+    python3 -m lumbre
 
-Elige una escena precargada o carga imágenes propias. Lumbre permite comparar composiciones, revisar la segmentación y sus capas de humo, ver focos cuando hay una imagen Wildfires disponible, medir sobre la rejilla de análisis y descargar resultados. La documentación explica [el flujo, los detectores y sus límites](DOCUMENTACION/Ideas/README.md).
+El paquete web está incluido. Node.js solo hace falta para desarrollar la interfaz. Para cerrar Lumbre, pulsa Ctrl+C en la ventana del servidor.
 
-Las capas de una ejecución se mantienen en memoria y se descartan al cerrar Lumbre. No se guardan imágenes automáticamente: usa las acciones de exportación para descargar al ordenador solo las que quieras conservar.
+## Uso y desarrollo
 
-En el visor, **Anotar** permite dibujar a mano, añadir líneas, flechas, rectángulos, elipses y textos sobre la imagen. El botón circular junto a **Guardar resultado** descarga un ZIP con las entradas True Color/SWIR preparadas en la misma rejilla, las capas y máscaras semánticas disponibles, bordes, parámetros, métricas y un mapa anotado. Incluye las anotaciones por separado en JSON y SVG para que otra herramienta pueda leerlas y alinearlas por coordenadas de píxel. El paquete registra GSD y rejilla cuando están disponibles; no inventa CRS ni reproyecta imágenes desalineadas.
+Elige una escena precargada o carga una pareja True Color/SWIR de la misma adquisición y con dimensiones coincidentes. Inicia la segmentación, cambia las capas del visor y usa las herramientas **Ver**, **Regla**, **Área** y **Anotar**. El formato RGB o el tamaño iguales no garantizan por sí solos que dos imágenes estén alineadas geográficamente.
 
-Las escenas precargadas están en `imagenes_muestra/`, con una carpeta por caso y una imagen True Color y otra SWIR. Ambas deben corresponder a la misma adquisición y estar alineadas. Para cargas propias se admiten JPG, PNG y TIFF. Tener el mismo ancho y alto no demuestra que dos imágenes estén alineadas geográficamente.
+Para ejecutar las pruebas disponibles:
 
-Los resultados son candidatos para revisión, no confirmaciones de superficie quemada o fuego activo. Las ocho escenas precargadas usan una escala de catálogo de 10 m/píxel, aplicada automáticamente y ajustada a la rejilla de análisis; no se solicita al usuario. Las parejas propias sin escala conocida se miden en píxeles. Las composiciones JPEG/PNG no conservan necesariamente las bandas originales, la reflectancia ni la georreferenciación, así que esa escala es nominal y no crea coordenadas terrestres. Lumbre no calcula NBR/dNBR a partir de esos renderizados. La máscara de humo representa oclusión probable; una hipótesis de terreno bajo humo se mantiene separada del área observada. `Wildfires` sirve para extraer marcas visuales de focos, pero no es verdad terreno ni mide temperatura.
+    python -m pip install --user -r requirements.txt
+    python -m pytest -c tests/pytest.ini tests
 
-## Acceso móvil opcional
+Las pruebas que generen archivos deben escribirlos en <code>tmp_path</code>. Para inspeccionar una salida manual entre procesos, usa <code>.tmp/pruebas/&lt;nombre&gt;/</code>; no uses <code>resultados/</code>. Conserva a largo plazo solo resultados elegidos, dentro de <code>resultados/guardados/&lt;nombre&gt;/</code>, con su procedencia y parámetros.
 
-El acceso desde un teléfono está desactivado por defecto. Para activarlo o desactivarlo, ejecuta `03_acceso_movil.bat` desde la raíz y elige una opción; después inicia o reinicia Lumbre. La preferencia se guarda localmente en `.lumbre/` y no se sube al repositorio.
+La interfaz editable está en <code>frontend/</code>; el paquete que sirve el backend está en <code>web/</code>. Para desarrollar, inicia el backend con <code>python -m lumbre --no-browser</code> y, en otra terminal:
 
-Al activarlo, el servidor escucha también en la red local y muestra un QR en el panel izquierdo. No se cambian el firewall ni el router; Windows podría pedir permiso para conexiones entrantes y, si se bloquean, el teléfono no podrá conectarse. Los dispositivos de la misma red podrían alcanzar la aplicación si el firewall lo permite, así que úsalo solo en una Wi‑Fi privada de confianza. No configures redirección de puertos ni lo expongas a Internet.
+    cd frontend
+    npm ci
+    npm run dev
 
-## Diseño adaptable a pantallas estrechas
+Vite requiere Node.js ^20.19.0 o >=22.12.0. Para regenerar el paquete de producción, ejecuta <code>npm run build</code> en <code>frontend/</code>.
 
-La interfaz cambia automáticamente su distribución cuando el navegador se hace estrecho o vertical. Para comprobarlo en el portátil, reduce el ancho de la ventana o usa las herramientas de diseño adaptable del navegador. Esto funciona aunque el acceso móvil esté desactivado.
+## Escenas, escala y alcance
 
-## Desarrollo
+Las parejas de muestra están en <code>imagenes_muestra/</code>. Los nombres de archivo identifican composiciones True Color y SWIR y, en varios casos, incluyen “Sentinel-2 L2A”; el repositorio no conserva el identificador de producto ni verifica de forma independiente toda su procedencia. <code>Wildfires</code>, cuando está disponible, aporta una referencia visual de focos, no una máscara validada ni una medición térmica.
 
-### Ramas y clones
+En escenas precargadas puede aplicarse un GSD nominal de catálogo de 10 m/píxel. Sirve para estimar distancias y áreas en la rejilla local, pero no aporta coordenadas terrestres, CRS ni una transformación geográfica fiable. En imágenes propias sin escala conocida, las mediciones quedan en píxeles. Las composiciones renderizadas no conservan necesariamente las bandas originales o la reflectancia; Lumbre no calcula NBR ni dNBR a partir de ellas.
 
-`main` es la única rama activa y la fuente de verdad del proyecto. Las otras ramas remotas se conservan por su valor histórico; no contienen trabajo vigente ni deben usarse como base salvo que alguien lo pida expresamente.
+Las detecciones son **candidatas experimentales**, no confirmaciones de área quemada, fuego activo o humo. No hay suficientes etiquetas externas independientes para afirmar una precisión general. Lumbre es un prototipo de revisión visual, no un sistema operativo de alerta o apoyo a emergencias.
 
-Para obtener únicamente la rama activa en una copia nueva:
+## Documentación y estructura
 
-```sh
-git clone --single-branch --branch main https://github.com/emilioreato/malackathon2026.git
-```
-
-Un `git clone` normal también descarga las referencias de las demás ramas y los objetos que solo existen en ellas. La opción `--single-branch` evita ese contenido histórico en las copias nuevas, sin borrar las ramas del remoto.
-
-Para ejecutar las pruebas disponibles, instala las dependencias del proyecto y luego ejecuta pytest:
-
-```sh
-python -m pip install --user -r requirements.txt
-python -m pytest -c tests/pytest.ini tests
-```
-
-Las pruebas que generan imágenes o archivos deben escribirlos en `tmp_path`; pytest los elimina al finalizar. Para inspeccionar una salida manual entre procesos, usa `.tmp/pruebas/<nombre-de-la-prueba>/` (ignorada por Git), nunca `resultados/`. Los scripts de evaluación limpian su carpeta temporal automáticamente por defecto; si necesitas conservar una ejecución, pásales `--salida .tmp/pruebas/<nombre-de-la-prueba>`. Solo los resultados elegidos para conservar a largo plazo van en `resultados/guardados/<nombre-descriptivo>/`, acompañados de sus parámetros y procedencia.
-
-La interfaz React/Vite está en `frontend/`; el paquete estático servido por la app se guarda en `web/`. Para desarrollarla, inicia el backend con `python -m lumbre --no-browser` y, en otra terminal:
-
-```sh
-cd frontend
-npm ci
-npm run dev
-```
-
-Vite usa Node.js `^20.19.0` o `>=22.12.0` (Node 22 reciente es una opción sencilla). Para regenerar el paquete de producción, ejecuta `npm run build` en `frontend/`. Si el backend usa otro puerto, configura `LUMBRE_API_TARGET` con su URL.
-
-`requirements.txt` es el único archivo de dependencias e incluye pytest para que la instalación de desarrollo y la de uso no se contradigan. Para entrenar el detector Random Forest, preparar etiquetas y consultar las limitaciones, sigue la [guía de entrenamiento](<training/random_forest/README.md>); el repositorio no incluye un modelo entrenado.
-
-## Estructura del proyecto
-
-- Los accesos numerados de Windows para instalar, iniciar, configurar el móvil y cerrar Lumbre están en la raíz del repositorio.
-- `lumbre/` contiene el backend Python; `python -m lumbre` lo inicia.
-- `frontend/` contiene la interfaz editable y `web/` su versión servida por el backend.
-- `imagenes_muestra/` contiene escenas de ejemplo.
-- `training/random_forest/` reúne la guía y referencias para preparar datos de entrenamiento.
-- `resultados/` contiene informes y resultados seleccionados para conservar; consulta su [política de almacenamiento](resultados/README.md).
-- `scripts/` contiene herramientas de evaluación y el auxiliar de cierre de Windows.
-
-El estado de ejecución se guarda en `.lumbre/` y se excluye de Git. La configuración de pytest está dentro de `tests/` para mantener las herramientas de desarrollo fuera de la vista inicial.
-
-## Documentación
-
+- [Historia y evolución del proyecto](DOCUMENTACION/historia_del_proyecto.md)
 - [Índice de documentación](DOCUMENTACION/README.md)
-- [Ideas, decisiones y evolución](DOCUMENTACION/Ideas/README.md)
-- [Imágenes y escenas de prueba](imagenes_muestra/README.md)
-- [Guía de entrenamiento Random Forest](<training/random_forest/README.md>)
+- [Ideas, decisiones y estado actual](DOCUMENTACION/Ideas/README.md)
+- [Flujo básico, GSD y mediciones](DOCUMENTACION/Ideas/segmentacion_basica.md)
+- [Escenas de muestra y procedencia](imagenes_muestra/README.md)
+- [Guía de entrenamiento Random Forest](training/random_forest/README.md)
+
+El backend Python está en <code>lumbre/</code>; la interfaz editable, en <code>frontend/</code>; las escenas, en <code>imagenes_muestra/</code>; las herramientas de evaluación, en <code>scripts/</code>; y los resultados seleccionados para conservar, en <code>resultados/</code>. <code>main</code> es la rama activa del proyecto; para una copia nueva:
+
+    git clone --single-branch --branch main https://github.com/emilioreato/malackathon2026.git
+
+## Fallos observados en las pruebas
+
+En una revisión manual de una iteración experimental para Madrid–Ávila señalamos zonas que el resultado no delimitaba bien. Los trazos amarillos de la imagen son observaciones del equipo, no una referencia de verdad terreno. También vimos falsos positivos, en especial al separar humo, nube y bruma.
+
+![Ejemplo real de omisiones señaladas manualmente durante la revisión de Madrid–Ávila](DOCUMENTACION/media_readme/04_revision_omisiones.jpg)
+
+*La salida visual puede ser llamativa y aun así omitir zonas o marcar superficies que requieren revisión. Por eso el README muestra candidatos, no una precisión demostrada.*

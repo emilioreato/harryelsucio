@@ -142,7 +142,7 @@ def test_paquete_incluye_entradas_capas_anotaciones_y_mapa_editado():
             "capas/semantic-classes.png",
             "capas/class-water.png",
             "capas/visible-surface-border.png",
-            "revision/mapa_anotado.png",
+            "mapa_anotado.png",
             "anotaciones/anotaciones.json",
             "anotaciones/anotaciones.svg",
         } <= nombres
@@ -164,7 +164,7 @@ def test_paquete_incluye_entradas_capas_anotaciones_y_mapa_editado():
         svg = archivo.read("anotaciones/anotaciones.svg").decode("utf-8")
         assert "Revisar borde" in svg
         assert "<ellipse" in svg and "<rect" in svg
-        with Image.open(BytesIO(archivo.read("revision/mapa_anotado.png"))) as mapa:
+        with Image.open(BytesIO(archivo.read("mapa_anotado.png"))) as mapa:
             assert mapa.size == (32, 24)
             assert mapa.format == "PNG"
 
@@ -200,7 +200,7 @@ def test_endpoint_package_devuelve_zip_y_rechaza_trabajo_incompleto(monkeypatch)
     assert response["status"] == 200
     assert response["content_type"] == "application/zip"
     with ZipFile(BytesIO(response["body"])) as archivo:
-        assert "revision/mapa_anotado.png" in archivo.namelist()
+        assert "mapa_anotado.png" in archivo.namelist()
 
     trabajo["state"] = "running"
     response.clear()

@@ -45,6 +45,9 @@ export default function ZoomableImageViewport({
   const frameRef = useRef(null);
   const internalImageRef = useRef(null);
   const controlsRef = useRef(null);
+  const controlsHideTimerRef = useRef(0);
+  const hasZoomedRef = useRef(false);
+  const isAtFitScaleRef = useRef(true);
   const naturalSizeRef = useRef(null);
   const frameSizeRef = useRef(null);
   const lastResetKeyRef = useRef(resetKey);
@@ -59,6 +62,7 @@ export default function ZoomableImageViewport({
   const clearClickTimerRef = useRef(0);
   const [fitSize, setFitSize] = useState({ width: 0, height: 0 });
   const [scale, setScale] = useState(MIN_SCALE);
+  const [showZoomControls, setShowZoomControls] = useState(true);
   const [spacePressed, setSpacePressed] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const canPanWithLeft = allowLeftPan || spacePressed;
@@ -101,6 +105,18 @@ export default function ZoomableImageViewport({
   const attachSurfaceRef = useCallback((node) => {
     assignRef(surfaceRef, node);
   }, [surfaceRef]);
+
+  const scheduleZoomControlsHide = useCallback(() => {
+    if (!hasZoomedRef.current || !isAtFitScaleRef.current) return;
+    window.clearTimeout(controlsHideTimerRef.current);
+    controlsHideTimerRef.current = window.setTimeout(() => setShowZoomControls(false), 3000);
+  }, []);
+
+  const revealZoomControls = useCallback(() => {
+    setShowZoomControls(true);
+    if (isAtFitScaleRef.current) scheduleZoomControlsHide();
+    else window.clearTimeout(controlsHideTimerRef.current);
+  }, [scheduleZoomControlsHide]);
 
   useEffect(() => {
     const frame = frameRef.current;
@@ -175,7 +191,10 @@ export default function ZoomableImageViewport({
     setIsDragging(false);
   }, [onPointerCancel, resetKey]);
 
-  useEffect(() => () => window.clearTimeout(clearClickTimerRef.current), []);
+  useEffect(() => () => {
+    window.clearTimeout(clearClickTimerRef.current);
+    window.clearTimeout(controlsHideTimerRef.current);
+  }, []);
 
   const handleImageLoad = useCallback((event) => {
     const image = event.currentTarget;
@@ -190,8 +209,19 @@ export default function ZoomableImageViewport({
   }, [measureFit, onLoad]);
 
   const handleTransform = useCallback((_ref, nextState) => {
+    isAtFitScaleRef.current = nextState.scale <= MIN_SCALE + 0.005;
+    if (isAtFitScaleRef.current) {
+      if (hasZoomedRef.current) {
+        setShowZoomControls(true);
+        scheduleZoomControlsHide();
+      }
+    } else {
+      hasZoomedRef.current = true;
+      window.clearTimeout(controlsHideTimerRef.current);
+      setShowZoomControls(true);
+    }
     setScale((current) => (Math.abs(current - nextState.scale) < 0.005 ? current : nextState.scale));
-  }, []);
+  }, [scheduleZoomControlsHide]);
 
   const clearClickSuppressionSoon = (delay = 500) => {
     window.clearTimeout(clearClickTimerRef.current);
@@ -431,7 +461,11 @@ export default function ZoomableImageViewport({
           </div>
         </TransformComponent>
         {fitSize.width > 0 && fitSize.height > 0 && (
-          <div className="zoomable-viewport__controls" role="group" aria-label="Controles de zoom">
+          <div
+            className={`zoomable-viewport__controls${showZoomControls ? "" : " is-auto-hidden"}`}
+            role="group"
+            aria-label="Controles de zoom"
+          >
             <button
               type="button"
               className="zoomable-viewport__button zoomable-viewport__icon-button"
@@ -458,7 +492,7 @@ export default function ZoomableImageViewport({
               title="Encajar imagen"
               disabled={isAtFit}
               onClick={resetView}
-            ><Maximize2 size={13} aria-hidden="true" /><span>Encajar</span></button>
+            ><Maximize2 size={13} aria-hidden="true" /></button>
           </div>
         )}
       </div>
@@ -466,7 +500,12 @@ export default function ZoomableImageViewport({
   };
 
   return (
-    <div className={`zoomable-viewport ${className}`.trim()}>
+    <div
+      className={`zoomable-viewport ${className}`.trim()}
+      onPointerMove={revealZoomControls}
+      onPointerDown={revealZoomControls}
+      onFocusCapture={revealZoomControls}
+    >
       <TransformWrapper
         initialScale={MIN_SCALE}
         initialPositionX={0}

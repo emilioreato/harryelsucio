@@ -107,6 +107,7 @@ export default function AdvancedSettings({ value, onChange, onReset, method, ran
               <Slider label="Peso K-Means" value={value.fusion_kmeans_weight} onChange={(n) => updateTop("fusion_kmeans_weight", n)} />
               <Slider label="Peso SWIR + histéresis" value={value.fusion_swir_weight} onChange={(n) => updateTop("fusion_swir_weight", n)} />
               <Slider label="Voto mínimo" value={value.fusion_threshold} onChange={(n) => updateTop("fusion_threshold", n)} />
+              <p className="field-help">Con los pesos iniciales iguales, basta el voto de uno de los detectores. Sube el umbral para exigir que coincidan más.</p>
             </div>
           </details>
         )}

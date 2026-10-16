@@ -34,6 +34,21 @@ function saveBlob(blob, filename) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function slugForFilename(value) {
+  return String(value || "analisis")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 48) || "analisis";
+}
+
+function localDateStamp(date = new Date()) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
+}
+
 function loadRulerMask(url) {
   return new Promise((resolve) => {
     const image = new Image();
@@ -234,6 +249,8 @@ export default function AdvancedWorkspace({ version, onVersionChange, isActive }
   const [connectionLabel, setConnectionLabel] = useState("Conectando…");
   const [running, setRunning] = useState(false);
   const [jobId, setJobId] = useState(null);
+  const [jobLabel, setJobLabel] = useState("pareja_cargada");
+  const [jobTimestamp, setJobTimestamp] = useState(null);
   const [analysis, setAnalysis] = useState(null);
   const [progress, setProgress] = useState({ stage: "Listo para analizar", value: 0 });
   const [error, setError] = useState("");
@@ -318,6 +335,7 @@ export default function AdvancedWorkspace({ version, onVersionChange, isActive }
     const runToken = ++analysisRunRef.current;
     setError("");
     let request;
+    let nextJobLabel = scenes.find((scene) => scene.id === sceneId)?.label || "pareja_cargada";
     try {
       if (source === "preloaded") {
         if (!sceneId) throw new Error("Selecciona una escena para analizar.");
@@ -334,8 +352,11 @@ export default function AdvancedWorkspace({ version, onVersionChange, isActive }
           swir: await fileToBase64(swirFile),
           wildfires_reference: wildfireFile ? await fileToBase64(wildfireFile) : "",
         };
+        nextJobLabel = trueFile.name.replace(/\.[^.]+$/, "") || "pareja_cargada";
       }
 
+      setJobLabel(nextJobLabel);
+      setJobTimestamp(localDateStamp());
       setJobId(null);
       setAnalysis(null);
       setOrigin(null);
@@ -413,7 +434,10 @@ export default function AdvancedWorkspace({ version, onVersionChange, isActive }
   const downloadLayer = async (name, filename) => {
     if (!jobId) return;
     try {
-      saveBlob(await advancedApi.downloadLayer(jobId, name), filename);
+      const extension = filename.match(/\.[^.]+$/)?.[0] || "";
+      const artifact = filename.slice(0, filename.length - extension.length).replace(/^lumbre_/, "");
+      const exportFilename = `lumbre_${slugForFilename(jobLabel)}_${jobTimestamp || localDateStamp()}_${jobId.slice(0, 8)}_${slugForFilename(artifact)}${extension}`;
+      saveBlob(await advancedApi.downloadLayer(jobId, name), exportFilename);
     } catch (cause) {
       setError(cause?.message || "No se pudo descargar la capa.");
     }

@@ -9,7 +9,7 @@
 
 ## Contexto y código
 
-- Leer solo archivos y secciones pertinentes. `DOCUMENTACION/Ideas/inicial.md` orienta el análisis científico; no sustituye los datos reales ni constituye un contrato infalible. `README.md` documenta uso e instalación; `requirements.txt`, dependencias.
+- Leer solo archivos y secciones pertinentes. `DOCUMENTACION/historia_del_proyecto.md` recoge el origen y el relato del equipo en el III Malackathon; `README.md` documenta uso e instalación y enlaza esa historia. `DOCUMENTACION/Ideas/inicial.md` orienta el análisis científico; no sustituye los datos reales ni constituye un contrato infalible. `requirements.txt` enumera las dependencias.
 - Stack preferente: Python, NumPy, Rasterio, OpenCV/scikit-image, SciPy y scikit-learn para el motor; interfaz propia HTML/CSS/JavaScript servida por una API HTTP local ligera. Evitar frameworks de presentación que añadan controles ajenos a la aplicación. QGIS sirve para inspección, no es requisito del runtime.
 - Desarrollo en Windows/VS Code; usar el Python existente y `pip`, sin imponer entornos virtuales, Conda o Docker. Registrar dependencias nuevas en `requirements.txt` y comandos relevantes en README. Evitar instalaciones pesadas o cambios globales innecesarios.
 - Modularizar por responsabilidades **cuando haga falta**. Código simple y legible, validación de entradas, errores comprensibles y datos de demo reproducibles. Si falla una API, admitir entrada manual o caché con procedencia explícita.

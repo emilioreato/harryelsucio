@@ -3,6 +3,7 @@ import pytest
 
 from lumbre.refinamiento_basico import (
     refinar_humo_sobre_superficie, refinar_superficie_local, refinar_velo_contextual,
+    refinar_soporte_regional, recuperar_continuidad_swir,
 )
 
 
@@ -15,6 +16,69 @@ def test_refinamiento_conserva_cicatrices_separadas_y_ramas_delgadas():
     swir = np.full((160, 200, 3), (160, 60, 30), np.uint8)
     refinada = refinar_superficie_local(swir, superficie, np.zeros_like(superficie))
     assert refinada[superficie].all()
+
+
+def test_auditoria_regional_conserva_varios_cuerpos_y_una_cicatriz_pequena_con_contraste():
+    superficie = np.zeros((200, 300), bool)
+    superficie[20:100, 20:100] = True
+    superficie[30:80, 160:210] = True
+    superficie[125:140, 30:45] = True  # Cuerpo pequeño sin observación.
+    superficie[125:145, 170:190] = True  # Cicatriz pequeña despejada.
+    visible = superficie.copy()
+    visible[125:140, 30:45] = False
+    tc = np.full((200, 300, 3), 180, np.uint8)
+    sw = np.full_like(tc, (60, 150, 70))
+    tc[visible] = (70, 65, 60)
+    sw[visible] = (185, 85, 55)
+    final, incierta = refinar_soporte_regional(
+        tc, sw, superficie, visible, np.zeros_like(visible), np.zeros_like(visible),
+        area_minima_pct=1,
+    )
+    assert final[visible].all()
+    assert incierta[130:135, 35:40].all()
+    assert np.array_equal(final | incierta, superficie)
+    assert not (final & incierta).any()
+
+
+def test_recuperacion_swir_cian_conectada_sin_cambiar_humo_ni_crear_islas():
+    sw = np.full((160, 240, 3), (50, 130, 55), np.uint8)
+    visible = np.zeros(sw.shape[:2], bool)
+    visible[30:90, 20:45] = True
+    sw[visible] = (185, 85, 55)
+    humo = np.zeros_like(visible)
+    humo[25:100, 45:210] = True
+    sw[25:100, 45:60] = (100, 135, 125)
+    sw[25:100, 170:190] = (100, 135, 125)  # Igual firma, remota.
+    sw[65:80, 45:60] = (8, 20, 30)  # Agua oscura, sin rojo suficiente.
+    original = humo.copy()
+    recuperada, etiquetas = recuperar_continuidad_swir(
+        sw, visible, visible, humo, area_minima_pct=.15,
+    )
+    assert recuperada[40:55, 46:49].any()
+    assert not recuperada[30:90, 170:190].any()
+    assert not recuperada[65:80, 45:60].any()
+    assert not recuperada[~humo].any()
+    assert np.array_equal(humo, original)
+    assert etiquetas.shape == humo.shape
+
+
+def test_recuperacion_lejana_exige_amplitud_roja_no_solo_residuo_cian():
+    forma = (400, 500)
+    visible = np.zeros(forma, bool)
+    visible[70:280, 150:350] = True
+    visible[100:250, 170:330] = False
+    humo = np.zeros(forma, bool)
+    humo[100:250, 170:330] = True
+    salidas = []
+    for firma in [(100, 135, 125), (200, 205, 190)]:
+        sw = np.full((*forma, 3), (50, 130, 55), np.uint8)
+        sw[visible] = (185, 85, 55)
+        sw[120:220, 170:210] = firma
+        nueva, _ = recuperar_continuidad_swir(sw, visible, visible, humo, area_minima_pct=.15)
+        salidas.append(nueva)
+    assert salidas[0][140:190, 171:180].any()  # Continuidad débil cercana.
+    assert not salidas[0][140:190, 195:205].any()
+    assert salidas[1][140:190, 195:205].any()  # Extensión con amplitud comparable.
 
 
 def test_velo_sobre_suelo_sano_no_necesita_mascara_quemada():

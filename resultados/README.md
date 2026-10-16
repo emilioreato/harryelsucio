@@ -1,5 +1,7 @@
 # Resultados
 
+Esta carpeta es un archivo histórico de evaluaciones seleccionadas del proyecto, no el destino de los análisis de la aplicación. Lumbre conserva una ejecución temporalmente en memoria y solo descarga una imagen o un ZIP cuando la persona lo solicita; el navegador permite elegir dónde guardarlo. La aplicación no depende de esta carpeta.
+
 - [`clasificacion/agua/90dd412/INFORME.md`](clasificacion/agua/90dd412/INFORME.md) conserva una evaluación histórica seleccionada y sus artefactos asociados.
 - [`guardados/`](guardados/README.md) explica dónde y cómo conservar resultados elegidos.
 - `experimentos/historico/` conserva materiales locales de revisiones anteriores; no añadas aquí salidas nuevas de pruebas.

@@ -812,13 +812,13 @@ export default function ImageViewer({
         <div className="viewer-toolbar__tools">
           <div className="layer-control layer-control--overlays" role="group" aria-label="Detección y humo">
           <Button className={`layer-choice layer-choice--overlay layer-choice--burned${showVisibleSurface ? " is-active" : ""}`} variant="ghost" size="1" type="button"
-            disabled={!hasResult || !supportsSeparateOverlays || !maskLayers["estimated-surface"]}
+            disabled={!hasResult || !supportsSeparateOverlays}
             aria-pressed={showVisibleSurface} title="Zona quemada estimada: superficie visible y evidencia SWIR bajo humo unidas; no confirmada en terreno."
             onClick={() => setShowVisibleSurface((visible) => !visible)}>
             <span>Detección</span>
           </Button>
           <Button className={`layer-choice layer-choice--overlay layer-choice--smoke${showSmoke ? " is-active" : ""}`} variant="ghost" size="1" type="button"
-            disabled={!hasResult || !supportsSeparateOverlays || !maskLayers.smoke}
+            disabled={!hasResult || !supportsSeparateOverlays}
             aria-pressed={showSmoke} title="Humo probable; azul."
             onClick={() => setShowSmoke((visible) => !visible)}>
             <span>Humo</span>

@@ -27,6 +27,9 @@ _CAPAS_VISTA = {
 _DESCRIPCIONES_CAPA = {
     "estimated-surface": "Unión final de superficie visible, evidencia SWIR bajo humo y continuidad local respaldada por SWIR; zona quemada estimada, no confirmada.",
     "surface-continuity": "Continuidad inferida en huecos y separaciones pequeños con respaldo SWIR; no se suma al área observada.",
+    "diagnostic-under-smoke-regional-recovery": "Continuidad ocluida recuperada por firma residual regional SWIR y conexión a superficie previa; hipótesis, no área observada.",
+    "diagnostic-under-smoke-recovery-slic": "Regiones SWIR de la zona de búsqueda, evaluadas antes de descartar los píxeles atenuados.",
+    "diagnostic-surface-uncertain-regions": "Hipótesis ocluidas sin respaldo regional suficiente; no se consideran terreno sano.",
     "diagnostic-under-smoke-cyan-evidence": "Contraste residual SWIR bajo cian: solo diagnóstico; no alimenta la clasificación de superficie.",
     "diagnostic-smoke-contextual-veil": "Velo atmosférico conectado añadido antes de evaluar la superficie bajo humo, independientemente de la máscara quemada.",
     "true-color": "Entrada True Color preparada en la rejilla común del análisis.",
@@ -426,7 +429,7 @@ def crear_paquete_resultado(
             "7": "suelo_desnudo_urbano",
         },
         "annotated_view": {
-            "file": "revision/mapa_anotado.png",
+            "file": "mapa_anotado.png",
             "base_layer": vista_nombre,
             "base_layer_label": _CAPAS_VISTA[vista_nombre],
             "display_options": {
@@ -463,7 +466,7 @@ El programa requiere imágenes de entrada con dimensiones coincidentes y no repr
 - `capas/`: todas las capas PNG generadas por esta ejecución. Los nombres conservan el identificador de capa; `manifest.json` describe su contenido.
 - `capas/semantic-classes.png`: identificador semántico por píxel; los valores y nombres están en `semantic_class_values` del manifiesto. `capas/class-*.png` contiene la máscara binaria independiente de cada clase.
 - Las máscaras binarias usan 0 para fondo y 255 para la clase marcada. Las capas `*-border.png` son contornos interiores en píxeles, no perímetros geográficos.
-- `revision/mapa_anotado.png`: vista seleccionada con las anotaciones renderizadas.
+- `mapa_anotado.png`: vista principal seleccionada, con las anotaciones renderizadas. Está en la raíz para encontrarla al abrir el ZIP.
 - `anotaciones/anotaciones.json`: anotaciones editables con coordenadas de píxel.
 - `anotaciones/anotaciones.svg`: capa vectorial transparente en la misma rejilla.
 - `manifest.json`: procedencia, rejilla, parámetros, métricas y limitaciones.
@@ -481,7 +484,7 @@ Las anotaciones son observaciones humanas para revisar errores; no son etiquetas
             paquete.writestr("entradas/wildfires_referencia.png", outputs["reference-wildfires"])
         for ruta, contenido in capas_zip:
             paquete.writestr(ruta, contenido)
-        paquete.writestr("revision/mapa_anotado.png", mapa)
+        paquete.writestr("mapa_anotado.png", mapa)
         paquete.writestr("anotaciones/anotaciones.json", json.dumps(anotaciones_json, ensure_ascii=False, indent=2))
         paquete.writestr("anotaciones/anotaciones.svg", _anotaciones_svg(anotaciones, ancho, alto))
     return buffer.getvalue()

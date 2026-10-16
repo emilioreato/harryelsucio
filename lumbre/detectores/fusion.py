@@ -20,7 +20,7 @@ def clasificar_fusion_ponderada(
     semilla: int = 42,
     peso_kmeans: float = 0.5,
     peso_swir: float = 0.5,
-    umbral_voto: float = 0.55,
+    umbral_voto: float = 0.5,
     pesos_kmeans: dict[str, float] | None = None,
     umbrales_swir: dict[str, float | None] | None = None,
     pesos_humo: dict[str, float] | None = None,

@@ -34,14 +34,14 @@ class DetectorSuperficie:
 DETECTORES_SUPERFICIE: tuple[DetectorSuperficie, ...] = (
     DetectorSuperficie(
         id="contextual_hibrida",
-        nombre="Segmentación contextual híbrida (experimental)",
+        nombre="Segmentación contextual híbrida",
         descripcion="Evidencia V2 + SLIC conjunto, RAG y Watershed local opcional. Hipótesis bajo humo separada del área visible.",
         usa_numero_clases=False,
         clasificar=clasificar_base_contextual,
     ),
     DetectorSuperficie(
         id="kmeans",
-        nombre="K-Means conjunto",
+        nombre="Alternativa · K-Means conjunto",
         descripcion=(
             "Agrupa señales de True Color y SWIR; la puntuación posterior propone "
             "píxeles candidatos a superficie afectada."
@@ -51,7 +51,7 @@ DETECTORES_SUPERFICIE: tuple[DetectorSuperficie, ...] = (
     ),
     DetectorSuperficie(
         id="swir_histeresis",
-        nombre="Contraste SWIR + histéresis (V2)",
+        nombre="Alternativa · Contraste SWIR + histéresis",
         descripcion=(
             "Busca semillas de contraste SWIR alto y las expande por regiones "
             "contiguas; True Color aporta el verdor y ambas vistas confirman "
@@ -62,7 +62,7 @@ DETECTORES_SUPERFICIE: tuple[DetectorSuperficie, ...] = (
     ),
     DetectorSuperficie(
         id="fusion_ponderada",
-        nombre="Fusión ponderada (K-Means + SWIR)",
+        nombre="Alternativa · Fusión ponderada (K-Means + SWIR)",
         descripcion=(
             "Combina las máscaras de ambos detectores. En Herramientas de desarrollo "
             "puedes ponderar sus votos y ajustar sus scores y umbrales."

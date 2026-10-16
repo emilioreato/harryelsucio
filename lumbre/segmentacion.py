@@ -183,7 +183,7 @@ def segmentar_superficie_afectada(
         opciones_detector.update(
             peso_kmeans=avanzado.get("fusion_kmeans_weight", 0.5),
             peso_swir=avanzado.get("fusion_swir_weight", 0.5),
-            umbral_voto=avanzado.get("fusion_threshold", 0.55),
+            umbral_voto=avanzado.get("fusion_threshold", 0.5),
         )
 
     if detector.id == "contextual_hibrida" and ajuste_basico:
@@ -424,7 +424,45 @@ def segmentar_superficie_afectada(
         clases[humo_refinado] = ClaseSemantica.HUMO_PROBABLE
         clasificacion = replace(clasificacion, mascara_humo=humo_refinado,
                                 confianza_humo=confianza, clase_por_pixel=clases)
+        # El humo se cierra primero con el comportamiento anterior. Ni la
+        # auditoría regional ni la recuperación SWIR posterior lo realimentan.
+        from .refinamiento_basico import refinar_soporte_regional, recuperar_continuidad_swir
+        if not conservar_regiones_separadas:
+            soporte, incierta = refinar_soporte_regional(
+                true_color, swir, union_refinada, regiones.mascara, humo_refinado,
+                clasificacion.mascara_agua, area_minima_pct=area_minima_pct,
+            )
+            # Auditar continuidad débil; conservar tanto la evidencia visible
+            # como la firma espectral directa, aunque forme otro cuerpo.
+            soporte |= regiones.mascara | estimacion.mascara_espectral
+            union_refinada &= soporte
+            estimacion = replace(estimacion,
+                mascara_espectral=estimacion.mascara_espectral & soporte,
+                mascara_continuidad=estimacion.mascara_continuidad & soporte)
+            continuidad_superficie &= soporte
+            diagnosticos["surface-uncertain-regions"] = incierta & ~soporte
+        recuperada, etiquetas_recuperacion = recuperar_continuidad_swir(
+            swir, union_refinada, regiones.mascara, humo_refinado,
+            area_minima_pct=area_minima_pct,
+        )
+        estimacion = replace(estimacion,
+            mascara_continuidad=estimacion.mascara_continuidad | recuperada)
+        union_refinada |= recuperada
+        if "surface-uncertain-regions" in diagnosticos:
+            diagnosticos["surface-uncertain-regions"] &= ~union_refinada
+        diagnosticos["under-smoke-regional-recovery"] = recuperada
+        diagnosticos["under-smoke-recovery-slic"] = etiquetas_recuperacion
         estimacion = replace(estimacion, mascara_indeterminada=humo_refinado & ~union_refinada)
+        publicador.publicar(
+            "recuperacion-swir", "Continuidad bajo humo (SWIR)",
+            "Hipótesis regional conectada a la cicatriz; la máscara de humo permanece fija.",
+            kind="diagnostic", progress=98,
+            image=lambda: previsualizar_bajo_humo(
+                swir, humo_refinado, estimacion.mascara_candidata,
+                estimacion.mascara_indeterminada,
+            ),
+            applied=bool(recuperada.any()),
+        )
         diagnosticos["surface-local-refinement"] = continuidad_superficie
         diagnosticos["smoke-local-refinement"] = humo_refinado & ~humo_previo
         publicador.publicar(

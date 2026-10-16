@@ -1,5 +1,6 @@
 from dataclasses import replace
 from io import BytesIO
+import json
 from types import SimpleNamespace
 
 import numpy as np
@@ -70,10 +71,13 @@ def test_basico_filtra_contexto_antes_de_slic_y_refina_swir_oculto(monkeypatch):
     assert opciones[0]["ajuste_basico"] is True
     assert not r.diagnosticos_contextuales["context"][5, 145]
     assert np.any(r.diagnosticos_contextuales["under-smoke-slic"][oculta] > 0)
-    # La firma fuerte oculta conserva su conexión al borde, pero no se usa
-    # para resembrar toda la región más allá del radio desde lo visible.
+    # La recuperación regional puede superar el radio corto, pero siempre
+    # respeta su radio máximo medido desde el visible original.
     assert r.mascara_candidata_bajo_humo[40:60, 60:64].all()
-    assert not r.mascara_candidata_bajo_humo[40:60, 66:78].any()
+    assert r.mascara_candidata_bajo_humo[40:60, 66:68].any()
+    from scipy import ndimage as ndi
+    distancia = ndi.distance_transform_edt(~(r.mascara & ~r.mascara_humo))
+    assert np.all(distancia[r.mascara_candidata_bajo_humo] <= round(min(forma) * .10))
     assert any(c.label == "SLIC bajo humo (SWIR)" for c in checkpoints)
     assert checkpoints[-1].final
     assert "unificada" in checkpoints[-1].description
@@ -83,6 +87,15 @@ def test_basico_filtra_contexto_antes_de_slic_y_refina_swir_oculto(monkeypatch):
     sin_humo = replace(r, mascara_humo=np.zeros(forma, bool))
     mapa = crear_superposicion(sw, sin_humo, unir_superficie=True)
     assert np.array_equal(mapa[50, 59], mapa[50, 60])
+    # El nuevo paso SWIR no puede realimentar el humo ni la evidencia visible.
+    import lumbre.refinamiento_basico as refinamiento
+    monkeypatch.setattr(refinamiento, "recuperar_continuidad_swir",
+        lambda *_args, **_kwargs: (np.zeros(forma, bool), np.zeros(forma, np.int32)))
+    sin_recuperacion = segmentacion.segmentar_superficie_afectada(
+        tc, sw, metodo="contextual_hibrida", area_minima_pct=.15,
+        ajustes_avanzados={"basic_surface": True})
+    assert np.array_equal(r.mascara_humo, sin_recuperacion.mascara_humo)
+    assert np.array_equal(r.mascara, sin_recuperacion.mascara)
 
 
 def test_exportacion_compone_union_y_humo_independientes():
@@ -94,7 +107,8 @@ def test_exportacion_compone_union_y_humo_independientes():
              "show_visible_surface": True, "show_segmentation": False}
     def exportar(v):
         with ZipFile(BytesIO(crear_paquete_resultado(trabajo, [], v))) as z:
-            return np.array(Image.open(BytesIO(z.read("revision/mapa_anotado.png"))))
+            manifest = json.loads(z.read("manifest.json"))
+            return np.array(Image.open(BytesIO(z.read(manifest["annotated_view"]["file"]))))
     mapa = exportar(vista)
     # Mismo rojo a ambos lados de la antigua separación visible/oculta.
     assert np.array_equal(mapa[8, 12], mapa[8, 23])

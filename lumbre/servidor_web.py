@@ -440,13 +440,19 @@ def _jpeg_checkpoint(imagen: np.ndarray) -> bytes:
     return contenido
 
 
-def _jpeg_scene_preview(ruta: Path) -> bytes:
-    """Crea una miniatura JPEG para el selector sin exponer la ruta del archivo."""
+def _jpeg_scene_preview(
+    ruta: Path,
+    *,
+    max_size: tuple[int, int] | None = (480, 300),
+    quality: int = 76,
+) -> bytes:
+    """Prepara una imagen JPEG; permite miniaturas y vistas amplias de escenas."""
     with Image.open(ruta) as original:
-        original.thumbnail((480, 300), Image.Resampling.LANCZOS)
+        if max_size is not None:
+            original.thumbnail(max_size, Image.Resampling.LANCZOS)
         vista = original.convert("RGB")
     salida = BytesIO()
-    vista.save(salida, format="JPEG", quality=76, optimize=True)
+    vista.save(salida, format="JPEG", quality=quality, optimize=True)
     return salida.getvalue()
 
 
@@ -637,7 +643,7 @@ def _validar_ajustes(datos: dict[str, Any]) -> dict[str, Any]:
 
     peso_fusion_kmeans = decimal_avanzado("fusion_kmeans_weight", 0.0, 1.0, 0.5)
     peso_fusion_swir = decimal_avanzado("fusion_swir_weight", 0.0, 1.0, 0.5)
-    umbral_fusion = decimal_avanzado("fusion_threshold", 0.0, 1.0, 0.55)
+    umbral_fusion = decimal_avanzado("fusion_threshold", 0.0, 1.0, 0.5)
     umbral_humo = decimal_avanzado("smoke_threshold", 0.0, 1.0, 0.55)
     if metodo == "fusion_ponderada" and peso_fusion_kmeans + peso_fusion_swir <= 0:
         raise ValueError("En la fusión, al menos un peso de algoritmo debe ser mayor que cero.")
@@ -785,7 +791,7 @@ def _iniciar_analisis(
                 "warnings": list(resultado.avisos),
                 "coverage_pct": float(resultado.proporcion * 100),
                 "estimated_surface_pixels": int(resultado.mascara_superficie_estimada.sum()),
-                "surface_profile": "basic-unified-v5-evidence-only",
+                "surface_profile": "basic-unified-v6-regional-swir",
                 "surface_continuity_px": int(np.count_nonzero(resultado.mascara_continuidad_superficie)),
                 "area": float(area),
                 "area_unit": unidad_area,
@@ -1030,6 +1036,36 @@ class LumbreHandler(BaseHTTPRequestHandler):
                 },
             )
             return
+        imagen_escena = re.fullmatch(r"/api/scenes/([^/]+)/image/(true-color|swir)", ruta)
+        if imagen_escena:
+            escena_id, canal = imagen_escena.groups()
+            escena_id = unquote(escena_id)
+            escena = next(
+                (item for item in listar_escenas_disponibles() if item.nombre == escena_id),
+                None,
+            )
+            if escena is None:
+                self._json(404, {"error": "No se encontró esa escena."})
+                return
+            ruta_imagen = escena.true_color if canal == "true-color" else escena.swir
+            try:
+                imagen = _jpeg_scene_preview(
+                    ruta_imagen,
+                    max_size=(4000, 4000),
+                    quality=88,
+                )
+            except (OSError, ValueError) as exc:
+                logging.getLogger(__name__).warning(
+                    "No se pudo preparar la imagen de %s (%s): %s",
+                    escena_id,
+                    canal,
+                    exc,
+                )
+                self._json(422, {"error": "No se pudo leer la imagen de esta escena."})
+                return
+            self._bytes(200, imagen, "image/jpeg")
+            return
+
         vista_escena = re.fullmatch(r"/api/scenes/([^/]+)/preview/(true-color|swir)", ruta)
         if vista_escena:
             escena_id, canal = vista_escena.groups()
@@ -1511,7 +1547,7 @@ class LumbreHandler(BaseHTTPRequestHandler):
                     "input_source": source,
                     "scene_id": scene_id,
                     "input_filenames": input_filenames,
-                    "settings": dict(_ajustes_exportables(ajustes), surface_profile="basic-unified-v5-evidence-only"),
+                    "settings": dict(_ajustes_exportables(ajustes), surface_profile="basic-unified-v6-regional-swir"),
                 }
             worker = threading.Thread(
                 target=_iniciar_analisis,

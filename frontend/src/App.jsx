@@ -4,6 +4,7 @@ import AdvancedSettings from "./components/AdvancedSettings.jsx";
 import ImageViewer from "./components/ImageViewer.jsx";
 import PipelineTimeline from "./components/PipelineTimeline.jsx";
 import CheckpointViewer from "./components/CheckpointViewer.jsx";
+import ScenePreviewViewer from "./components/ScenePreviewViewer.jsx";
 import AdvancedWorkspace from "./components/AdvancedWorkspace.jsx";
 import VersionSwitcher from "./components/VersionSwitcher.jsx";
 import { api, fileToBase64 } from "./services/api.js";
@@ -79,7 +80,7 @@ function defaultAdvancedSettings() {
     water_thresholds: { ...DEFAULT_WATER_THRESHOLDS },
     fusion_kmeans_weight: 0.5,
     fusion_swir_weight: 0.5,
-    fusion_threshold: 0.55,
+    fusion_threshold: 0.5,
     use_random_forest: false,
   };
 }
@@ -102,6 +103,21 @@ function saveBlob(blob, filename) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function slugForFilename(value) {
+  return String(value || "analisis")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 48) || "analisis";
+}
+
+function localDateStamp(date = new Date()) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
+}
+
 function BasicWorkspace({ version, onVersionChange, isActive }) {
   const [scenes, setScenes] = useState([]);
   const [detectors, setDetectors] = useState([]);
@@ -119,6 +135,7 @@ function BasicWorkspace({ version, onVersionChange, isActive }) {
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
   const [jobId, setJobId] = useState(null);
+  const [jobTimestamp, setJobTimestamp] = useState(null);
   const [checkpoints, setCheckpoints] = useState([]);
   const [selectedCheckpointId, setSelectedCheckpointId] = useState(null);
   const [checkpointWarnings, setCheckpointWarnings] = useState([]);
@@ -259,6 +276,8 @@ function BasicWorkspace({ version, onVersionChange, isActive }) {
   const selectedCheckpoint = checkpoints.find((item) => item.id === selectedCheckpointId) || null;
   const showingHistory = Boolean(selectedCheckpoint && !selectedCheckpoint.final);
   const showFinalViewer = hasResult && !showingHistory;
+  const showScenePreview = source === "preloaded" && Boolean(selectedScene)
+    && !showFinalViewer && !selectedCheckpoint;
   const canMeasure = hasResult && !showingHistory;
   const grid = result?.grid || null;
   const metrics = result?.metrics || null;
@@ -285,6 +304,24 @@ function BasicWorkspace({ version, onVersionChange, isActive }) {
     setDistancePreview(null);
     setSelectedRegion(null);
   }, [checkpoints]);
+
+  const selectScene = (nextSceneId) => {
+    if (running || nextSceneId === sceneId) return;
+    setSceneId(nextSceneId);
+    setError("");
+    setResult(null);
+    setJobId(null);
+    setJobTimestamp(null);
+    setCheckpoints([]);
+    setSelectedCheckpointId(null);
+    setCheckpointWarnings([]);
+    followingLiveRef.current = true;
+    setMarks([]);
+    setDistancePreview(null);
+    setSelectedRegion(null);
+    setRegionCount(0);
+    resetAnnotations();
+  };
 
   useEffect(() => {
     const handleHistoryKeys = (event) => {
@@ -366,6 +403,7 @@ function BasicWorkspace({ version, onVersionChange, isActive }) {
     event.preventDefault();
     setError("");
     let request;
+    let resultLabel = activeLabel;
     try {
       const settings = collectSettings();
       if (source === "preloaded") {
@@ -384,9 +422,11 @@ function BasicWorkspace({ version, onVersionChange, isActive }) {
           swir_filename: swirFile.name,
           settings,
         };
+        resultLabel = trueFile.name.replace(/\.[^.]+$/, "") || activeLabel;
       }
 
-      setJobLabel(activeLabel);
+      setJobLabel(resultLabel);
+      setJobTimestamp(localDateStamp());
       setJobId(null);
       setCheckpoints([]);
       setSelectedCheckpointId(null);
@@ -456,7 +496,10 @@ function BasicWorkspace({ version, onVersionChange, isActive }) {
   const downloadLayer = async (name, filename) => {
     if (!jobId) return;
     try {
-      saveBlob(await api.downloadLayer(jobId, name), filename);
+      const extension = filename.match(/\.[^.]+$/)?.[0] || "";
+      const artifact = filename.slice(0, filename.length - extension.length).replace(/^lumbre_/, "");
+      const exportFilename = `lumbre_${slugForFilename(jobLabel)}_${jobTimestamp || localDateStamp()}_${jobId.slice(0, 8)}_${slugForFilename(artifact)}${extension}`;
+      saveBlob(await api.downloadLayer(jobId, name), exportFilename);
     } catch (cause) {
       setError(cause.message);
     }
@@ -476,7 +519,10 @@ function BasicWorkspace({ version, onVersionChange, isActive }) {
           show_under_smoke: showVisibleSurface,
         },
       });
-      saveBlob(paquete, `lumbre_paquete_ia_${jobId.slice(0, 8)}.zip`);
+      saveBlob(
+        paquete,
+        `lumbre_${slugForFilename(jobLabel)}_${jobTimestamp || localDateStamp()}_${jobId.slice(0, 8)}.zip`,
+      );
     } catch (cause) {
       setError(cause.message);
     } finally {
@@ -546,7 +592,8 @@ function BasicWorkspace({ version, onVersionChange, isActive }) {
                       type="button"
                       aria-pressed={scene.id === sceneId}
                       aria-label={`Elegir ${scene.label}, True Color y SWIR`}
-                      onClick={() => setSceneId(scene.id)}
+                      disabled={running}
+                      onClick={() => selectScene(scene.id)}
                     >
                       <span className="scene-card-previews">
                         <span className="scene-preview">
@@ -682,12 +729,20 @@ function BasicWorkspace({ version, onVersionChange, isActive }) {
                 onError={setError}
               />
             ) : (
-              <CheckpointViewer
-                checkpoint={selectedCheckpoint}
-                jobId={jobId}
-                running={running}
-                incomplete={result?.state === "error"}
-              />
+              showScenePreview ? (
+                <ScenePreviewViewer
+                  scene={selectedScene}
+                  src={api.sceneImageUrl(selectedScene.id, "true-color")}
+                  running={running}
+                />
+              ) : (
+                <CheckpointViewer
+                  checkpoint={selectedCheckpoint}
+                  jobId={jobId}
+                  running={running}
+                  incomplete={result?.state === "error"}
+                />
+              )
             )}
           </div>
         </section>

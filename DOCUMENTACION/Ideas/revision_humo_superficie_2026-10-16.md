@@ -108,3 +108,36 @@ Se ensayó después una apertura morfológica y selección del componente mayor 
 Tras retirarlo, las dos regiones negativas de Niebla mantienen cero superficie detectada frente a 33.761 y 28.772 píxeles de v4. La Mierla recupera 63.065 píxeles respecto al ensayo restrictivo y queda en 393.216 píxeles de unión (367.033 visibles y 20.870 ocultos). En las regiones amarillas evaluadas quedan 5.745 píxeles detectados frente a 30.618 de v4: **persisten falsos positivos**, por tanto el algoritmo no se declara resuelto ni fiable de forma general. Las marcas son controles locales, no etiquetas exhaustivas ni una medida de precisión global.
 
 Las tres escenas se procesaron a 2500 × 1546 con sensibilidad 6, siete clases, área mínima 0,15 %, distancia 10 % y método contextual híbrido. Los datos y comparaciones de esta ejecución están en `.tmp/pruebas/precision-negativos/`. La batería focal de ocho archivos aprueba 37 pruebas. Sus resultados no sustituyen la aceptación visual ni una evaluación de omisiones con máscaras independientes.
+
+## Afinamiento v6: superficie ocluida con humo fijo
+
+La persona aclaró que la detección de humo actual debe conservarse y aportó nuevas zonas de omisión en La Mierla y Madrid–Ávila. El perfil `basic-unified-v6-regional-swir` mantiene exactamente la máscara de humo y la superficie visible de v5 en las tres escenas comparadas. La recuperación nueva se ejecuta después del refinamiento de humo y no lo realimenta.
+
+Se recupera la auditoría regional sin seleccionar un único componente: admite todos los cuerpos con el área mínima y cuerpos pequeños con contraste propio. En el flujo final se protege la evidencia visible y la firma SWIR espectral directa; la auditoría solo puede retirar continuidad débil. No vuelve a desaparecer una cicatriz visible por ser una región separada o tener un cuello fino.
+
+El paso SWIR nuevo analiza primero superpíxeles en la zona de búsqueda, antes de descartar individualmente los píxeles atenuados. Compara la mediana regional del contraste residual R frente a G−B con el cuartil superior de las anclas despejadas (mínimo ordinal 0,70). Exige señal roja absoluta, compatibilidad por píxel y conexión a la superficie previa. Cerca admite continuidad débil; más lejos necesita amplitud roja comparable al cuartil inferior de las anclas o predominio azul regional. Las distancias se miden desde las anclas originales, no desde la expansión recién obtenida. La búsqueda corta llega al 4 % de la dimensión menor; dentro del contexto espacial de cada cicatriz, ampliado por ese margen, llega como máximo al 10 %. Es una heurística sobre RGB renderizado: no recupera bandas, no elimina físicamente aerosoles ni confirma suelo que el sensor no permite observar.
+
+### Comparación de las nuevas regiones de omisión
+
+Las capturas se registraron sobre las escenas con 99 y 123 correspondencias aceptadas. Se seleccionaron interiores aproximados de revisión, no máscaras exhaustivas de quemado.
+
+| Escena | Píxeles de la región revisada | Detectados v5 | Detectados v6 |
+|---|---:|---:|---:|
+| La Mierla | 47.944 | 0 | 7.109 |
+| Madrid–Ávila, izquierda | 38.184 | 1.412 | 10.299 |
+
+Esto demuestra recuperación local, no precisión o recall. Quedan omisiones importantes. Las marcas nuevas y antiguas de La Mierla se solapan en 14.637 píxeles; exigir cero detección en todo el contorno antiguo también impediría recuperar parte de lo ahora señalado como omitido. Fuera de la nueva zona de omisión, el control antiguo pasa de 5.745 a 5.524 píxeles y no recibe expansión nueva. No deben tratarse todos los interiores dibujados como etiquetas binarias infalibles.
+
+En los dos interiores de exceso de Niebla se seleccionan ahora 1.444 y 581 píxeles (frente a 33.761 y 28.772 en v4, y cero en la v5 más restrictiva). La inspección muestra pequeñas extensiones de borde; no se afirma ausencia de falsos positivos. Las cicatrices grandes y los píxeles visibles de v5 permanecen intactos en las tres escenas.
+
+### Coste y comprobaciones
+
+Se comparó SLIC de 144 y 64 píxeles por región, con iguales entradas y humo, repitiendo el ensayo tras el último ajuste. En el paso de recuperación aislado, 64 recupera algo más en el interior señalado de Madrid–Ávila (9.273 frente a 8.887 píxeles), pero menos en La Mierla (7.919 frente a 8.716), y aumenta los dos controles de exceso de Niebla (1.598/670 frente a 1.444/581). No hay mejora consistente que justifique sustituir 144. Estas cifras corresponden al paso aislado con semillas v5, no al resultado final con auditoría regional de la tabla anterior.
+
+El paso de recuperación final cuesta aproximadamente 4–5 segundos según escena. Los análisis completos finales tardaron 48,69 s (Niebla), 51,12 s (La Mierla) y 51,11 s (Madrid–Ávila), frente a aproximadamente 40–45 s en v5. No se incrementaron resolución, iteraciones de K-means ni parámetros de humo. No se consume el presupuesto permitido de 2–3 veces el tiempo sin una ganancia demostrada.
+
+La batería focal de ocho archivos aprueba 40 pruebas. Incluye conservación de varias cicatrices, recuperación de cian conectado, rechazo de islas remotas y agua oscura, mayor exigencia de señal lejos de las anclas y una comprobación de que activar la recuperación no cambia humo ni superficie visible. Las capas nuevas `diagnostic-under-smoke-regional-recovery`, `diagnostic-under-smoke-recovery-slic` y `diagnostic-surface-uncertain-regions` permiten revisar las decisiones. La recuperación se integra en la superficie unificada como continuidad inferida, sin sumarla al área observada. El modo avanzado no incorpora estos pasos.
+
+Los comandos y resultados de comparación están en `.tmp/pruebas/precision-negativos/evaluar_v6.py`, `comparacion.json`, `comparar_coste.py` y `comparacion-coste-slic.json`. Las capturas conservan sus trazos originales para comparar el mismo encuadre.
+
+La ejecución real del análisis básico de La Mierla y la creación del ZIP completaron correctamente; las máscaras exportadas coinciden con las evaluadas y el manifiesto identifica el perfil v6. No se reinició la aplicación abierta ni se verificó su interfaz durante esta revisión: las pruebas usaron procesos nuevos del motor y del servidor.

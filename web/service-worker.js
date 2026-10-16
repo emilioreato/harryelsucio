@@ -1,4 +1,4 @@
-const CACHE_NAME = "lumbre-shell-v1";
+const CACHE_NAME = "lumbre-shell-v2";
 const APP_SHELL = ["/", "/manifest.webmanifest", "/icons/lumbre-192.png", "/icons/lumbre-512.png"];
 
 self.addEventListener("install", (event) => {
