@@ -6,8 +6,8 @@ from io import BytesIO
 import numpy as np
 from PIL import Image
 
-from pyroscope import servidor_web
-from pyroscope.observabilidad_pipeline import PublicadorCheckpoint
+from lumbre import servidor_web
+from lumbre.observabilidad_pipeline import PublicadorCheckpoint
 
 
 def _get(handler_path):

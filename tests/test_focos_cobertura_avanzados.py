@@ -2,10 +2,10 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from pyroscope.cobertura import detectar_verdor_aparente
-from pyroscope.escenarios import generar_escenario_progresion
-from pyroscope.focos import detectar_focos_visuales
-from pyroscope.ontologia import ClaseSemantica
+from lumbre.cobertura import detectar_verdor_aparente
+from lumbre.escenarios import generar_escenario_progresion
+from lumbre.focos import detectar_focos_visuales
+from lumbre.ontologia import ClaseSemantica
 
 
 def _resultado(shape, *, burned=None, smoke=None, classified=None, classes=None):

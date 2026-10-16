@@ -1,6 +1,0 @@
-nombre,fecha,fecha_real_utc,stac_item_id,coverage,fuente
-01_Cinco_Villas_Zaragoza,2026-07-16,2026-07-16T10:56:19.024000+00:00,S2B_MSIL2A_20260716T105619_R094_T30TXM_20260716T134607,1.0,https://eu-space.europa.eu/components/earth-observation-copernicus/image-of-the-day/wildfire-prompts-evacuations-cinco-villas-spain
-02_La_Vall_d_Uixo_Castellon,2026-07-28,2026-07-28T10:46:21.025000+00:00,S2C_MSIL2A_20260728T104621_R051_T30TYK_20260728T144218,1.0,https://eu-space.europa.eu/components/earth-observation-copernicus/image-of-the-day/wildfire-la-vall-duixo-spain
-03_Fermoselle_Zamora,2026-07-29,2026-07-29T11:06:19.024000+00:00,S2B_MSIL2A_20260729T110619_R137_T29TQF_20260729T133901,1.0,https://eu-space.europa.eu/components/earth-observation-copernicus/image-of-the-day/wildfires-along-portugal-spain-border
-04_Pinzio_Portugal,2026-07-29,2026-07-29T11:21:31.024000+00:00,S2A_MSIL2A_20260729T112131_R037_T29TPF_20260729T195715,0.9016817593790427,https://eu-space.europa.eu/components/earth-observation-copernicus/image-of-the-day/wildfires-along-portugal-spain-border
-05_Valpacos_Portugal,2026-07-29,2026-07-29T11:21:31.024000+00:00,S2A_MSIL2A_20260729T112131_R037_T29TPG_20260729T195715,1.0,https://eu-space.europa.eu/components/earth-observation-copernicus/image-of-the-day/wildfires-along-portugal-spain-border

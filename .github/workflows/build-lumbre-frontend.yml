@@ -34,7 +34,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Check Python syntax
-        run: python -m compileall -q app.py pyroscope
+        run: python -m compileall -q lumbre
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci

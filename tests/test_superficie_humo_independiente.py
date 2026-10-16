@@ -2,13 +2,13 @@ from types import SimpleNamespace
 
 import numpy as np
 
-import pyroscope.regiones_contextuales as regiones_contextuales
-import pyroscope.segmentacion as segmentacion
-from pyroscope.modelos_segmentacion import (
+import lumbre.regiones_contextuales as regiones_contextuales
+import lumbre.segmentacion as segmentacion
+from lumbre.modelos_segmentacion import (
     ResultadoClasificacionSemantica,
     ResultadoRegionesEspaciales,
 )
-from pyroscope.ontologia import ClaseSemantica
+from lumbre.ontologia import ClaseSemantica
 
 
 def test_humo_ampliado_no_borra_superficie_visible_ni_funde_hipotesis_oculta(monkeypatch):

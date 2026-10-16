@@ -26,6 +26,8 @@
 
 - Antes de editar, revisar `git status --short` y los cambios existentes en archivos afectados. Preservar trabajo ajeno y evitar reformateos masivos.
 - No hacer `reset --hard`, `clean -fd`, `push --force`, pull, merge, rebase, commits o push sin petición expresa. No subir secretos, cachés ni imágenes pesadas.
+- `main` es la única rama activa y la fuente de verdad. Todas las demás ramas remotas se conservan como referencias históricas; no iniciar trabajo, integrar cambios ni basarse en ellas salvo petición expresa del usuario.
+- Para una copia nueva de trabajo usa `git clone --single-branch --branch main <URL-del-repositorio>`; así no se descargan los refs ni los objetos exclusivos de ramas históricas. No borrar ni renombrar esas ramas para reducir el tamaño local.
 
 ## Verificación y comunicación
 
@@ -33,3 +35,12 @@
 - Comprobar un recorrido real de extremo a extremo en cuanto exista. Distinguir claramente lo probado de lo pendiente; no presentar un mock como integración real.
 - Avances breves cuando aporten valor, con un emoji de fase: 🔎 diagnóstico, 🛠️ implementación, 🔧 corrección, ▶️ prueba, ✅ validado, ❌ fallo, 📦 entrega. No narrar cada comando.
 - Al terminar, resumir **qué funciona, qué cambió, qué se probó y qué falta**. Priorizar el siguiente paso de mayor impacto.
+
+## Salidas de la aplicación y pruebas
+
+- Lumbre mantiene las capas de un análisis en memoria. No escribe las imágenes de cada ejecución en `resultados/`; al cerrar el proceso desaparecen. Solo se conserva un archivo cuando la persona pulsa una acción de exportación y lo guarda desde el navegador.
+- En pruebas Python, usa `tmp_path` de pytest para imágenes y archivos generados; pytest gestiona su ciclo de vida. No copies entradas de `imagenes_muestra/` ni escribas salidas de pruebas dentro de `resultados/`.
+- Los scripts que generan paneles o máscaras usan `scripts/_salidas.py`: sin `--salida` crean una carpeta en `.tmp/salidas/` y la eliminan al terminar; con `--salida RUTA` conservan los artefactos en la ruta solicitada.
+- Para revisar manualmente una salida entre procesos, usa `.tmp/pruebas/<id-de-prueba>/` (ignorada por Git), por ejemplo `python scripts/evaluar_lumbre.py --salida .tmp/pruebas/revision-humo`. Elimina solo esa carpeta concreta al terminar. No uses `resultados/` como área de trabajo temporal.
+- Guarda en `resultados/guardados/<nombre-descriptivo>/` únicamente resultados seleccionados para conservar; añade por ejecución un `README.md` o manifiesto con escena, fecha, comando, parámetros y procedencia. No sustituyas ni borres el informe histórico curado sin una petición expresa.
+- Si Windows bloquea la carpeta temporal del sistema, ejecuta desde la raíz y mantén las pruebas dentro del alcance activo. Crea primero el padre ignorado por Git y luego usa una base exclusiva para pytest (pytest puede vaciar esa base al iniciar): `python -c "from pathlib import Path; Path('.tmp').mkdir(exist_ok=True)"` y `python -m pytest -c tests/pytest.ini tests --basetemp=.tmp/pytest-codex`. No apuntes `--basetemp` a `.tmp/` directamente, porque pytest podría borrar las salidas de inspección manual que haya dentro.

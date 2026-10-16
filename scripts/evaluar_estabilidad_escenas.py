@@ -22,9 +22,9 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from pyroscope.imagenes import abrir_rgb, validar_par_alineado
-from pyroscope.interfaz.configuracion import listar_escenas_disponibles
-from pyroscope.segmentacion import segmentar_superficie_afectada
+from lumbre.imagenes import abrir_rgb, validar_par_alineado
+from lumbre.interfaz.configuracion import listar_escenas_disponibles
+from lumbre.segmentacion import segmentar_superficie_afectada
 
 
 def _sensibilidades(texto: str) -> tuple[int, ...]:

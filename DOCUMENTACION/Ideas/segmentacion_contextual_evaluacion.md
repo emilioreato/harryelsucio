@@ -1,6 +1,6 @@
 # Segmentación contextual: evaluación del 15/10/2026
 
-Implementación experimental sobre HEAD `a9cfe602a40ddfba56e9b371a74eae8d91468bb0`. Se comprobaron mediante `git ls-remote` los HEAD de harryelsucio y del remoto local malackathon: ambos coincidían. Se preservaron cambios previos de React, mediciones y servidor. Sin commits ni push. No se modificó entrenamiento, etiquetas ni modelos Random Forest.
+Implementación experimental sobre HEAD `a9cfe602a40ddfba56e9b371a74eae8d91468bb0`. En aquella revisión se comprobó mediante `git ls-remote` que el HEAD del remoto de GitHub y el del remoto local coincidían. El repositorio se llama ahora **Malacatón 2026** y su remoto principal es `https://github.com/emilioreato/malackathon2026`. Se preservaron cambios previos de React, mediciones y servidor. Sin commits ni push. No se modificó entrenamiento, etiquetas ni modelos Random Forest.
 
 ## Implementación y parámetros
 
@@ -48,20 +48,15 @@ No comparar directamente estos recuentos con los de 1800. Se verificó en navega
 
 ## Archivos y reproducción
 
-- Nuevos motores: `pyroscope/regiones_contextuales.py`, `estimacion_bajo_humo.py`, `evidencia_contextual.py`, `detectores/contextual.py`.
+- Nuevos motores: `lumbre/regiones_contextuales.py`, `estimacion_bajo_humo.py`, `evidencia_contextual.py`, `detectores/contextual.py`.
 - Integración: `modelos_segmentacion.py`, `segmentacion.py`, `geometria_segmentacion.py`, `detectores/registro.py`, `detectores/swir_histeresis.py` (caché opcional de características), `interfaz/configuracion.py`, `interfaz/procesamiento.py`.
 - Presentación/exportación: `visualizacion.py`, `servidor_web.py`, `frontend/src/App.jsx`, paquete Vite en `web/`.
 - Verificación: `tests/`, `scripts/comparar_contextual.py`, `scripts/verificar_http_contextual.py`, `scripts/evaluar_humo_sintetico.py`.
-- Uso/documentación: README y exclusión de `resultados_contextual/` en `.gitignore`.
+- Uso/documentación: README y política de salidas temporales descrita en [`resultados/README.md`](../../resultados/README.md).
 
-Ver comandos en README. Artefactos locales excluidos de Git:
+Los paneles y matrices grandes de las ejecuciones descritas aquí se retiraron después de documentar las conclusiones; los datos de entrada y el código de evaluación bastan para regenerarlos. Por defecto, los scripts los escriben en `.tmp/salidas/` y eliminan cada carpeta al terminar. Para inspeccionarlos entre procesos, pasa `--salida .tmp/pruebas/<id-de-prueba>`; para conservar resultados seleccionados, usa `resultados/guardados/<nombre-descriptivo>/` y registra su procedencia.
 
-- `resultados_contextual/baseline/`: nueve ejecuciones originales y métricas.
-- `resultados_contextual/hibrido/`: experimento completo inicial y representaciones.
-- `resultados_contextual/contextual_mask/`: intento parcial descartado por coste.
-- `resultados_contextual/contextual_roi/`: comparaciones finales, diagnósticos, perímetros, marcadores y humo por escena.
-- `resultados_contextual/http/`: PNG finales a2500, `verificacion.json` y captura `niebla_interfaz.png`.
-- `resultados_contextual/sintetico/`: oclusiones conocidas, métricas y paneles reproducibles.
+Las fases comparativas de `scripts/comparar_contextual.py` necesitan la salida baseline. Guárdala explícitamente con `--salida` y pásala después como `--baseline`; no depende de una carpeta de resultados preexistente.
 
 Pruebas focales cubren ausencia de semillas, agua, vegetación incompatible, cicatrices independientes, agujeros, componente completo por proximidad, reproducibilidad, scores inválidos, contexto remoto y fallback Watershed. Las pruebas sintéticas verifican lógica, no reconstrucción de humo real. Escena gris uniforme sin incendio: cero superficie e hipótesis.
 

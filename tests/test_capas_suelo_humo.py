@@ -2,9 +2,9 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from pyroscope.visualizacion import crear_superposicion, superponer_mascara
-from pyroscope.humo_visible import ampliar_humo_true_color
-from pyroscope.estimacion_bajo_humo import estimar_bajo_humo
+from lumbre.visualizacion import crear_superposicion, superponer_mascara
+from lumbre.humo_visible import ampliar_humo_true_color
+from lumbre.estimacion_bajo_humo import estimar_bajo_humo
 
 
 def test_superficie_visible_e_inferida_se_dibujan_en_capas_distintas():

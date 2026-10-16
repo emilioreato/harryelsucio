@@ -1,6 +1,7 @@
 """Comparación reproducible de escenas; métricas geométricas, no precisión.
 
-python scripts/comparar_contextual.py --fase baseline
+python scripts/comparar_contextual.py --fase baseline --salida .tmp/pruebas/comparacion
+python scripts/comparar_contextual.py --fase contextual_roi --salida .tmp/pruebas/comparacion --baseline .tmp/pruebas/comparacion/baseline
 """
 from __future__ import annotations
 
@@ -15,13 +16,14 @@ import time
 import cv2
 import numpy as np
 from PIL import Image, ImageDraw
+from _salidas import directorio_salida, resolver_ruta_repositorio
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from pyroscope.imagenes import abrir_rgb
-from pyroscope.segmentacion import segmentar_superficie_afectada
-from pyroscope.visualizacion import crear_superposicion
+from lumbre.imagenes import abrir_rgb
+from lumbre.segmentacion import segmentar_superficie_afectada
+from lumbre.visualizacion import crear_superposicion
 
 
 def geometria(mask):
@@ -85,12 +87,12 @@ def render_cached(tc, destination):
 
 
 def comparar_hibrido(tc, swir, destination, baseline, representaciones=False):
-    from pyroscope.caracteristicas import extraer_caracteristicas_pareja
-    from pyroscope.detectores.swir_histeresis import clasificar_pixeles_area_afectada_swir
-    from pyroscope.regiones_contextuales import segmentar_contextual
-    from pyroscope.evidencia_contextual import evidencia_desde_v2
-    from pyroscope.estimacion_bajo_humo import estimar_bajo_humo
-    from pyroscope.geometria_segmentacion import segmentar_regiones_espaciales
+    from lumbre.caracteristicas import extraer_caracteristicas_pareja
+    from lumbre.detectores.swir_histeresis import clasificar_pixeles_area_afectada_swir
+    from lumbre.regiones_contextuales import segmentar_contextual
+    from lumbre.evidencia_contextual import evidencia_desde_v2
+    from lumbre.estimacion_bajo_humo import estimar_bajo_humo
+    from lumbre.geometria_segmentacion import segmentar_regiones_espaciales
     from dataclasses import replace
 
     inicio = time.perf_counter()
@@ -179,17 +181,42 @@ def comparar_hibrido(tc, swir, destination, baseline, representaciones=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fase", default="baseline")
+    parser.add_argument(
+        "--salida", type=Path,
+        help="Carpeta base para conservar artefactos; si se omite, se borran al terminar.",
+    )
+    parser.add_argument(
+        "--baseline", type=Path,
+        help="Carpeta baseline guardada previamente; obligatoria para fases comparativas.",
+    )
     parser.add_argument("--max-lado", type=int, default=1800)
     parser.add_argument("--escena", help="Substring del nombre de escena")
     parser.add_argument("--representaciones", action="store_true", help="Compara 3 representaciones SLIC")
     parser.add_argument("--render-only", action="store_true", help="Dibuja perimetros desde NPZ guardados")
     args = parser.parse_args()
-    output = ROOT / "resultados_contextual" / args.fase
-    output.mkdir(parents=True, exist_ok=True)
+
+    if not args.render_only and args.fase != "baseline" and args.baseline is None:
+        parser.error("Para una fase comparativa indica --baseline con la carpeta guardada de la fase baseline.")
+    if args.render_only:
+        if args.salida is None:
+            parser.error("--render-only requiere --salida con la carpeta de artefactos existente.")
+        ejecutar(resolver_ruta_repositorio(args.salida), args)
+        return
+    with directorio_salida(args.salida, "lumbre-comparacion-") as raiz_salida:
+        ejecutar(raiz_salida, args)
+
+
+def ejecutar(raiz_salida: Path, args: argparse.Namespace) -> None:
+    output = raiz_salida / args.fase
+    if args.render_only:
+        if not output.is_dir():
+            raise FileNotFoundError(f"No existe la carpeta con artefactos para renderizar: {output}")
+    else:
+        output.mkdir(parents=True, exist_ok=True)
     report = {
         "head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "codigo_sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
-            for p in (ROOT / "pyroscope").glob("*.py")},
+            for p in (ROOT / "lumbre").glob("*.py")},
         "advertencia": "JPEG renderizados sin verdad terreno: métricas geométricas, no accuracy; no áreas métricas sin GSD.",
         "parametros": {"max_lado": args.max_lado, "numero_clases": 7, "sensibilidad": 5,
                        "area_minima_pct": 0.15, "distancia_maxima_pct": 10, "conservar_regiones_separadas": False},
@@ -199,7 +226,7 @@ def main():
         report["parametros"].update(conservar_regiones_separadas=True, preservar_geometria=True,
             area_superpixel=144, representacion="conjunta", distancia_crecimiento_px=8, limitar_contexto=True,
             nota="Cada variante reutiliza la semantica V2; tiempos espaciales incluyen filtro de area minima.")
-    for scene in sorted((ROOT / "imagenes").iterdir()):
+    for scene in sorted((ROOT / "imagenes_muestra").iterdir()):
         if not scene.is_dir() or (args.escena and args.escena.lower() not in scene.name.lower()):
             continue
         true_path = next(scene.glob("*True_color*"))
@@ -218,7 +245,7 @@ def main():
                         "fuentes_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in (true_path, swir_path)}}
         if args.fase != "baseline":
             scene_report["metodos"] = comparar_hibrido(tc, swir, destination,
-                ROOT / "resultados_contextual" / "baseline" / scene.name, args.representaciones)
+                resolver_ruta_repositorio(args.baseline) / scene.name, args.representaciones)
             report["escenas"][scene.name] = scene_report
             (output / "metricas.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
             continue

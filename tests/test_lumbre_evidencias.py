@@ -2,13 +2,13 @@
 
 import numpy as np
 
-from pyroscope.caracteristicas import extraer_caracteristicas_pareja
-from pyroscope.detectores import contextual
-from pyroscope.evidencia_contextual import EvidenciaContextual
-from pyroscope.evidencia_frente import evaluar_evidencia_frente
-from pyroscope.estimacion_bajo_humo import estimar_bajo_humo
-from pyroscope.humo_visible import detectar_humo_por_niveles
-from pyroscope.modelos_segmentacion import ResultadoClasificacionSemantica
+from lumbre.caracteristicas import extraer_caracteristicas_pareja
+from lumbre.detectores import contextual
+from lumbre.evidencia_contextual import EvidenciaContextual
+from lumbre.evidencia_frente import evaluar_evidencia_frente
+from lumbre.estimacion_bajo_humo import estimar_bajo_humo
+from lumbre.humo_visible import detectar_humo_por_niveles
+from lumbre.modelos_segmentacion import ResultadoClasificacionSemantica
 
 
 def test_humo_extenso_crece_desde_nucleo_y_respeta_superficie_clara_distinta():
@@ -95,11 +95,11 @@ def test_contextual_conserva_la_ampliacion_previa_de_humo(monkeypatch):
     confianza_referencia = confianza.copy()
     confianza_referencia[referencia & ~nucleo] = .55
     monkeypatch.setattr(
-        "pyroscope.detectores.contextual.clasificar_pixeles_area_afectada_swir",
+        "lumbre.detectores.contextual.clasificar_pixeles_area_afectada_swir",
         lambda *args, **kwargs: clasificacion,
     )
     monkeypatch.setattr(
-        "pyroscope.humo_visible.ampliar_humo_true_color",
+        "lumbre.humo_visible.ampliar_humo_true_color",
         lambda *args, **kwargs: (referencia.copy(), confianza_referencia.copy()),
     )
 

@@ -11,13 +11,23 @@ from urllib.request import Request, urlopen
 
 import numpy as np
 from PIL import Image
+from _salidas import directorio_salida
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default="http://127.0.0.1:8501")
+    parser.add_argument(
+        "--salida", type=Path,
+        help="Conserva PNG y métricas en esta carpeta; si se omite, se borran al terminar.",
+    )
     args = parser.parse_args()
-    base = args.url.rstrip("/")
+    with directorio_salida(args.salida, "lumbre-http-") as carpeta:
+        ejecutar(args.url, carpeta)
+
+
+def ejecutar(url: str, carpeta: Path) -> None:
+    base = url.rstrip("/")
 
     def leer(ruta, datos=None):
         request = Request(base + ruta, data=json.dumps(datos).encode() if datos else None,
@@ -27,7 +37,6 @@ def main():
 
     escenas = json.loads(leer("/api/scenes"))["scenes"]
     assert "contextual_hibrida" in [d["id"] for d in json.loads(leer("/api/detectors"))["detectors"]]
-    carpeta = Path(__file__).resolve().parents[1] / "resultados_contextual" / "http"
     carpeta.mkdir(parents=True, exist_ok=True)
     informe = {}
     for escena in escenas:

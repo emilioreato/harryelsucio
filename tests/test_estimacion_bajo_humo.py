@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from pyroscope.estimacion_bajo_humo import estimar_bajo_humo
+from lumbre.estimacion_bajo_humo import estimar_bajo_humo
 
 
 def escena(anchura=3):

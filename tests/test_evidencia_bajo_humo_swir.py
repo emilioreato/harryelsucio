@@ -1,9 +1,33 @@
 import numpy as np
 
-from pyroscope.evidencia_bajo_humo_swir import evaluar_evidencia_bajo_humo_swir
-from pyroscope.evidencia_contextual import EvidenciaContextual
-from pyroscope.estimacion_bajo_humo import estimar_bajo_humo
-from pyroscope.humo_visible import detectar_humo_por_niveles
+from lumbre.evidencia_bajo_humo_swir import evaluar_evidencia_bajo_humo_swir
+from lumbre.evidencia_contextual import EvidenciaContextual
+from lumbre.estimacion_bajo_humo import estimar_bajo_humo
+from lumbre.humo_visible import detectar_humo_por_niveles
+
+
+def test_compensacion_cian_es_solo_diagnostico_no_superficie_quemada():
+    swir = np.full((80, 130, 3), (50, 130, 55), np.uint8)
+    visible = np.zeros((80, 130), bool)
+    visible[20:50, 5:25] = True
+    swir[visible] = (185, 85, 55)
+    humo = np.zeros_like(visible)
+    humo[15:65, 30:125] = True
+    swir[25:45, 35:55] = (85, 140, 130)  # Rojo absoluto atenuado por cian.
+    swir[25:45, 60:80] = (65, 160, 100)  # Vegetación con verde residual.
+    swir[25:45, 85:105] = (5, 180, 180)  # Cian puro: sin firma de suelo.
+    swir[48:58, 35:55] = (8, 20, 30)  # Respuesta oscura, compatible con agua.
+    swir[48:58, 60:80] = (85, 140, 155)  # Velo azul sin firma residual separable.
+    anterior = evaluar_evidencia_bajo_humo_swir(swir, humo, visible)
+    actual = evaluar_evidencia_bajo_humo_swir(swir, humo, visible, conservadora=True)
+    assert not anterior.candidatos_fuertes[30, 40]
+    assert not actual.candidatos_fuertes[30, 40]
+    assert not actual.candidatos_moderados[30, 40]
+    assert actual.candidatos_cian[30, 40]
+    assert not actual.candidatos_cian[30, 70]
+    assert not actual.candidatos_cian[30, 90]
+    assert not actual.candidatos_cian[52, 40]
+    assert not actual.candidatos_cian[52, 70]
 
 
 def test_usa_firma_swir_para_distinguir_rojo_verde_bajo_humo():
@@ -43,6 +67,46 @@ def test_sin_firma_visible_se_abstiene_bajo_humo():
     assert not resultado.candidatos_fuertes.any()
     assert not resultado.candidatos_moderados.any()
     assert not resultado.evidencia.any()
+
+
+def test_firma_residual_cian_no_es_suelo_ni_siquiera_conectada_a_una_cicatriz():
+    forma = (50, 120)
+    visible = np.zeros(forma, bool)
+    visible[15:35, 5:20] = True
+    humo = np.zeros(forma, bool)
+    humo[10:40, 20:110] = True
+    cian = np.zeros(forma, bool)
+    cian[15:35, 20:35] = True
+    cian[15:35, 80:95] = True  # Isla residual sin ancla visible ni roja directa.
+    score = EvidenciaContextual(cian.astype(np.float32) * .9, {
+        "evidencia_bajo_humo_swir": cian.astype(np.float32) * .9,
+        "superficie_bajo_humo_swir_fuerte": cian,
+        "superficie_bajo_humo_swir_cian": cian,
+    })
+    r = estimar_bajo_humo(visible, humo, np.zeros(forma, bool), score,
+                          distancia_espectral_px=100)
+    assert not r.mascara_candidata[25, 25]
+    assert r.mascara_indeterminada[25, 25]
+    assert not r.mascara_candidata[25, 85]
+
+
+def test_cian_conectado_no_puede_resembrarse_hasta_cubrir_el_penacho():
+    forma = (50, 120)
+    visible = np.zeros(forma, bool)
+    visible[15:35, 5:20] = True
+    humo = np.zeros(forma, bool)
+    humo[10:40, 20:110] = True
+    cian = np.zeros(forma, bool)
+    cian[15:35, 20:110] = True
+    score = EvidenciaContextual(cian.astype(np.float32) * .9, {
+        "evidencia_bajo_humo_swir": cian.astype(np.float32) * .9,
+        "superficie_bajo_humo_swir_fuerte": cian,
+        "superficie_bajo_humo_swir_cian": cian,
+    })
+    r = estimar_bajo_humo(visible, humo, np.zeros(forma, bool), score,
+                          distancia_espectral_px=20)
+    assert not r.mascara_candidata[25, 30]
+    assert not r.mascara_candidata[25, 70]
 
 
 def test_escena_sin_superficie_visible_no_inventa_semillas():

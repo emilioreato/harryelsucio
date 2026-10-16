@@ -5,17 +5,17 @@ import pytest
 import joblib
 from sklearn.ensemble import RandomForestClassifier
 
-from pyroscope.caracteristicas import extraer_caracteristicas_pareja
-from pyroscope.detectores import random_forest as random_forest_module
-from pyroscope.evidencia_contextual import EvidenciaContextual
-from pyroscope.modelos_segmentacion import ResultadoClasificacionSemantica
-from pyroscope.ontologia import ClaseSemantica
-from pyroscope.segmentacion import (
+from lumbre.caracteristicas import extraer_caracteristicas_pareja
+from lumbre.detectores import random_forest as random_forest_module
+from lumbre.evidencia_contextual import EvidenciaContextual
+from lumbre.modelos_segmentacion import ResultadoClasificacionSemantica
+from lumbre.ontologia import ClaseSemantica
+from lumbre.segmentacion import (
     _aplicar_random_forest_contextual,
     _fusionar_evidencia_random_forest,
     segmentar_superficie_afectada,
 )
-from pyroscope.servidor_web import _validar_ajustes
+from lumbre.servidor_web import _validar_ajustes
 
 
 def _clasificacion(candidata, agua=None, humo=None):
@@ -81,7 +81,7 @@ def test_fallo_del_modelo_opcional_devuelve_aviso_sin_detener_v2(monkeypatch):
     def fallo(*_args, **_kwargs):
         raise ValueError("modelo de prueba incompatible")
 
-    monkeypatch.setattr("pyroscope.segmentacion.clasificar_random_forest", fallo)
+    monkeypatch.setattr("lumbre.segmentacion.clasificar_random_forest", fallo)
     resultado, evidencia, aviso = _aplicar_random_forest_contextual(
         base, imagen, imagen, caracteristicas, None
     )
@@ -121,7 +121,7 @@ def test_fallo_rf_en_el_recorrido_completo_conserva_resultado_contextual(monkeyp
     def fallo(*_args, **_kwargs):
         raise RuntimeError("fallo simulado del modelo")
 
-    monkeypatch.setattr("pyroscope.segmentacion.clasificar_random_forest", fallo)
+    monkeypatch.setattr("lumbre.segmentacion.clasificar_random_forest", fallo)
     resultado = segmentar_superficie_afectada(
         true_color,
         swir,

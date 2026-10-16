@@ -1,7 +1,7 @@
 import numpy as np
 
-from pyroscope.observabilidad_pipeline import PublicadorCheckpoint
-from pyroscope.regiones_contextuales import segmentar_contextual
+from lumbre.observabilidad_pipeline import PublicadorCheckpoint
+from lumbre.regiones_contextuales import segmentar_contextual
 
 
 def test_callback_nulo_no_ejecuta_renderizado_extra():

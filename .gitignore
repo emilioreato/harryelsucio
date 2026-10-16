@@ -10,6 +10,8 @@ __pycache__/
 .streamlit/credentials.toml
 
 # Estado local del servidor Lumbre
+/.lumbre/
+# Mantener ignorados los nombres usados por versiones anteriores.
 .lumbre-instance.json
 .lumbre-instance.lock
 .lumbre-instance.*.tmp
@@ -18,12 +20,17 @@ __pycache__/
 frontend/node_modules/
 frontend/.vite/
 
-# Salidas temporales de experimentos y logs locales
-tmp_pyroscope/
-tmp_algorithm_review/
-/tmp/
-resultados_contextual/
+# Salidas temporales de pruebas e inspección manual
+/.tmp/
+
+# Resultados locales de evaluación; se conserva versionado el informe histórico de agua.
+/resultados/clasificacion/contextual/
+/resultados/experimentos/historico/
+# Ignorar nuevas salidas de agua y mantener visibles los artefactos históricos existentes.
+/resultados/clasificacion/agua/*
+!/resultados/clasificacion/agua/90dd412/
+!/resultados/clasificacion/agua/90dd412/**
 
 # Datos y modelos locales del clasificador supervisado
-/training Random Forest/dataset/
-/training Random Forest/random_forest.joblib
+/training/random_forest/dataset/
+/training/random_forest/random_forest.joblib

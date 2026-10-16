@@ -3,6 +3,8 @@ import { Activity, Flame, Image as ImageIcon, Layers3, Play, ScanLine } from "lu
 import { advancedApi, fileToBase64 } from "../services/api.js";
 import { formatNumber } from "../domain/measurements.js";
 import VersionSwitcher from "./VersionSwitcher.jsx";
+import GsdScaleRuler from "./GsdScaleRuler.jsx";
+import ZoomableImageViewport from "./ZoomableImageViewport.jsx";
 
 const INPUT_LAYERS = [
   ["true-color", "True Color", ImageIcon],
@@ -32,6 +34,15 @@ function saveBlob(blob, filename) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function loadRulerMask(url) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = url;
+  });
+}
+
 function AdvancedViewer({
   jobId,
   grid,
@@ -44,9 +55,10 @@ function AdvancedViewer({
   onOriginSelect,
   onError,
 }) {
-  const stageRef = useRef(null);
   const imageRef = useRef(null);
   const canvasRef = useRef(null);
+  const surfaceRef = useRef(null);
+  const [rulerMasks, setRulerMasks] = useState({});
   const availableLayers = new Set(metrics?.available_layers || []);
   const choices = INPUT_LAYERS.filter(([id]) => availableLayers.has(id));
   if (availableLayers.has("reference-wildfires")) {
@@ -54,37 +66,47 @@ function AdvancedViewer({
   }
   const source = jobId ? `${advancedApi.layerUrl(jobId, layer)}?v=${jobId}` : "";
 
+  useEffect(() => {
+    setRulerMasks({});
+    if (!jobId) return undefined;
+    let cancelled = false;
+    const names = ["mask", "vegetation-mask", "fire-hotspots-mask", "possible-active-fire-mask"]
+      .filter((name) => availableLayers.has(name));
+    Promise.all(names.map(async (name) => [
+      name,
+      await loadRulerMask(`${advancedApi.layerUrl(jobId, name)}?v=${jobId}`),
+    ])).then((entries) => {
+      if (!cancelled) setRulerMasks(Object.fromEntries(entries));
+    });
+    return () => { cancelled = true; };
+  }, [jobId, metrics?.available_layers]);
+
   const drawScenario = useCallback(() => {
-    const stage = stageRef.current;
+    const surface = surfaceRef.current;
     const image = imageRef.current;
     const canvas = canvasRef.current;
-    if (!stage || !canvas) return;
-    const width = stage.clientWidth;
-    const height = stage.clientHeight;
+    if (!surface || !canvas) return;
+    const width = Number.parseFloat(surface.style.width) || surface.clientWidth;
+    const height = Number.parseFloat(surface.style.height) || surface.clientHeight;
+    if (!width || !height) return;
     const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
     canvas.width = Math.round(width * pixelRatio);
     canvas.height = Math.round(height * pixelRatio);
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
     const context = canvas.getContext("2d");
     context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
     context.clearRect(0, 0, width, height);
     if (!image?.naturalWidth || !grid) return;
 
-    const stageRect = stage.getBoundingClientRect();
-    const imageRect = image.getBoundingClientRect();
-    const left = imageRect.left - stageRect.left;
-    const top = imageRect.top - stageRect.top;
-    const scaleX = imageRect.width / (grid.ancho_px || image.naturalWidth);
-    const scaleY = imageRect.height / (grid.alto_px || image.naturalHeight);
-    context.save();
-    context.beginPath();
-    context.rect(left, top, imageRect.width, imageRect.height);
-    context.clip();
+    const scaleX = width / (grid.ancho_px || image.naturalWidth);
+    const scaleY = height / (grid.alto_px || image.naturalHeight);
 
     if (progressionFront?.length > 2) {
       context.beginPath();
       progressionFront.forEach(([x, y], index) => {
-        const px = left + x * scaleX;
-        const py = top + y * scaleY;
+        const px = x * scaleX;
+        const py = y * scaleY;
         if (index === 0) context.moveTo(px, py);
         else context.lineTo(px, py);
       });
@@ -99,8 +121,8 @@ function AdvancedViewer({
     }
 
     if (origin) {
-      const x = left + origin.x * scaleX;
-      const y = top + origin.y * scaleY;
+      const x = origin.x * scaleX;
+      const y = origin.y * scaleY;
       context.beginPath();
       context.arc(x, y, 7, 0, Math.PI * 2);
       context.fillStyle = "#ed335e";
@@ -109,15 +131,14 @@ function AdvancedViewer({
       context.strokeStyle = "white";
       context.stroke();
     }
-    context.restore();
   }, [grid, origin, progressionFront]);
 
   useEffect(() => {
     drawScenario();
-    const stage = stageRef.current;
-    if (!stage || typeof ResizeObserver === "undefined") return undefined;
+    const surface = surfaceRef.current;
+    if (!surface || typeof ResizeObserver === "undefined") return undefined;
     const observer = new ResizeObserver(drawScenario);
-    observer.observe(stage);
+    observer.observe(surface);
     return () => observer.disconnect();
   }, [drawScenario, layer, source]);
 
@@ -126,6 +147,8 @@ function AdvancedViewer({
     const image = imageRef.current;
     if (!image?.naturalWidth) return;
     const rect = image.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right
+      || event.clientY < rect.top || event.clientY > rect.bottom || !rect.width || !rect.height) return;
     const x = ((event.clientX - rect.left) / rect.width) * grid.ancho_px;
     const y = ((event.clientY - rect.top) / rect.height) * grid.alto_px;
     onOriginSelect({
@@ -150,27 +173,35 @@ function AdvancedViewer({
             </button>
           ))}
         </div>
-        {grid && <span className="advanced-grid-label">{grid.ancho_px} × {grid.alto_px} px</span>}
+        <div className="advanced-viewer-meta">
+          {grid && <span className="advanced-grid-label">{grid.ancho_px} × {grid.alto_px} px</span>}
+        </div>
       </div>
-      <div className="advanced-image-stage" ref={stageRef}>
+      <div className="advanced-image-stage">
         {source ? (
-          <>
-            <img
-              ref={imageRef}
-              className={`advanced-result-image${selectingOrigin ? " is-selecting-origin" : ""}`}
-              src={source}
-              alt={layer === "fire-hotspots"
+          <ZoomableImageViewport
+            className="zoomable-viewport--advanced"
+            imageRef={imageRef}
+            surfaceRef={surfaceRef}
+            imageClassName={`advanced-result-image${selectingOrigin ? " is-selecting-origin" : ""}`}
+            src={source}
+            alt={layer === "fire-hotspots"
                 ? "Candidatos visuales de focos resaltados para revisión"
                 : layer === "reference-wildfires"
                   ? "Composición Wildfires usada para extraer los focos"
                   : `Capa avanzada ${layer}`}
-              draggable="false"
-              onLoad={drawScenario}
-              onClick={selectOrigin}
-              onError={() => onError("No se pudo cargar esta capa del análisis avanzado.")}
-            />
+            resetKey={jobId}
+            allowLeftPan={!selectingOrigin}
+            allowDoubleClick={!selectingOrigin}
+            showCrosshair={selectingOrigin}
+            suppressClickAfterDrag={selectingOrigin}
+            onLoad={drawScenario}
+            onClick={selectOrigin}
+            onError={() => onError("No se pudo cargar esta capa del análisis avanzado.")}
+          >
             <canvas ref={canvasRef} className="advanced-scenario-canvas" aria-hidden="true" />
-          </>
+            <GsdScaleRuler grid={grid} imageRef={imageRef} maskImages={rulerMasks} />
+          </ZoomableImageViewport>
         ) : (
           <div className="advanced-viewer-empty">
             <Flame size={32} aria-hidden="true" />
@@ -195,11 +226,10 @@ function AdvancedViewer({
   );
 }
 
-export default function AdvancedWorkspace({ version, onVersionChange }) {
+export default function AdvancedWorkspace({ version, onVersionChange, isActive }) {
   const [scenes, setScenes] = useState([]);
   const [source, setSource] = useState("preloaded");
   const [sceneId, setSceneId] = useState("");
-  const [gsd, setGsd] = useState("");
   const [connected, setConnected] = useState(false);
   const [connectionLabel, setConnectionLabel] = useState("Conectando…");
   const [running, setRunning] = useState(false);
@@ -232,7 +262,6 @@ export default function AdvancedWorkspace({ version, onVersionChange }) {
       setScenes(available);
       if (available.length) {
         setSceneId(available[0].id);
-        setGsd(available[0].gsd_m_per_px ? String(available[0].gsd_m_per_px) : "");
       } else {
         setSource("upload");
       }
@@ -247,24 +276,15 @@ export default function AdvancedWorkspace({ version, onVersionChange }) {
     return () => { active = false; };
   }, []);
 
-  const selectedScene = scenes.find((item) => item.id === sceneId);
   useEffect(() => {
-    if (source !== "preloaded") {
-      setGsd("");
-      return;
-    }
-    setGsd(selectedScene?.gsd_m_per_px ? String(selectedScene.gsd_m_per_px) : "");
-  }, [source, selectedScene?.id, selectedScene?.gsd_m_per_px]);
-
-  useEffect(() => {
-    if (!scenarioPlaying || !scenario?.frames?.length) return undefined;
+    if (!isActive || !scenarioPlaying || !scenario?.frames?.length) return undefined;
     if (scenarioFrame >= scenario.frames.length - 1) {
       setScenarioPlaying(false);
       return undefined;
     }
     const timer = window.setTimeout(() => setScenarioFrame((frame) => frame + 1), 240);
     return () => window.clearTimeout(timer);
-  }, [scenarioPlaying, scenario, scenarioFrame]);
+  }, [isActive, scenarioPlaying, scenario, scenarioFrame]);
 
   const resetAnalysis = () => {
     analysisRunRef.current += 1;
@@ -299,11 +319,9 @@ export default function AdvancedWorkspace({ version, onVersionChange }) {
     setError("");
     let request;
     try {
-      const gsdValue = gsd.trim() ? numberFromInput(gsd, "El GSD") : null;
-      if (gsdValue !== null && gsdValue <= 0) throw new Error("El GSD debe ser positivo en metros por píxel.");
       if (source === "preloaded") {
         if (!sceneId) throw new Error("Selecciona una escena para analizar.");
-        request = { source: "preloaded", scene: sceneId, gsd_m_per_px: gsdValue };
+        request = { source: "preloaded", scene: sceneId };
       } else {
         const form = event.currentTarget;
         const trueFile = form.elements.namedItem("advanced-true-color")?.files?.[0];
@@ -315,7 +333,6 @@ export default function AdvancedWorkspace({ version, onVersionChange }) {
           true_color: await fileToBase64(trueFile),
           swir: await fileToBase64(swirFile),
           wildfires_reference: wildfireFile ? await fileToBase64(wildfireFile) : "",
-          gsd_m_per_px: gsdValue,
         };
       }
 
@@ -410,25 +427,33 @@ export default function AdvancedWorkspace({ version, onVersionChange }) {
     || (layer === "reference-wildfires" ? "Wildfires" : "Resultado");
 
   return (
-    <main className="workspace advanced-workspace">
+    <main className={`workspace advanced-workspace${isActive ? "" : " mode-panel-hidden"}`}>
       <aside className="control-panel advanced-control-panel" id="advanced-setup" aria-label="Configuración del análisis avanzado">
-        <div className="panel-heading">
-          <h1 className="panel-brand-heading">
-            <span className="brand-mark-wrap" aria-hidden="true"><span className="brand-pixel-flame" /></span>
-            <span className="brand-heading-copy"><strong>LUMBRE</strong><small>Reto avanzado</small></span>
-          </h1>
-          <span className={`connection-pill${connected ? " is-ready" : error ? " is-error" : ""}`}>
-            <span className="status-dot" />{connectionLabel}
-          </span>
+        <div className="sidebar-fixed">
+          <div className="panel-heading">
+            <h1 className="panel-brand-heading">
+              <span className="brand-mark-wrap" aria-hidden="true"><span className="brand-pixel-flame" /></span>
+              <span className="brand-heading-copy"><strong>LUMBRE</strong><small>Análisis</small></span>
+            </h1>
+            <VersionSwitcher version={version} onChange={onVersionChange} />
+            <span className="sr-only" role="status">{connectionLabel}</span>
+          </div>
+          <div className="sidebar-heading-divider" aria-hidden="true" />
+
+          <section className="advanced-progress" aria-live="polite">
+            <div><span>{progress.stage}</span><strong>{progress.value}%</strong></div>
+            <span className="advanced-progress-track"><span style={{ width: `${progress.value}%` }} /></span>
+          </section>
+
+          <button className="run-button advanced-run-button" type="submit" form="advanced-analysis-form" disabled={!connected || running || (source === "preloaded" && !scenes.length)}>
+            <Activity size={15} aria-hidden="true" />{running ? "Analizando…" : "Analizar reto avanzado"}
+          </button>
+          {error && <p className="form-error" role="alert">{error}</p>}
+          {analysis?.state === "error" && <p className="form-error" role="alert">{analysis.error}</p>}
         </div>
-        <VersionSwitcher version={version} onChange={onVersionChange} />
 
-        <section className="advanced-progress" aria-live="polite">
-          <div><span>{progress.stage}</span><strong>{progress.value}%</strong></div>
-          <span className="advanced-progress-track"><span style={{ width: `${progress.value}%` }} /></span>
-        </section>
-
-        <form onSubmit={runAnalysis}>
+        <div className="sidebar-scroll">
+        <form id="advanced-analysis-form" onSubmit={runAnalysis}>
           <div className="source-switch" role="tablist" aria-label="Origen de imágenes para avanzado">
             {[["preloaded", "Escenas"], ["upload", "Subir imágenes"]].map(([id, label]) => (
               <button
@@ -482,26 +507,12 @@ export default function AdvancedWorkspace({ version, onVersionChange }) {
             </section>
           )}
 
-          <label className="field-label" htmlFor="advanced-gsd">Resolución declarada <small>GSD, m/píxel (opcional)</small></label>
-          <input
-            id="advanced-gsd"
-            className="field-control"
-            inputMode="decimal"
-            value={gsd}
-            onChange={(event) => setGsd(event.target.value)}
-            placeholder="Solo si conoces la escala"
-          />
-          <p className="field-help">Sin una escala fiable, las superficies se informan en píxeles.</p>
-
-          <button className="run-button advanced-run-button" type="submit" disabled={!connected || running || (source === "preloaded" && !scenes.length)}>
-            <Activity size={15} aria-hidden="true" />{running ? "Analizando…" : "Analizar reto avanzado"}
-          </button>
-          {error && <p className="form-error" role="alert">{error}</p>}
-          {analysis?.state === "error" && <p className="form-error" role="alert">{analysis.error}</p>}
+          <p className="field-help">Las escenas precargadas aplican su escala automáticamente. Las imágenes propias sin georreferencia se miden en píxeles.</p>
         </form>
         <p className="advanced-method-note">
           Los focos se extraen directamente de Wildfires, también bajo humo. True Color y SWIR se usan para las demás capas.
         </p>
+        </div>
       </aside>
 
       <section className="analysis-column advanced-analysis-column" id="advanced-map" aria-label="Resultado avanzado">

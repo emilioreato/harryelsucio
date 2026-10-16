@@ -1,12 +1,13 @@
 import { api } from "../services/api.js";
+import ZoomableImageViewport from "./ZoomableImageViewport.jsx";
 
 export default function CheckpointViewer({ checkpoint, jobId, running, incomplete }) {
   if (!checkpoint || !jobId) {
     return (
       <div className="checkpoint-empty" role="status">
         <span className="empty-mark" aria-hidden="true">◌</span>
-        <strong>{running ? "Preparando la primera imagen" : "La evolución aparecerá aquí"}</strong>
-        <span>{running ? "La ejecución continúa mientras se prepara la pareja alineada." : "Carga una pareja True Color + SWIR e inicia la segmentación."}</span>
+        <strong>{running ? "Preparando la primera imagen" : "Inicia la segmentación."}</strong>
+        {running && <span>La ejecución continúa mientras se prepara la pareja alineada.</span>}
       </div>
     );
   }
@@ -21,11 +22,12 @@ export default function CheckpointViewer({ checkpoint, jobId, running, incomplet
         </span>
       </div>
       <div className="checkpoint-image-stage">
-        <img
-          key={checkpoint.id}
+        <ZoomableImageViewport
+          className="zoomable-viewport--checkpoint"
+          imageClassName="checkpoint-image"
           src={`${api.checkpointUrl(jobId, checkpoint.id)}?v=${encodeURIComponent(checkpoint.id)}`}
           alt={`${checkpoint.label}. ${checkpoint.description}`}
-          decoding="async"
+          resetKey={jobId}
         />
       </div>
       <p className="checkpoint-description">{checkpoint.description}</p>

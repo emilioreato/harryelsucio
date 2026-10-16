@@ -2,8 +2,8 @@ import numpy as np
 import cv2
 import pytest
 
-from pyroscope.geometria_segmentacion import segmentar_regiones_espaciales
-from pyroscope.modelos_segmentacion import ResultadoClasificacionSemantica
+from lumbre.geometria_segmentacion import segmentar_regiones_espaciales
+from lumbre.modelos_segmentacion import ResultadoClasificacionSemantica
 
 
 @pytest.mark.parametrize("separadas", [False, True])

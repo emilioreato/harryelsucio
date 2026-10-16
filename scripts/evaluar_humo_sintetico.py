@@ -1,18 +1,19 @@
 """Oclusiones conocidas: verifica lógica; no valida reconstrucción de humo real."""
 import json
+import argparse
 from pathlib import Path
 import sys
 
 import numpy as np
 from PIL import Image, ImageDraw
 from scipy import ndimage as ndi
+from _salidas import directorio_salida
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from pyroscope.estimacion_bajo_humo import estimar_bajo_humo
+from lumbre.estimacion_bajo_humo import estimar_bajo_humo
 
 
-def main():
-    destino = Path(__file__).resolve().parents[1] / "resultados_contextual" / "sintetico"
+def generar(destino: Path) -> None:
     destino.mkdir(parents=True, exist_ok=True)
     informe = {"limite": "Geometría sintética conocida; no valida humo real.", "casos": {}}
     panel = Image.new("RGB", (720, 6 * 145), (22, 30, 38))
@@ -64,6 +65,17 @@ def main():
     panel.save(destino / "oclusiones.png")
     (destino / "metricas.json").write_text(json.dumps(informe, indent=2), encoding="utf-8")
     print("6 escenarios sintéticos verificados; métricas y panel en", destino)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--salida", type=Path,
+        help="Conserva los artefactos en esta carpeta; si se omite, se borran al terminar.",
+    )
+    args = parser.parse_args()
+    with directorio_salida(args.salida, "lumbre-humo-sintetico-") as destino:
+        generar(destino)
 
 
 if __name__ == "__main__":

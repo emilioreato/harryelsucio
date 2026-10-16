@@ -1,6 +1,6 @@
 import numpy as np
 
-from pyroscope.focos import crear_superposicion_focos, detectar_focos_wildfires
+from lumbre.focos import crear_superposicion_focos, detectar_focos_wildfires
 
 
 def test_extrae_marcas_wildfires_sin_exigir_suelo_visible_ni_true_color():

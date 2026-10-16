@@ -28,6 +28,18 @@ export const api = {
     }
     return response.blob();
   },
+  async downloadPackage(jobId, payload) {
+    const response = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/package.zip`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const details = await response.json().catch(() => ({}));
+      throw new Error(details.error || "No se pudo preparar el paquete completo.");
+    }
+    return response.blob();
+  },
 };
 
 // La experiencia avanzada tiene rutas propias y almacena sus análisis por

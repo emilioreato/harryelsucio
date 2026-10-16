@@ -1,7 +1,7 @@
 """Compara el contextual anterior y el experimental con las mismas escenas.
 
 Ejemplo:
-    py scripts/evaluar_lumbre.py --salida resultados_contextual/lumbre_revision
+    py scripts/evaluar_lumbre.py --salida .tmp/pruebas/lumbre-revision
 
 Genera máscaras, capas fuente, paneles y métricas geométricas. Sin anotaciones
 independientes, los conteos no se presentan como precisión científica.
@@ -20,24 +20,25 @@ import time
 import cv2
 import numpy as np
 from PIL import Image, ImageDraw
+from _salidas import directorio_salida
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from pyroscope.caracteristicas import extraer_caracteristicas_pareja
-from pyroscope.detectores.contextual import clasificar_base_contextual
-from pyroscope.detectores.swir_histeresis import clasificar_pixeles_area_afectada_swir
-from pyroscope.evidencia_contextual import EvidenciaContextual, evidencia_desde_v2
-from pyroscope.estimacion_bajo_humo import estimar_bajo_humo
-from pyroscope.geometria_segmentacion import segmentar_regiones_espaciales
-from pyroscope.humo_visible import ampliar_humo_true_color
-from pyroscope.imagenes import abrir_rgb
-from pyroscope.ontologia import ClaseSemantica
-from pyroscope.regiones_contextuales import segmentar_contextual
+from lumbre.caracteristicas import extraer_caracteristicas_pareja
+from lumbre.detectores.contextual import clasificar_base_contextual
+from lumbre.detectores.swir_histeresis import clasificar_pixeles_area_afectada_swir
+from lumbre.evidencia_contextual import EvidenciaContextual, evidencia_desde_v2
+from lumbre.estimacion_bajo_humo import estimar_bajo_humo
+from lumbre.geometria_segmentacion import segmentar_regiones_espaciales
+from lumbre.humo_visible import ampliar_humo_true_color
+from lumbre.imagenes import abrir_rgb
+from lumbre.ontologia import ClaseSemantica
+from lumbre.regiones_contextuales import segmentar_contextual
 
 
 ESCENAS = (
-    ("00_PRUEBA 02 - La Vall d'Uixo Castellon", "2026-07-28"),
+    ("test2 - La Vall d'Uixó, Castellón", "2026-07-28"),
     ("La Mierla (Guadalajara)", "2026-07-21"),
     ("Madrid-Avila", "2026-07-26"),
     ("Niebla (Huelva)", "2026-08-08"),
@@ -206,7 +207,7 @@ def hash_archivo(ruta: Path) -> str:
 
 
 def procesar_escena(nombre: str, fecha: str, destino: Path) -> dict:
-    carpeta = ROOT / "imagenes" / nombre
+    carpeta = ROOT / "imagenes_muestra" / nombre
     tc_path = next(carpeta.glob("*True_color*"))
     swir_path = next(carpeta.glob("*SWIR*"))
     tc, original_tc = abrir_rgb(tc_path.read_bytes(), 2500)
@@ -359,14 +360,18 @@ def procesar_escena(nombre: str, fecha: str, destino: Path) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--salida", default="resultados_contextual/lumbre_20261015_p0/comparacion_actual",
-        help="Carpeta nueva donde guardar máscaras y paneles; no se sobrescriben archivos.",
+        "--salida", type=Path,
+        help="Conserva máscaras y paneles en esta carpeta; si se omite, se borran al terminar.",
     )
     parser.add_argument("--escena", help="Filtra por parte del nombre de escena.")
     args = parser.parse_args()
-    destino = (ROOT / args.salida).resolve()
-    destino.mkdir(parents=True, exist_ok=False)
-    escenas = [par for par in ESCENAS if not args.escena or args.escena.casefold() in par[0].casefold()]
+    with directorio_salida(args.salida, "lumbre-evaluacion-") as destino:
+        ejecutar(destino, args.escena)
+
+
+def ejecutar(destino: Path, filtro_escena: str | None) -> None:
+    destino.mkdir(parents=True, exist_ok=True)
+    escenas = [par for par in ESCENAS if not filtro_escena or filtro_escena.casefold() in par[0].casefold()]
     informe = {
         "head": __import__("subprocess").check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "parametros": {
@@ -383,7 +388,7 @@ def main() -> None:
             json.dumps(informe, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         print(nombre, informe["escenas"][nombre]["diferencias_px"], flush=True)
-    print(f"Resultados guardados en {destino}")
+    print(f"Resultados generados en {destino}")
 
 
 if __name__ == "__main__":

@@ -7,15 +7,15 @@ robustez y regresiones, no estiman precisión en las escenas JPEG del reto.
 import numpy as np
 import pytest
 
-from pyroscope.detectores.swir_histeresis import (
+from lumbre.detectores.swir_histeresis import (
     clasificar_pixeles_area_afectada_swir,
 )
-from pyroscope.detectores.kmeans import clasificar_pixeles_area_afectada
-from pyroscope.detectores.fusion import clasificar_fusion_ponderada
-from pyroscope.caracteristicas import extraer_caracteristicas_pareja
-from pyroscope.agua import detectar_agua_probable
-from pyroscope.segmentacion import segmentar_superficie_afectada
-from pyroscope.servidor_web import _validar_ajustes
+from lumbre.detectores.kmeans import clasificar_pixeles_area_afectada
+from lumbre.detectores.fusion import clasificar_fusion_ponderada
+from lumbre.caracteristicas import extraer_caracteristicas_pareja
+from lumbre.agua import detectar_agua_probable
+from lumbre.segmentacion import segmentar_superficie_afectada
+from lumbre.servidor_web import _validar_ajustes
 
 
 def _escena(tipo: str, *, ruido: int = 2, semilla: int = 19):

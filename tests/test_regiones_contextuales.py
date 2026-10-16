@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from scipy import ndimage as ndi
 
-from pyroscope.regiones_contextuales import refinar_frontera_local, segmentar_contextual
+from lumbre.regiones_contextuales import refinar_frontera_local, segmentar_contextual
 
 
 def escena():

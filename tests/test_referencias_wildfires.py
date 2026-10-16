@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pyroscope.interfaz import configuracion
+from lumbre.interfaz import configuracion
 
 
 def _crear_par(carpeta: Path, fecha: str) -> None:

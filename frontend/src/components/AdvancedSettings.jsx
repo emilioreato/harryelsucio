@@ -94,7 +94,7 @@ export default function AdvancedSettings({ value, onChange, onReset, method, ran
               <p className="field-help">
                 {randomForestAvailable
                   ? "Solo añade candidatos donde también existe evidencia SWIR/contextual. Si el modelo falla, se conserva el resultado habitual y se muestra un aviso. Puedes desactivarlo aquí."
-                  : "Esta copia no contiene un modelo Random Forest entrenado. La segmentación habitual sigue disponible; prepara un modelo con training Random Forest/README.md y reinicia la aplicación para activar este apoyo."}
+                  : "Esta copia no contiene un modelo Random Forest entrenado. La segmentación habitual sigue disponible; prepara un modelo con training/random_forest/README.md y reinicia la aplicación para activar este apoyo."}
               </p>
             </div>
           </details>

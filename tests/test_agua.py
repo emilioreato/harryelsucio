@@ -1,12 +1,12 @@
 import numpy as np
 import pytest
 
-from pyroscope.agua import (
+from lumbre.agua import (
     UMBRALES_AGUA_POR_DEFECTO,
     _detectar_agua_probable_experimental,
     detectar_agua_probable,
 )
-from pyroscope.caracteristicas import extraer_caracteristicas_pareja
+from lumbre.caracteristicas import extraer_caracteristicas_pareja
 
 
 def _caracteristicas_uniformes(color_tc, color_swir, *, ruido=0):

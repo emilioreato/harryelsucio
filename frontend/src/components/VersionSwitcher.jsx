@@ -1,8 +1,7 @@
 export default function VersionSwitcher({ version, onChange }) {
   return (
     <div className="version-switcher-wrap">
-      <span className="version-switcher-label">Modo de trabajo</span>
-      <div className="version-switcher" role="tablist" aria-label="Versión de Lumbre">
+      <div className="version-switcher" role="tablist" aria-label="Retos de Lumbre">
         {[
           ["basic", "Básico"],
           ["advanced", "Avanzado"],
