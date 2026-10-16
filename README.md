@@ -1,6 +1,6 @@
 # Lumbre · análisis satelital de incendios
 
-Prototipo local para explorar escenas satelitales con composiciones **True Color** y **SWIR**. Propone capas de superficie afectada y humo probable, permite revisar la imagen, medir, anotar y exportar un paquete con la evidencia del análisis.
+Prototipo experimental para revisar imágenes satelitales **True Color** y **SWIR** de Copernicus y localizar zonas candidatas de superficie afectada. Presenta por separado el humo probable y los candidatos bajo humo para facilitar la revisión, medición, anotación y exportación del análisis.
 
 Nació en la **III Malackathon 2026 de la Universidad de Málaga**, para el reto de Indra Espacio. Éramos cuatro estudiantes de primer curso: tres de Ciberseguridad e Inteligencia Artificial y uno de Informática. [La historia del proyecto](DOCUMENTACION/historia_del_proyecto.md) conserva cómo evolucionó el trabajo y qué quedó fuera del prototipo.
 
